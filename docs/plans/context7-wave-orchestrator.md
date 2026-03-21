@@ -94,10 +94,19 @@ When a bundle is active, the launcher injects:
 
 The injected block appears before the assigned implementation prompt and is labeled non-canonical. This injection is executor-agnostic.
 
+Wave coordination state is injected separately from Context7:
+
+- a compiled shared summary from `.tmp/<lane>-wave-launcher/inboxes/wave-<n>/shared-summary.md`
+- a compiled per-agent inbox from `.tmp/<lane>-wave-launcher/inboxes/wave-<n>/<agent-id>.md`
+
+Those inbox artifacts are repository-state summaries. Context7 stays reserved for third-party library truth.
+
 ## Runtime Behavior
 
 - Prefetch happens in the launcher before the agent session starts.
+- Shared summary and per-agent inbox compilation also happen in the launcher before the executor is invoked.
 - Cache files are written under `.tmp/<lane>-wave-launcher/context7-cache/`.
+- Compiled inboxes are written under `.tmp/<lane>-wave-launcher/inboxes/`.
 - Executor runtime overlays are written under `.tmp/<lane>-wave-launcher/executors/`.
 - The resolved Context7 selection becomes part of the prompt fingerprint, so changing bundle or query invalidates prior success reuse.
 - If `CONTEXT7_API_KEY` is missing, prefetch is disabled with a warning and the wave continues.
@@ -107,11 +116,11 @@ The injected block appears before the assigned implementation prompt and is labe
 ## Prompt Layering
 
 - `codex`
-  The generated task prompt already contains the injected Context7 block. It is piped directly into `codex exec`.
+  The generated task prompt already contains the compiled shared summary, the compiled agent inbox, and the injected Context7 block. It is piped directly into `codex exec`.
 - `claude`
-  The generated task prompt contains the injected Context7 block. The harness also writes a runtime system-prompt overlay and passes it with `--append-system-prompt-file` by default, or `--system-prompt-file` if `executors.claude.appendSystemPromptMode` is set to `replace`.
+  The generated task prompt contains the compiled shared summary, the compiled agent inbox, and the injected Context7 block. The harness also writes a runtime system-prompt overlay and passes it with `--append-system-prompt-file` by default, or `--system-prompt-file` if `executors.claude.appendSystemPromptMode` is set to `replace`.
 - `opencode`
-  The generated task prompt contains the injected Context7 block. The harness writes a temporary `opencode.json` plus an agent prompt file under `.tmp/.../executors/`, points `OPENCODE_CONFIG` at that overlay, and launches `opencode run`.
+  The generated task prompt contains the compiled shared summary, the compiled agent inbox, and the injected Context7 block. The harness writes a temporary `opencode.json` plus an agent prompt file under `.tmp/.../executors/`, points `OPENCODE_CONFIG` at that overlay, and launches `opencode run`.
 
 ## Guidance
 

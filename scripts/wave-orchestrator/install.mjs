@@ -18,6 +18,7 @@ export const STARTER_TEMPLATE_PATHS = [
   "wave.config.json",
   "docs/agents/wave-documentation-role.md",
   "docs/agents/wave-evaluator-role.md",
+  "docs/agents/wave-integration-role.md",
   "docs/context7/bundles.json",
   "docs/plans/component-cutover-matrix.json",
   "docs/plans/component-cutover-matrix.md",
@@ -226,6 +227,7 @@ export function runDoctor() {
       }
       for (const requiredPath of [
         lanePaths.evaluatorRolePromptPath,
+        lanePaths.integrationRolePromptPath,
         lanePaths.documentationRolePromptPath,
         lanePaths.context7BundleIndexPath.replace(`${REPO_ROOT}${path.sep}`, ""),
       ]) {

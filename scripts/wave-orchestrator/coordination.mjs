@@ -185,13 +185,22 @@ export function buildExecutionPrompt({
   orchestratorId,
   messageBoardPath,
   messageBoardSnapshot,
+  sharedSummaryPath = null,
+  sharedSummaryText = "",
+  inboxPath = null,
+  inboxText = "",
   context7 = null,
   componentPromotions = null,
   sharedPlanDocs = null,
   evaluatorAgentId = "A0",
+  integrationAgentId = "A8",
   documentationAgentId = "A9",
 }) {
   const relativeBoardPath = path.relative(REPO_ROOT, messageBoardPath);
+  const relativeSharedSummaryPath = sharedSummaryPath
+    ? path.relative(REPO_ROOT, sharedSummaryPath)
+    : null;
+  const relativeInboxPath = inboxPath ? path.relative(REPO_ROOT, inboxPath) : null;
   const lanePlansDir = lane === DEFAULT_WAVE_LANE ? "docs/plans" : `docs/${lane}/plans`;
   const resolvedSharedPlanDocs =
     sharedPlanDocs && sharedPlanDocs.length > 0
@@ -254,6 +263,15 @@ export function buildExecutionPrompt({
     '--question "<specific clarification needed>"',
     '--context "<what you tried, options, and impact>"',
     "--timeout-seconds 30",
+  ].join(" ");
+  const coordinationCommand = [
+    "pnpm exec wave coord post",
+    `--lane ${lane}`,
+    `--wave ${wave}`,
+    `--agent ${agent.agentId}`,
+    '--kind "<request|ack|claim|evidence|decision|blocker|handoff|human-feedback|integration-summary>"',
+    '--summary "<one-line summary>"',
+    '--detail "<short detail>"',
   ].join(" ");
   const context7Selection = context7?.selection || agent?.context7Resolved || null;
   const executorId = agent?.executorResolved?.id || "default";
@@ -329,8 +347,9 @@ export function buildExecutionPrompt({
     "",
     "Role model for this run:",
     "- Wave Orchestrator role: create wave files, initiate wave runs, and manage execution end-to-end.",
-    "- WAVE Executor role (you): deliver the assigned outcome end-to-end within your scope and coordinate through the wave message board every turn.",
+    "- WAVE Executor role (you): deliver the assigned outcome end-to-end within your scope and coordinate through the Wave coordination log every turn.",
     `- Evaluator agent id: ${evaluatorAgentId}`,
+    `- Integration steward agent id: ${integrationAgentId}`,
     `- Documentation steward agent id: ${documentationAgentId}`,
     `- Resolved executor: ${executorId}`,
     "",
@@ -341,13 +360,14 @@ export function buildExecutionPrompt({
     "",
     "Hard requirements for completeness:",
     "- Follow repository instructions in AGENTS.md and CLAUDE.md if present.",
-    "- Read the latest message board before taking action on every turn.",
-    "- Append a message-board entry on every turn with progress, decisions, blockers, handoffs, or explicit no-change status.",
-    "- Re-read the board before major edits, before commit or push, and before your final report.",
+    "- Read the compiled shared summary and your compiled inbox before taking action on every turn.",
+    "- Post a coordination record on every meaningful turn with progress, decisions, blockers, handoffs, evidence, or explicit acknowledgement.",
+    "- Re-read the generated board projection before major edits, before commit or push, and before your final report.",
     "- If you change interfaces or contracts, include exact files and exact keys or fields affected.",
     "- If your task touches persisted state, implement the required schema or migration work instead of leaving TODOs.",
-    "- If human clarification is useful, request it non-blocking, continue with the best reasonable assumption, and log the assumption on the board.",
+    "- If human clarification is useful, request it non-blocking, continue with the best reasonable assumption, and log the assumption as a coordination record.",
     `- Human clarification command: \`${askCommand}\``,
+    `- Coordination command: \`${coordinationCommand}\``,
     "- Run relevant tests, lint, and build checks for touched workspaces and fix failures caused by your changes.",
     "- Emit explicit progress markers in your output: `[wave-phase] coding`, `[wave-phase] validating`, `[wave-phase] deploying`, `[wave-phase] finalizing`.",
     "- During deployment checks, emit structured deployment markers: `[deploy-status] service=<service-name> state=<deploying|healthy|failed|rolledover> detail=<short-note>`.",
@@ -355,12 +375,31 @@ export function buildExecutionPrompt({
     ...evaluatorRequirements,
     ...docStewardRequirements,
     ...implementationRequirements,
-    `- Update docs impacted by your implementation. If your work changes status, sequencing, ownership, or explicit proof expectations, update the relevant docs. If shared plan docs need changes outside your owned files, post the exact doc paths and exact delta needed for ${sharedPlanDocList} on the message board instead of leaving documentation drift for later cleanup.`,
+    `- Update docs impacted by your implementation. If your work changes status, sequencing, ownership, or explicit proof expectations, update the relevant docs. If shared plan docs need changes outside your owned files, post the exact doc paths and exact delta needed for ${sharedPlanDocList} as a coordination record instead of leaving documentation drift for later cleanup.`,
     "- If the wave defines a documentation steward or other explicit owner for shared plan docs, coordinate those updates through that owner, notify them as soon as the delta is known, and stay engaged until they confirm `closed` or `no-change`. Do not treat the ownership boundary as the definition of done.",
     "- In high-fanout waves, do not push to remote by default. A local Conventional Commit is okay when useful; push only when explicitly requested.",
     "- Do not leave watch or dev servers running after completion.",
     "",
-    "Current wave message board snapshot:",
+    ...(sharedSummaryPath
+      ? [
+          `Shared summary absolute path: ${sharedSummaryPath}`,
+          `Shared summary repo-relative path: ${relativeSharedSummaryPath}`,
+        ]
+      : []),
+    ...(inboxPath
+      ? [
+          `Agent inbox absolute path: ${inboxPath}`,
+          `Agent inbox repo-relative path: ${relativeInboxPath}`,
+        ]
+      : []),
+    "",
+    ...(sharedSummaryText
+      ? ["Current wave shared summary:", "```markdown", sharedSummaryText, "```", ""]
+      : []),
+    ...(inboxText
+      ? ["Current agent inbox:", "```markdown", inboxText, "```", ""]
+      : []),
+    "Current wave board projection:",
     "```markdown",
     messageBoardSnapshot,
     "```",

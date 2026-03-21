@@ -7,9 +7,11 @@ const REPO_ROOT = WORKSPACE_ROOT;
 export const DEFAULT_WAVE_CONFIG_PATH = path.join(REPO_ROOT, "wave.config.json");
 export const DEFAULT_WAVE_LANE = "main";
 export const DEFAULT_EVALUATOR_AGENT_ID = "A0";
+export const DEFAULT_INTEGRATION_AGENT_ID = "A8";
 export const DEFAULT_DOCUMENTATION_AGENT_ID = "A9";
 export const DEFAULT_ROLE_PROMPT_DIR = "docs/agents";
 export const DEFAULT_EVALUATOR_ROLE_PROMPT_PATH = "docs/agents/wave-evaluator-role.md";
+export const DEFAULT_INTEGRATION_ROLE_PROMPT_PATH = "docs/agents/wave-integration-role.md";
 export const DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH =
   "docs/agents/wave-documentation-role.md";
 export const DEFAULT_TERMINALS_PATH = ".vscode/terminals.json";
@@ -229,12 +231,17 @@ function normalizeRoles(rawRoles = {}) {
   return {
     rolePromptDir,
     evaluatorAgentId: String(rawRoles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID).trim(),
+    integrationAgentId: String(rawRoles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID).trim(),
     documentationAgentId: String(
       rawRoles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID,
     ).trim(),
     evaluatorRolePromptPath: normalizeRepoRelativePath(
       rawRoles.evaluatorRolePromptPath || DEFAULT_EVALUATOR_ROLE_PROMPT_PATH,
       "roles.evaluatorRolePromptPath",
+    ),
+    integrationRolePromptPath: normalizeRepoRelativePath(
+      rawRoles.integrationRolePromptPath || DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
+      "roles.integrationRolePromptPath",
     ),
     documentationRolePromptPath: normalizeRepoRelativePath(
       rawRoles.documentationRolePromptPath || DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
@@ -261,6 +268,10 @@ function normalizeValidation(rawValidation = {}) {
       rawValidation.requireExitContractsFromWave,
       6,
     ),
+    requireIntegrationStewardFromWave: normalizeThreshold(
+      rawValidation.requireIntegrationStewardFromWave,
+      null,
+    ),
     requireComponentPromotionsFromWave: normalizeThreshold(
       rawValidation.requireComponentPromotionsFromWave,
       0,
@@ -269,6 +280,29 @@ function normalizeValidation(rawValidation = {}) {
       rawValidation.requireAgentComponentsFromWave,
       0,
     ),
+  };
+}
+
+function normalizeCapabilityRouting(rawCapabilityRouting = {}) {
+  const preferredAgentsInput =
+    rawCapabilityRouting && typeof rawCapabilityRouting === "object"
+      ? rawCapabilityRouting.preferredAgents
+      : null;
+  const preferredAgents =
+    preferredAgentsInput &&
+    typeof preferredAgentsInput === "object" &&
+    !Array.isArray(preferredAgentsInput)
+      ? Object.fromEntries(
+          Object.entries(preferredAgentsInput).map(([capability, agentIds]) => [
+            String(capability || "")
+              .trim()
+              .toLowerCase(),
+            normalizeOptionalStringArray(agentIds, []),
+          ]),
+        )
+      : {};
+  return {
+    preferredAgents,
   };
 }
 
@@ -433,6 +467,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     roles: normalizeRoles(rawConfig.roles),
     validation: normalizeValidation(rawConfig.validation),
     executors: normalizeExecutors(rawConfig.executors),
+    capabilityRouting: normalizeCapabilityRouting(rawConfig.capabilityRouting),
     sharedPlanDocs,
     lanes,
     configPath,
@@ -465,6 +500,10 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
   const executors = normalizeExecutors(
     mergeExecutors(config.executors, laneConfig.executors),
   );
+  const capabilityRouting = normalizeCapabilityRouting({
+    ...config.capabilityRouting,
+    ...(laneConfig.capabilityRouting || {}),
+  });
   return {
     lane,
     docsDir,
@@ -477,6 +516,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     roles,
     validation,
     executors,
+    capabilityRouting,
     paths: {
       terminalsPath: normalizeRepoRelativePath(
         laneConfig.terminalsPath || config.paths.terminalsPath,

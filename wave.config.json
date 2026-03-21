@@ -15,8 +15,10 @@
   "roles": {
     "rolePromptDir": "docs/agents",
     "evaluatorAgentId": "A0",
+    "integrationAgentId": "A8",
     "documentationAgentId": "A9",
     "evaluatorRolePromptPath": "docs/agents/wave-evaluator-role.md",
+    "integrationRolePromptPath": "docs/agents/wave-integration-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
   },
   "executors": {
@@ -48,7 +50,11 @@
     "requireDocumentationStewardFromWave": 0,
     "requireContext7DeclarationsFromWave": 6,
     "requireExitContractsFromWave": 6,
+    "requireIntegrationStewardFromWave": 0,
     "requireComponentPromotionsFromWave": 0,
     "requireAgentComponentsFromWave": 0
+  },
+  "capabilityRouting": {
+    "preferredAgents": {}
   }
 }

@@ -37,6 +37,36 @@ File ownership (only touch these paths):
 - docs/plans/waves/reviews/wave-0-evaluator.md
 ```
 
+## Agent A8: Integration Steward
+
+### Role prompts
+
+- docs/agents/wave-integration-role.md
+
+### Context7
+
+- bundle: none
+
+### Capabilities
+
+- integration
+- docs-shared-plan
+
+### Prompt
+
+```text
+Synthesize the wave before documentation and evaluator closure.
+
+Required context before coding:
+- Read docs/reference/repository-guidance.md.
+- Read docs/research/agent-context-sources.md.
+- Read docs/plans/master-plan.md, docs/plans/current-state.md, and docs/plans/migration.md.
+
+File ownership (only touch these paths):
+- .tmp/main-wave-launcher/integration/wave-0.md
+- .tmp/main-wave-launcher/integration/wave-0.json
+```
+
 ## Agent A9: Documentation Steward
 
 ### Role prompts
@@ -75,6 +105,11 @@ File ownership (only touch these paths):
 
 - wave-parser-and-launcher
 - starter-docs-and-adoption-guidance
+
+### Capabilities
+
+- schema-migration
+- frontend-validation
 
 ### Exit contract
 

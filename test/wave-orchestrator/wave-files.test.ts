@@ -16,6 +16,7 @@ import {
   validateWaveDefinition,
   WAVE_DOCUMENTATION_ROLE_PROMPT_PATH,
   WAVE_EVALUATOR_ROLE_PROMPT_PATH,
+  WAVE_INTEGRATION_ROLE_PROMPT_PATH,
 } from "../../scripts/wave-orchestrator/wave-files.mjs";
 
 const tempPaths = [];
@@ -417,6 +418,14 @@ describe("validateWaveDefinition", () => {
     "File ownership (only touch these paths):",
     ...starterDocumentationPaths.map((docPath) => `- ${docPath}`),
   ].join("\n");
+  const integrationStewardPrompt = [
+    "Read docs/reference/repository-guidance.md.",
+    "Read docs/research/agent-context-sources.md.",
+    "",
+    "File ownership (only touch these paths):",
+    "- .tmp/main-wave-launcher/integration/wave-0.json",
+    "- .tmp/main-wave-launcher/integration/wave-0.md",
+  ].join("\n");
 
   it("accepts a valid leap-claw wave definition", () => {
     expect(
@@ -434,6 +443,15 @@ describe("validateWaveDefinition", () => {
               ),
               rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
               ownedPaths: ["docs/plans/waves/reviews/wave-0-evaluator.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
             },
             {
               agentId: "A9",
@@ -569,6 +587,15 @@ describe("validateWaveDefinition", () => {
               ownedPaths: ["docs/plans/waves/reviews/wave-0-evaluator.md"],
             },
             {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+            },
+            {
               agentId: "A9",
               prompt: documentationStewardPrompt,
               rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
@@ -608,6 +635,23 @@ describe("validateWaveDefinition", () => {
               ),
               rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
               ownedPaths: ["docs/plans/waves/reviews/wave-6-evaluator.md"],
+              context7Config: { bundle: "none", query: "repo truth only" },
+            },
+            {
+              agentId: "A8",
+              prompt: [
+                "Read docs/reference/repository-guidance.md.",
+                "Read docs/research/agent-context-sources.md.",
+                "",
+                "File ownership (only touch these paths):",
+                "- .tmp/main-wave-launcher/integration/wave-6.json",
+                "- .tmp/main-wave-launcher/integration/wave-6.md",
+              ].join("\n"),
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-6.json",
+                ".tmp/main-wave-launcher/integration/wave-6.md",
+              ],
               context7Config: { bundle: "none", query: "repo truth only" },
             },
             {
@@ -804,6 +848,16 @@ describe("completedWavesFromStatusFiles", () => {
           rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
         },
         {
+          agentId: "A8",
+          slug: "0-a8",
+          prompt: [
+            "File ownership (only touch these paths):",
+            "- .tmp/main-wave-launcher/integration/wave-0.json",
+            "- .tmp/main-wave-launcher/integration/wave-0.md",
+          ].join("\n"),
+          rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+        },
+        {
           agentId: "A9",
           slug: "0-a9",
           prompt: [
@@ -897,6 +951,152 @@ describe("completedWavesFromStatusFiles", () => {
       completedWavesFromStatusFiles([wave], statusDir, {
         logsDir,
         requireComponentPromotionsFromWave: 0,
+      }),
+    ).toEqual([]);
+  });
+
+  it("requires integration closure before marking an integration-gated wave complete", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-integration-closure`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    const reportRelPath = `.tmp/${path.basename(tempRoot)}/wave-0-evaluator.md`;
+    const wave = {
+      wave: 0,
+      file: "docs/plans/waves/wave-0.md",
+      componentPromotions: [
+        { componentId: "wave-parser-and-launcher", targetLevel: "repo-landed" },
+      ],
+      agents: [
+        {
+          agentId: "A0",
+          slug: "0-a0",
+          prompt: `File ownership (only touch these paths):\n- ${reportRelPath}`,
+          rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
+        },
+        {
+          agentId: "A8",
+          slug: "0-a8",
+          prompt: [
+            "File ownership (only touch these paths):",
+            "- .tmp/main-wave-launcher/integration/wave-0.json",
+            "- .tmp/main-wave-launcher/integration/wave-0.md",
+          ].join("\n"),
+          rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+        },
+        {
+          agentId: "A9",
+          slug: "0-a9",
+          prompt: [
+            "File ownership (only touch these paths):",
+            ...starterDocumentationPaths.map((docPath) => `- ${docPath}`),
+          ].join("\n"),
+          rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+        },
+        {
+          agentId: "A1",
+          slug: "0-a1",
+          prompt: "File ownership (only touch these paths):\n- go/example/file.go",
+          components: ["wave-parser-and-launcher"],
+          componentTargets: {
+            "wave-parser-and-launcher": "repo-landed",
+          },
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+      ],
+      evaluatorReportPath: reportRelPath,
+    };
+
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# Evaluator\n\nVerdict: PASS\n", "utf8");
+    for (const agent of wave.agents) {
+      fs.writeFileSync(
+        path.join(statusDir, `wave-0-${agent.slug}.status`),
+        JSON.stringify(
+          {
+            code: 0,
+            promptHash: hashAgentPromptFingerprint(agent),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    }
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a0.summary.json"),
+      JSON.stringify(
+        {
+          gate: {
+            architecture: "pass",
+            integration: "pass",
+            durability: "pass",
+            live: "pass",
+            docs: "pass",
+          },
+          verdict: { verdict: "pass" },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a9.summary.json"),
+      JSON.stringify(
+        {
+          docClosure: {
+            state: "closed",
+            detail: "Shared docs aligned",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a1.summary.json"),
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["go/example/file.go"],
+          },
+          components: [
+            {
+              componentId: "wave-parser-and-launcher",
+              level: "repo-landed",
+              state: "met",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      completedWavesFromStatusFiles([wave], statusDir, {
+        logsDir,
+        requireComponentPromotionsFromWave: 0,
+        requireIntegrationStewardFromWave: 0,
       }),
     ).toEqual([]);
   });

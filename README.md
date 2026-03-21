@@ -6,6 +6,8 @@ It includes:
 
 - wave parsing and validation
 - launcher, dashboard, autonomous, and human-feedback CLIs
+- coordination log, generated board projection, compiled inboxes, and a per-wave ledger
+- integration stewardship, docs queues, and trace bundles under `.tmp/`
 - role prompt imports and closure-sweep gating
 - component-cutover tracking and promotion gates
 - Context7 bundle selection, prefetch, caching, and prompt injection
@@ -25,6 +27,7 @@ pnpm add -D @chllming/wave-orchestration
 pnpm exec wave init
 pnpm exec wave doctor
 pnpm exec wave launch --lane main --dry-run --no-dashboard
+pnpm exec wave coord show --lane main --wave 0 --dry-run
 ```
 
 If your repo already has Wave config, docs, or waves you want to keep:
@@ -137,29 +140,49 @@ pnpm exec wave doctor
 pnpm exec wave launch --lane main --dry-run --no-dashboard
 ```
 
-7. Reconcile stale state if needed:
+7. Inspect the seeded coordination state and generated inboxes:
+
+```bash
+pnpm exec wave coord show --lane main --wave 0 --dry-run
+pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
+```
+
+8. Reconcile stale state if needed:
 
 ```bash
 pnpm exec wave launch --lane main --reconcile-status
 ```
 
-8. Check pending human feedback:
+9. Check pending human feedback:
 
 ```bash
 pnpm exec wave feedback list --lane main --pending
 ```
 
-9. Launch one wave at a time until the plan is stable:
+10. Launch one wave at a time until the plan is stable:
 
 ```bash
 pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
 ```
 
-10. Use autonomous mode only after the wave set is already solid:
+11. Use autonomous mode only after the wave set is already solid:
 
 ```bash
 pnpm exec wave autonomous --lane main --executor codex --codex-sandbox danger-full-access
 ```
+
+## Runtime Artifacts
+
+The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
+
+- `coordination/wave-<n>.jsonl`: append-only coordination upsert log
+- `messageboards/wave-<n>.md`: generated board projection for humans
+- `inboxes/wave-<n>/`: compiled shared summary plus per-agent inboxes
+- `ledger/wave-<n>.json`: derived task/blocker/closure state
+- `integration/wave-<n>.json|md`: explicit or synthesized integration summary
+- `docs-queue/wave-<n>.json`: documentation reconciliation queue
+- `traces/wave-<n>/attempt-<k>/`: replay-oriented attempt bundle
+- `prompts/`, `logs/`, `status/`, `executors/`, and `context7-cache/`: run artifacts, overlays, and cached external-doc snippets
 
 ## Wave File Shape
 
@@ -172,10 +195,17 @@ Each wave is regular markdown. The harness looks for:
 - `### Role prompts`
 - `### Context7`
 - `### Components`
+- `### Capabilities`
 - `### Exit contract`
 - `### Prompt`
 
-Minimal example:
+Under the starter config in this repo, wave 0 and later also require:
+
+- `A0` as the evaluator
+- `A8` as the integration steward
+- `A9` as the documentation steward
+
+The sample [wave-0.md](/home/coder/wave-orchestration/docs/plans/waves/wave-0.md) is a complete valid example. The excerpt below shows the implementation-agent portion of a full wave:
 
 ````md
 # Wave 1 - Example
@@ -225,6 +255,11 @@ File ownership (only touch these paths):
 
 - wave-parser-and-launcher
 
+### Capabilities
+
+- runtime
+- validation
+
 ### Exit contract
 
 - completion: integrated
@@ -244,6 +279,8 @@ File ownership (only touch these paths):
 ````
 
 `## Component promotions` declares the component levels this wave is responsible for proving. `### Components` assigns each promoted component to one or more implementation agents.
+
+`### Capabilities` is optional. It lets the coordination layer route targeted follow-up work to a capability rather than a single hard-coded agent.
 
 The component matrix is also expected to reflect the landed state. Before a promoted wave closes, `docs/plans/component-cutover-matrix.json` should advance each promoted component's `currentLevel` to the proved target.
 

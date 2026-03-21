@@ -116,6 +116,12 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     statusDir: path.join(stateDir, "status"),
     messageboardsDir: path.join(stateDir, "messageboards"),
     dashboardsDir: path.join(stateDir, "dashboards"),
+    coordinationDir: path.join(stateDir, "coordination"),
+    inboxesDir: path.join(stateDir, "inboxes"),
+    ledgerDir: path.join(stateDir, "ledger"),
+    integrationDir: path.join(stateDir, "integration"),
+    docsQueueDir: path.join(stateDir, "docs-queue"),
+    tracesDir: path.join(stateDir, "traces"),
     context7CacheDir: path.join(stateDir, "context7-cache"),
     executorOverlaysDir: path.join(stateDir, "executors"),
     stateDir,
@@ -133,18 +139,23 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     requiredPromptReferences: laneProfile.validation.requiredPromptReferences,
     rolePromptDir: laneProfile.roles.rolePromptDir,
     evaluatorAgentId: laneProfile.roles.evaluatorAgentId,
+    integrationAgentId: laneProfile.roles.integrationAgentId,
     documentationAgentId: laneProfile.roles.documentationAgentId,
     evaluatorRolePromptPath: laneProfile.roles.evaluatorRolePromptPath,
+    integrationRolePromptPath: laneProfile.roles.integrationRolePromptPath,
     documentationRolePromptPath: laneProfile.roles.documentationRolePromptPath,
     requireDocumentationStewardFromWave:
       laneProfile.validation.requireDocumentationStewardFromWave,
     requireContext7DeclarationsFromWave:
       laneProfile.validation.requireContext7DeclarationsFromWave,
     requireExitContractsFromWave: laneProfile.validation.requireExitContractsFromWave,
+    requireIntegrationStewardFromWave:
+      laneProfile.validation.requireIntegrationStewardFromWave,
     requireComponentPromotionsFromWave:
       laneProfile.validation.requireComponentPromotionsFromWave,
     requireAgentComponentsFromWave: laneProfile.validation.requireAgentComponentsFromWave,
     executors: laneProfile.executors,
+    capabilityRouting: laneProfile.capabilityRouting,
     defaultManifestPath: path.join(stateDir, "waves.manifest.json"),
     defaultRunStatePath: path.join(stateDir, "run-state.json"),
     globalDashboardPath: path.join(stateDir, "dashboards", "global.json"),
@@ -164,6 +175,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     ),
     feedbackStateDir,
     feedbackRequestsDir: path.join(feedbackStateDir, "requests"),
+    crossLaneDependenciesDir: path.join(REPO_ROOT, laneProfile.paths.orchestratorStateDir, "dependencies"),
   };
 }
 

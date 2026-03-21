@@ -8,13 +8,14 @@ import {
   collectUnexpectedSessionFailures,
   DEFAULT_CODEX_SANDBOX_MODE,
   hasReusableSuccessStatus,
-    markLauncherFailed,
-    reconcileStaleLauncherArtifacts,
-    readWaveComponentMatrixGate,
-    releaseLauncherLock,
-    readWaveComponentGate,
-    readWaveEvaluatorGate,
+  markLauncherFailed,
+  readWaveComponentGate,
+  readWaveComponentMatrixGate,
+  readWaveEvaluatorGate,
   readWaveInfraGate,
+  reconcileStaleLauncherArtifacts,
+  releaseLauncherLock,
+  resolveRelaunchRuns,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
 import { hashAgentPromptFingerprint } from "../../scripts/wave-orchestrator/context7.mjs";
 
@@ -181,6 +182,87 @@ describe("readWaveInfraGate", () => {
       ok: true,
       statusCode: "pass",
     });
+  });
+});
+
+describe("resolveRelaunchRuns", () => {
+  it("does not treat launcher-seeded assignment requests as retry targets", () => {
+    const agentRuns = [
+      { agent: { agentId: "A1", capabilities: ["runtime"] } },
+      { agent: { agentId: "A2", capabilities: ["docs"] } },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A2", statusCode: "failed" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          requests: [
+            {
+              id: "wave-0-agent-A1-request",
+              kind: "request",
+              source: "launcher",
+              status: "open",
+              targets: ["agent:A1"],
+            },
+          ],
+          blockers: [],
+        },
+        ledger: { phase: "running", tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        evaluatorAgentId: "A0",
+        integrationAgentId: "A8",
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.map((run) => run.agent.agentId)).toEqual(["A2"]);
+  });
+
+  it("routes capability-targeted retries to the least-busy matching agent", () => {
+    const agentRuns = [
+      { agent: { agentId: "A1", capabilities: ["runtime"] } },
+      { agent: { agentId: "A2", capabilities: ["runtime"] } },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A1", statusCode: "failed" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          requests: [
+            {
+              id: "request-runtime",
+              kind: "request",
+              source: "agent",
+              status: "open",
+              targets: ["capability:runtime"],
+            },
+          ],
+          blockers: [],
+        },
+        ledger: {
+          phase: "running",
+          tasks: [
+            { id: "t1", owner: "A1", state: "in_progress" },
+            { id: "t2", owner: "A1", state: "planned" },
+            { id: "t3", owner: "A2", state: "in_progress" },
+          ],
+        },
+      },
+      {
+        documentationAgentId: "A9",
+        evaluatorAgentId: "A0",
+        integrationAgentId: "A8",
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.map((run) => run.agent.agentId)).toEqual(["A2"]);
   });
 });
 

@@ -7,13 +7,15 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - parses wave plans from `docs/plans/waves/`
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
+- seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
+- derives a per-wave ledger, docs queue, integration summary, and per-attempt trace bundle
 - validates Context7 declarations and exit contracts from configurable wave thresholds
 - validates component promotions and component-owned proof from configurable wave thresholds
-- writes prompts, logs, dashboards, message boards, and status summaries under `.tmp/`
+- writes prompts, logs, dashboards, coordination state, and status summaries under `.tmp/`
 - supports launcher-side Context7 prefetch and injection for headless runs
 - supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
 - supports a file-backed human feedback queue
-- performs a closure sweep so evaluator and documentation gates reflect final landed state
+- performs a closure sweep so integration, documentation, and evaluator gates reflect final landed state
 
 ## Main Commands
 
@@ -26,15 +28,17 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - `pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor opencode`
 - `pnpm exec wave autonomous --lane main --executor codex --codex-sandbox danger-full-access`
 - `pnpm exec wave feedback list --lane main --pending`
+- `pnpm exec wave coord show --lane main --wave 0 --dry-run`
+- `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`
+- `pnpm exec wave coord post --lane main --wave 0 --agent A1 --kind blocker --summary "Need repository decision"`
 - `pnpm exec wave upgrade`
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, component-cutover matrix paths, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
-- `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 
 ## Setup
 
@@ -73,6 +77,15 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 
 5. Only move to `wave:autonomous` after single-wave runs are already stable.
 
+## Coordination Surfaces
+
+- `wave coord show` reads the materialized coordination state for a wave.
+- `wave coord render` regenerates the markdown board projection from the canonical coordination log.
+- `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
+- `wave coord post` appends a structured record to the coordination log. This is the machine-readable path for blockers, handoffs, evidence, and targeted requests.
+
+The canonical state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not the scheduler's source of truth.
+
 ## Upgrade Flow
 
 1. Upgrade the package version:
@@ -95,21 +108,31 @@ pnpm exec wave changelog --since-installed
 - prompts: `.tmp/<lane>-wave-launcher/prompts/`
 - logs: `.tmp/<lane>-wave-launcher/logs/`
 - status summaries: `.tmp/<lane>-wave-launcher/status/`
+- coordination logs: `.tmp/<lane>-wave-launcher/coordination/`
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
+- compiled inboxes: `.tmp/<lane>-wave-launcher/inboxes/`
+- ledger: `.tmp/<lane>-wave-launcher/ledger/`
+- integration summaries: `.tmp/<lane>-wave-launcher/integration/`
+- docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
+- trace bundles: `.tmp/<lane>-wave-launcher/traces/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
 - Context7 cache: `.tmp/<lane>-wave-launcher/context7-cache/`
 - executor overlays: `.tmp/<lane>-wave-launcher/executors/`
+- cross-lane dependencies: `.tmp/wave-orchestrator/dependencies/`
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
 
 ## Authoring Rules
 
 - Every wave must include the configured evaluator agent.
+- Under the starter config, every wave must also include the configured integration steward and documentation steward.
 - From the configured thresholds onward, declare `## Component promotions` and keep them aligned with the component cutover matrix.
-- From the configured thresholds onward, every non-A0/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
+- From the configured thresholds onward, every non-A0/A8/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
+- `### Capabilities` is optional and lets the scheduler route targeted follow-up work by capability.
 - Use `### Executor` only when an agent should override the run-level executor default.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
+- Agents should use `wave coord post` for durable blockers, handoffs, evidence, and requests instead of relying on ad hoc board edits.
 - Keep shared plan docs and the component cutover matrix owned by the configured documentation steward once that rule becomes active.
 
 ## Executor Modes
@@ -134,4 +157,4 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, checks promoted component proof, then reruns the documentation steward and evaluator so the final gate reflects the landed state after implementation settles.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, and the integration recommendation. Then it reruns the documentation steward and evaluator so the final gate reflects the landed state after implementation settles.

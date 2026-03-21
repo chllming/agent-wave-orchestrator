@@ -26,6 +26,8 @@ const WAVE_DOC_DELTA_REGEX =
   /^\[wave-doc-delta\]\s*state=(none|owned|shared-plan)(?:\s+paths=([^\n]*?))?(?:\s+detail=(.*))?$/gim;
 const WAVE_DOC_CLOSURE_REGEX =
   /^\[wave-doc-closure\]\s*state=(closed|no-change|delta)(?:\s+paths=([^\n]*?))?(?:\s+detail=(.*))?$/gim;
+const WAVE_INTEGRATION_REGEX =
+  /^\[wave-integration\]\s*state=(ready-for-doc-closure|needs-more-work)\s+claims=(\d+)\s+conflicts=(\d+)\s+blockers=(\d+)\s*(?:detail=(.*))?$/gim;
 const WAVE_GATE_REGEX =
   /^\[wave-gate\]\s*architecture=(pass|concerns|blocked)\s+integration=(pass|concerns|blocked)\s+durability=(pass|concerns|blocked)\s+live=(pass|concerns|blocked)\s+docs=(pass|concerns|blocked)\s*(?:detail=(.*))?$/gim;
 const WAVE_GAP_REGEX =
@@ -181,6 +183,13 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       state: match[1],
       paths: parsePaths(match[2]),
       detail: cleanText(match[3]),
+    })),
+    integration: findLastMatch(logText, WAVE_INTEGRATION_REGEX, (match) => ({
+      state: match[1],
+      claims: Number.parseInt(String(match[2] || "0"), 10) || 0,
+      conflicts: Number.parseInt(String(match[3] || "0"), 10) || 0,
+      blockers: Number.parseInt(String(match[4] || "0"), 10) || 0,
+      detail: cleanText(match[5]),
     })),
     gate: findLastMatch(logText, WAVE_GATE_REGEX, (match) => ({
       architecture: match[1],
@@ -339,6 +348,30 @@ export function validateDocumentationClosureSummary(agent, summary) {
       summary.docClosure.state === "closed"
         ? "Documentation steward closed the shared-plan delta."
         : "Documentation steward confirmed no shared-plan changes were needed.",
+  };
+}
+
+export function validateIntegrationSummary(agent, summary) {
+  if (!summary?.integration) {
+    return {
+      ok: false,
+      statusCode: "missing-wave-integration",
+      detail: `Missing [wave-integration] marker for ${agent?.agentId || "A8"}.`,
+    };
+  }
+  if (summary.integration.state !== "ready-for-doc-closure") {
+    return {
+      ok: false,
+      statusCode: "integration-needs-more-work",
+      detail:
+        summary.integration.detail ||
+        `Integration steward reported ${summary.integration.state}.`,
+    };
+  }
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail: summary.integration.detail || "Integration summary is ready for doc closure.",
   };
 }
 

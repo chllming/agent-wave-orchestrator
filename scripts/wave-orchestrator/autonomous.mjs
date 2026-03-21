@@ -22,6 +22,8 @@ import {
   normalizeCodexSandboxMode,
 } from "./launcher.mjs";
 import { readRunState } from "./wave-files.mjs";
+import { readDependencyTickets } from "./coordination-store.mjs";
+import { readWaveLedger } from "./ledger.mjs";
 
 function printUsage() {
   console.log(`Usage: pnpm exec wave autonomous [options]
@@ -216,6 +218,13 @@ function launchSingleWave(params) {
   return runCommand(args);
 }
 
+function requiredInboundDependenciesOpen(lanePaths, lane) {
+  return readDependencyTickets(lanePaths.crossLaneDependenciesDir, lane).filter((record) => {
+    const required = record.required === true || String(record.closureCondition || "").includes("required=true");
+    return required && ["open", "acknowledged", "in_progress"].includes(record.status);
+  });
+}
+
 export function runAutonomousCli(argv) {
   const parsed = parseArgs(argv);
   if (parsed.help) {
@@ -251,6 +260,18 @@ export function runAutonomousCli(argv) {
       console.log(`[autonomous] all waves complete for lane=${options.lane}`);
       break;
     }
+    const dependencyBlockers = requiredInboundDependenciesOpen(lanePaths, options.lane);
+    if (dependencyBlockers.length > 0) {
+      throw new Error(
+        `Stopping before wave ${wave}: unresolved required inbound dependencies remain (${dependencyBlockers.map((item) => item.id).join(", ")}).`,
+      );
+    }
+    const existingLedger = readWaveLedger(path.join(lanePaths.ledgerDir, `wave-${wave}.json`));
+    if (existingLedger?.humanFeedback?.length > 0) {
+      throw new Error(
+        `Stopping before wave ${wave}: pending human feedback remains in the ledger (${existingLedger.humanFeedback.join(", ")}).`,
+      );
+    }
     let success = false;
     for (let attempt = 1; attempt <= options.maxAttemptsPerWave; attempt += 1) {
       console.log(
@@ -269,7 +290,9 @@ export function runAutonomousCli(argv) {
         break;
       }
       console.warn(`[autonomous] wave ${wave} failed with status=${status}.`);
-      break;
+      if (attempt < options.maxAttemptsPerWave) {
+        console.warn(`[autonomous] retrying wave ${wave}.`);
+      }
     }
     if (!success) {
       throw new Error(`Stopping after repeated failures on wave ${wave}.`);

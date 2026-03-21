@@ -7,6 +7,8 @@ import {
   DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
   DEFAULT_EVALUATOR_AGENT_ID,
   DEFAULT_EVALUATOR_ROLE_PROMPT_PATH,
+  DEFAULT_INTEGRATION_AGENT_ID,
+  DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
   DEFAULT_WAVE_LANE,
   loadWaveConfig,
   normalizeCodexSandboxMode,
@@ -33,10 +35,12 @@ import {
   validateDocumentationClosureSummary,
   validateEvaluatorSummary,
   validateExitContractShape,
+  validateIntegrationSummary,
   validateImplementationSummary,
 } from "./agent-state.mjs";
 
 export const WAVE_EVALUATOR_ROLE_PROMPT_PATH = DEFAULT_EVALUATOR_ROLE_PROMPT_PATH;
+export const WAVE_INTEGRATION_ROLE_PROMPT_PATH = DEFAULT_INTEGRATION_ROLE_PROMPT_PATH;
 export const WAVE_DOCUMENTATION_ROLE_PROMPT_PATH = DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH;
 export const SHARED_PLAN_DOC_PATHS = [
   "docs/plans/current-state.md",
@@ -418,6 +422,13 @@ export function extractAgentComponentsFromSection(sectionText, filePath, agentId
   return parseComponentList(block, filePath, `agent ${agentId} components`);
 }
 
+export function extractAgentCapabilitiesFromSection(sectionText, filePath, agentId) {
+  const block = extractSectionBody(sectionText, "Capabilities", filePath, agentId, {
+    required: false,
+  });
+  return parseComponentList(block, filePath, `agent ${agentId} capabilities`);
+}
+
 export function slugify(value) {
   return value
     .toLowerCase()
@@ -661,11 +672,14 @@ export function validateWaveDefinition(wave, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const lane = laneProfile.lane;
   const evaluatorAgentId = laneProfile.roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const integrationAgentId =
+    laneProfile.roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     laneProfile.roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const documentationThreshold = laneProfile.validation.requireDocumentationStewardFromWave;
   const context7Threshold = laneProfile.validation.requireContext7DeclarationsFromWave;
   const exitContractThreshold = laneProfile.validation.requireExitContractsFromWave;
+  const integrationThreshold = laneProfile.validation.requireIntegrationStewardFromWave;
   const componentPromotionThreshold =
     laneProfile.validation.requireComponentPromotionsFromWave;
   const agentComponentsThreshold = laneProfile.validation.requireAgentComponentsFromWave;
@@ -673,6 +687,8 @@ export function validateWaveDefinition(wave, options = {}) {
     componentPromotionThreshold !== null && wave.wave >= componentPromotionThreshold;
   const agentComponentsRuleActive =
     agentComponentsThreshold !== null && wave.wave >= agentComponentsThreshold;
+  const integrationRuleActive =
+    integrationThreshold !== null && wave.wave >= integrationThreshold;
   const errors = [];
   const promotedComponents = new Map(
     Array.isArray(wave.componentPromotions)
@@ -809,7 +825,7 @@ export function validateWaveDefinition(wave, options = {}) {
         );
       }
     }
-    if ([evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
+    if ([evaluatorAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId)) {
       if (Array.isArray(agent.components) && agent.components.length > 0) {
         errors.push(`Agent ${agent.agentId} must not declare a ### Components section`);
       }
@@ -836,7 +852,7 @@ export function validateWaveDefinition(wave, options = {}) {
       }
     }
     if (exitContractThreshold !== null && wave.wave >= exitContractThreshold) {
-      if (![evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
+      if (![evaluatorAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId)) {
         if (!agent.exitContract) {
           errors.push(
             `Agent ${agent.agentId} must declare a ### Exit contract section in waves ${exitContractThreshold} and later`,
@@ -867,6 +883,16 @@ export function validateWaveDefinition(wave, options = {}) {
   }
   if (!resolveEvaluatorReportPath(wave, { evaluatorAgentId })) {
     errors.push(`Agent ${evaluatorAgentId} must own an evaluator report path`);
+  }
+  if (integrationRuleActive) {
+    const integrationStewards = wave.agents.filter((agent) =>
+      agent.rolePromptPaths?.includes(laneProfile.roles.integrationRolePromptPath),
+    );
+    if (integrationStewards.length !== 1) {
+      errors.push(
+        `Wave ${wave.wave} must include exactly one integration steward importing ${laneProfile.roles.integrationRolePromptPath}`,
+      );
+    }
   }
   const documentationRuleActive =
     (documentationThreshold !== null && wave.wave >= documentationThreshold) ||
@@ -948,6 +974,7 @@ export function parseWaveContent(content, filePath, options = {}) {
     const exitContract = extractExitContractFromSection(sectionText, filePath, current.agentId);
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
     const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
+    const capabilities = extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId);
     const promptOverlay = extractPromptFromSection(sectionText, filePath, current.agentId);
     const prompt = composeResolvedPrompt(
       rolePromptPaths,
@@ -970,6 +997,7 @@ export function parseWaveContent(content, filePath, options = {}) {
       exitContract,
       executorConfig,
       components,
+      capabilities,
       ownedPaths,
     });
   }
@@ -1330,9 +1358,13 @@ export function readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId } =
 export function completedWavesFromStatusFiles(allWaves, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
   const evaluatorAgentId = options.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const integrationAgentId = options.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     options.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const laneProfile = resolveLaneProfileForOptions(options);
+  const integrationThreshold =
+    options.requireIntegrationStewardFromWave ??
+    laneProfile.validation.requireIntegrationStewardFromWave;
   const componentThreshold =
     options.requireComponentPromotionsFromWave ??
     laneProfile.validation.requireComponentPromotionsFromWave;
@@ -1356,6 +1388,17 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
       summariesByAgentId[agent.agentId] = summary;
       if (agent.agentId === evaluatorAgentId && summary) {
         if (!validateEvaluatorSummary(agent, summary).ok) {
+          waveIsComplete = false;
+          break;
+        }
+        continue;
+      }
+      if (
+        agent.agentId === integrationAgentId &&
+        integrationThreshold !== null &&
+        wave.wave >= integrationThreshold
+      ) {
+        if (!validateIntegrationSummary(agent, summary).ok) {
           waveIsComplete = false;
           break;
         }

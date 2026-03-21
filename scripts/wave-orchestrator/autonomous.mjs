@@ -267,9 +267,13 @@ export function runAutonomousCli(argv) {
       );
     }
     const existingLedger = readWaveLedger(path.join(lanePaths.ledgerDir, `wave-${wave}.json`));
-    if (existingLedger?.humanFeedback?.length > 0) {
+    const pendingHumanItems = [
+      ...(existingLedger?.humanFeedback || []),
+      ...(existingLedger?.humanEscalations || []),
+    ];
+    if (pendingHumanItems.length > 0) {
       throw new Error(
-        `Stopping before wave ${wave}: pending human feedback remains in the ledger (${existingLedger.humanFeedback.join(", ")}).`,
+        `Stopping before wave ${wave}: pending human input remains in the ledger (${pendingHumanItems.join(", ")}).`,
       );
     }
     let success = false;

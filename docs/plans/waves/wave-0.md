@@ -18,6 +18,10 @@
 
 - docs/agents/wave-evaluator-role.md
 
+### Executor
+
+- profile: deep-review
+
 ### Context7
 
 - bundle: none
@@ -42,6 +46,10 @@ File ownership (only touch these paths):
 ### Role prompts
 
 - docs/agents/wave-integration-role.md
+
+### Executor
+
+- profile: deep-review
 
 ### Context7
 
@@ -73,6 +81,10 @@ File ownership (only touch these paths):
 
 - docs/agents/wave-documentation-role.md
 
+### Executor
+
+- profile: docs-pass
+
 ### Context7
 
 - bundle: none
@@ -95,6 +107,11 @@ File ownership (only touch these paths):
 ```
 
 ## Agent A1: Starter Runtime and Docs Review
+
+### Executor
+
+- profile: implement-fast
+- fallbacks: claude, opencode
 
 ### Context7
 

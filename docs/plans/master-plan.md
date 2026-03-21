@@ -9,8 +9,8 @@
 
 ## Near-Term Work
 
-- Finish genericizing remaining tests and runtime helpers.
-- Keep the starter component cutover matrix and sample wave aligned with the shipped harness behavior.
-- Add additional starter templates for common repository shapes.
-- Add richer doctor checks and guided migrations for future breaking config changes.
-- Expand release automation and changelog generation around the package-first install flow.
+- Keep the starter wave, role prompts, and component cutover matrix aligned with the shipped launcher behavior.
+- Expand `wave doctor` and migration guidance around cross-repo adoption, executor availability, and future breaking config changes.
+- Add richer starter templates for additional repository shapes after the generic single-repo path is stable.
+- Extend replay and trace tooling from file-backed artifacts into easier operator workflows.
+- Add the remaining roadmap items that are not yet shipped, especially cross-lane dependency handling and richer capability routing.

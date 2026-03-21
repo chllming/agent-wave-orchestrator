@@ -26,6 +26,8 @@ export function writeTraceBundle({
   ledger,
   docsQueue,
   integrationSummary,
+  integrationMarkdownPath,
+  clarificationTriage,
   agentRuns,
   quality,
 }) {
@@ -43,6 +45,12 @@ export function writeTraceBundle({
   writeJsonAtomic(path.join(dir, "docs-queue.json"), docsQueue || {});
   writeJsonAtomic(path.join(dir, "integration.json"), integrationSummary || {});
   writeJsonAtomic(path.join(dir, "quality.json"), quality || {});
+  copyFileIfExists(integrationMarkdownPath, path.join(dir, "integration.md"));
+  copyFileIfExists(clarificationTriage?.triagePath, path.join(dir, "feedback", "triage.jsonl"));
+  copyFileIfExists(
+    clarificationTriage?.pendingHumanPath,
+    path.join(dir, "feedback", "pending-human.md"),
+  );
   writeJsonAtomic(path.join(dir, "run-metadata.json"), {
     wave: wave.wave,
     file: wave.file,

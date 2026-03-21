@@ -19,6 +19,10 @@ export const COORDINATION_KIND_VALUES = [
   "decision",
   "blocker",
   "handoff",
+  "clarification-request",
+  "orchestrator-guidance",
+  "resolved-by-policy",
+  "human-escalation",
   "human-feedback",
   "integration-summary",
 ];
@@ -36,6 +40,7 @@ export const COORDINATION_STATUS_VALUES = [
 export const COORDINATION_PRIORITY_VALUES = ["low", "normal", "high", "urgent"];
 export const COORDINATION_CONFIDENCE_VALUES = ["low", "medium", "high"];
 const OPEN_COORDINATION_STATUSES = new Set(["open", "acknowledged", "in_progress"]);
+export const CLARIFICATION_CLOSURE_PREFIX = "clarification:";
 
 function normalizeString(value, fallback = "") {
   const normalized = String(value ?? "")
@@ -204,9 +209,62 @@ export function materializeCoordinationState(records) {
     evidence: latestRecords.filter((record) => record.kind === "evidence"),
     decisions: latestRecords.filter((record) => record.kind === "decision"),
     handoffs: latestRecords.filter((record) => record.kind === "handoff"),
+    clarifications: latestRecords.filter((record) => record.kind === "clarification-request"),
+    orchestratorGuidance: latestRecords.filter(
+      (record) => record.kind === "orchestrator-guidance",
+    ),
+    resolvedByPolicy: latestRecords.filter((record) => record.kind === "resolved-by-policy"),
+    humanEscalations: latestRecords.filter((record) => record.kind === "human-escalation"),
     humanFeedback: latestRecords.filter((record) => record.kind === "human-feedback"),
     integrationSummaries: latestRecords.filter((record) => record.kind === "integration-summary"),
   };
+}
+
+export function isOpenCoordinationStatus(status) {
+  return OPEN_COORDINATION_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
+export function clarificationClosureCondition(clarificationId) {
+  return `${CLARIFICATION_CLOSURE_PREFIX}${String(clarificationId || "").trim()}`;
+}
+
+export function clarificationIdFromClosureCondition(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized.startsWith(CLARIFICATION_CLOSURE_PREFIX)) {
+    return null;
+  }
+  const clarificationId = normalized.slice(CLARIFICATION_CLOSURE_PREFIX.length).trim();
+  return clarificationId || null;
+}
+
+export function isClarificationLinkedRequest(record, clarificationIds = null) {
+  const closureClarificationId = clarificationIdFromClosureCondition(record?.closureCondition);
+  if (closureClarificationId) {
+    return true;
+  }
+  const clarificationIdSet =
+    clarificationIds instanceof Set
+      ? clarificationIds
+      : new Set(Array.isArray(clarificationIds) ? clarificationIds : []);
+  return Array.isArray(record?.dependsOn)
+    ? record.dependsOn.some((dependencyId) => clarificationIdSet.has(String(dependencyId || "").trim()))
+    : false;
+}
+
+export function clarificationLinkedRequests(state, clarificationId = null) {
+  const clarificationIds =
+    clarificationId === null
+      ? new Set((state?.clarifications || []).map((record) => String(record.id || "").trim()))
+      : new Set([String(clarificationId || "").trim()]);
+  return (state?.requests || []).filter((record) =>
+    isClarificationLinkedRequest(record, clarificationIds),
+  );
+}
+
+export function openClarificationLinkedRequests(state, clarificationId = null) {
+  return clarificationLinkedRequests(state, clarificationId).filter((record) =>
+    isOpenCoordinationStatus(record.status),
+  );
 }
 
 export function readMaterializedCoordinationState(filePath) {
@@ -237,6 +295,10 @@ export function serializeCoordinationState(state) {
     evidence: state?.evidence || [],
     decisions: state?.decisions || [],
     handoffs: state?.handoffs || [],
+    clarifications: state?.clarifications || [],
+    orchestratorGuidance: state?.orchestratorGuidance || [],
+    resolvedByPolicy: state?.resolvedByPolicy || [],
+    humanEscalations: state?.humanEscalations || [],
     humanFeedback: state?.humanFeedback || [],
     integrationSummaries: state?.integrationSummaries || [],
   };
@@ -313,11 +375,19 @@ export function compileSharedSummary({
 }) {
   const openBlockers = state.blockers.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
   const openRequests = state.requests.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
+  const openClarifications = state.clarifications.filter((record) =>
+    OPEN_COORDINATION_STATUSES.has(record.status),
+  );
+  const openHumanEscalations = state.humanEscalations.filter((record) =>
+    OPEN_COORDINATION_STATUSES.has(record.status),
+  );
   const summary = [
     `# Wave ${wave.wave} Shared Summary`,
     "",
     `- Open requests: ${openRequests.length}`,
     `- Open blockers: ${openBlockers.length}`,
+    `- Open clarifications: ${openClarifications.length}`,
+    `- Open human escalations: ${openHumanEscalations.length}`,
     `- Open coordination items: ${state.openRecords.length}`,
     ...(integrationSummary
       ? [`- Integration recommendation: ${integrationSummary.recommendation || "n/a"}`]
@@ -329,10 +399,26 @@ export function compileSharedSummary({
       ? openBlockers.map((record) => renderOpenRecord(record))
       : ["- None."]),
     "",
+    "## Current clarifications",
+    ...(openClarifications.length > 0
+      ? openClarifications.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
     "## Current decisions",
     ...(state.decisions.length > 0
       ? state.decisions.slice(-5).map((record) => renderActivityRecord(record))
       : ["- None."]),
+    ...(Array.isArray(integrationSummary?.runtimeAssignments) &&
+    integrationSummary.runtimeAssignments.length > 0
+      ? [
+          "",
+          "## Runtime assignments",
+          ...integrationSummary.runtimeAssignments.map(
+            (assignment) =>
+              `- ${assignment.agentId}: ${assignment.executorId || "n/a"} (${assignment.role || "n/a"})${assignment.profile ? ` profile=${assignment.profile}` : ""}${assignment.fallbackUsed ? " fallback-used" : ""}`,
+          ),
+        ]
+      : []),
     "",
   ].join("\n");
   if (summary.length <= maxChars) {
@@ -357,6 +443,10 @@ export function compileAgentInbox({
   const targetedRecords = state.openRecords.filter((record) => isTargetedToAgent(record, agent));
   const ownedRecords = (state.recordsByAgentId.get(agent.agentId) || []).filter((record) =>
     OPEN_COORDINATION_STATUSES.has(record.status),
+  );
+  const clarificationRecords = state.clarifications.filter((record) =>
+    OPEN_COORDINATION_STATUSES.has(record.status) &&
+    (record.agentId === agent.agentId || isTargetedToAgent(record, agent)),
   );
   const docsItems =
     Array.isArray(docsQueue?.items) && docsQueue.items.length > 0
@@ -384,6 +474,11 @@ export function compileAgentInbox({
       ? ownedRecords.map((record) => renderOpenRecord(record))
       : ["- None."]),
     "",
+    "## Clarifications",
+    ...(clarificationRecords.length > 0
+      ? clarificationRecords.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
     "## Ledger tasks",
     ...(ledgerTasks.length > 0
       ? ledgerTasks.map(
@@ -405,6 +500,16 @@ export function compileAgentInbox({
           "## Integration note",
           `- Recommendation: ${integrationSummary.recommendation || "n/a"}`,
           `- Detail: ${compactSingleLine(integrationSummary.detail || "n/a", 180)}`,
+          ...(Array.isArray(integrationSummary.runtimeAssignments) &&
+          integrationSummary.runtimeAssignments.length > 0
+            ? [
+                "- Runtime assignments:",
+                ...integrationSummary.runtimeAssignments.map(
+                  (assignment) =>
+                    `  ${assignment.agentId}: ${assignment.executorId || "n/a"} (${assignment.role || "n/a"})`,
+                ),
+              ]
+            : []),
         ]
       : []),
     "",

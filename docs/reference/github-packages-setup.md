@@ -32,6 +32,13 @@ For repositories that already have Wave config, docs, or waves:
 pnpm exec wave init --adopt-existing
 ```
 
+Then verify the package and starter runtime against the target repo:
+
+```bash
+pnpm exec wave doctor
+pnpm exec wave launch --lane main --dry-run --no-dashboard
+```
+
 ## Upgrade
 
 ```bash

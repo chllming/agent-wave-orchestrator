@@ -16,6 +16,7 @@ import {
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
   resolveRelaunchRuns,
+  runClosureSweepPhase,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
 import { hashAgentPromptFingerprint } from "../../scripts/wave-orchestrator/context7.mjs";
 
@@ -43,6 +44,15 @@ function makeLanePaths(dir) {
     tmuxDashboardSessionPrefix: "oc_leap_claw_wave_dashboard",
     tmuxGlobalDashboardSessionPrefix: "oc_leap_claw_wave_dashboard_global",
     tmuxSocketName: `test-${path.basename(dir)}`,
+    integrationAgentId: "A8",
+    documentationAgentId: "A9",
+    evaluatorAgentId: "A0",
+    laneProfile: {
+      runtimePolicy: {
+        runtimeMixTargets: {},
+      },
+    },
+    capabilityRouting: { preferredAgents: {} },
   };
 }
 
@@ -263,6 +273,276 @@ describe("resolveRelaunchRuns", () => {
     );
 
     expect(selected.map((run) => run.agent.agentId)).toEqual(["A2"]);
+  });
+
+  it("halts retries while human escalation remains unresolved", () => {
+    const agentRuns = [{ agent: { agentId: "A1", capabilities: ["runtime"] } }];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A1", statusCode: "failed" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [
+            {
+              id: "escalation-1",
+              kind: "human-escalation",
+              status: "open",
+              targets: ["agent:A1"],
+            },
+          ],
+          requests: [],
+          blockers: [],
+        },
+        ledger: { phase: "running", tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        evaluatorAgentId: "A0",
+        integrationAgentId: "A8",
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected).toEqual([]);
+  });
+
+  it("prioritizes launcher-routed clarification follow-up requests", () => {
+    const agentRuns = [
+      { agent: { agentId: "A1", capabilities: ["runtime"] } },
+      { agent: { agentId: "A9", capabilities: ["docs-shared-plan"] } },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A1", statusCode: "failed" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [
+            {
+              id: "clarify-docs",
+              kind: "clarification-request",
+              status: "in_progress",
+            },
+          ],
+          requests: [
+            {
+              id: "route-clarify-docs-1",
+              kind: "request",
+              source: "launcher",
+              status: "open",
+              targets: ["agent:A9"],
+              dependsOn: ["clarify-docs"],
+              closureCondition: "clarification:clarify-docs",
+            },
+          ],
+          blockers: [],
+        },
+        ledger: { phase: "clarifying", tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        evaluatorAgentId: "A0",
+        integrationAgentId: "A8",
+        laneProfile: { runtimePolicy: { runtimeMixTargets: {} } },
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.map((run) => run.agent.agentId)).toEqual(["A9"]);
+  });
+
+  it("switches failed agents to an allowed fallback executor on retry", () => {
+    const agentRuns = [
+      {
+        agent: {
+          agentId: "A1",
+          capabilities: ["runtime"],
+          executorResolved: {
+            id: "codex",
+            initialExecutorId: "codex",
+            model: null,
+            role: "implementation",
+            profile: null,
+            selectedBy: "lane-role-default",
+            fallbacks: ["claude"],
+            tags: [],
+            budget: null,
+            fallbackUsed: false,
+            fallbackReason: null,
+            executorHistory: [{ attempt: 0, executorId: "codex", reason: "initial" }],
+            codex: { command: "missing-codex", sandbox: "danger-full-access" },
+            claude: {
+              command: "bash",
+              model: "claude-sonnet-4-6",
+              appendSystemPromptMode: "append",
+              permissionMode: null,
+              permissionPromptTool: null,
+              maxTurns: null,
+              mcpConfig: [],
+              strictMcpConfig: false,
+              settings: null,
+              outputFormat: "text",
+              allowedTools: [],
+              disallowedTools: [],
+            },
+            opencode: {
+              command: "missing-opencode",
+              model: null,
+              agent: null,
+              attach: null,
+              format: "default",
+              steps: null,
+              instructions: [],
+              permission: null,
+            },
+          },
+        },
+      },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A1", statusCode: "127" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [],
+          requests: [],
+          blockers: [],
+        },
+        ledger: { phase: "running", attempt: 1, tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        evaluatorAgentId: "A0",
+        integrationAgentId: "A8",
+        laneProfile: {
+          runtimePolicy: {
+            runtimeMixTargets: {
+              claude: 1,
+            },
+          },
+        },
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.map((run) => run.agent.agentId)).toEqual(["A1"]);
+    expect(agentRuns[0].agent.executorResolved).toMatchObject({
+      id: "claude",
+      fallbackUsed: true,
+      fallbackReason: "retry:127",
+      initialExecutorId: "codex",
+    });
+  });
+});
+
+describe("runClosureSweepPhase", () => {
+  it("stops after integration when the integration summary is not ready for doc closure", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const runLog = path.join(dir, "wave-0-a8.log");
+    const runStatus = path.join(dir, "wave-0-a8.status");
+    const closureRuns = [
+      {
+        agent: { agentId: "A8", title: "Integration" },
+        sessionName: "wave-a8",
+        promptPath: path.join(dir, "a8.prompt.md"),
+        logPath: runLog,
+        statusPath: runStatus,
+        messageBoardPath: path.join(dir, "board.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "a8.inbox.md"),
+        inboxText: "",
+      },
+      {
+        agent: { agentId: "A9", title: "Docs" },
+        sessionName: "wave-a9",
+        promptPath: path.join(dir, "a9.prompt.md"),
+        logPath: path.join(dir, "wave-0-a9.log"),
+        statusPath: path.join(dir, "wave-0-a9.status"),
+        messageBoardPath: path.join(dir, "board.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "a9.inbox.md"),
+        inboxText: "",
+      },
+      {
+        agent: { agentId: "A0", title: "Evaluator" },
+        sessionName: "wave-a0",
+        promptPath: path.join(dir, "a0.prompt.md"),
+        logPath: path.join(dir, "wave-0-a0.log"),
+        statusPath: path.join(dir, "wave-0-a0.status"),
+        messageBoardPath: path.join(dir, "board.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "a0.inbox.md"),
+        inboxText: "",
+      },
+    ];
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: { wave: 0, evaluatorAgentId: "A0", integrationAgentId: "A8", documentationAgentId: "A9" },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "needs-more-work",
+          detail: "integration still has contradictions",
+        },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        fs.writeFileSync(
+          params.statusPath,
+          JSON.stringify({ code: 0, promptHash: "hash" }, null, 2),
+          "utf8",
+        );
+        fs.writeFileSync(
+          params.logPath,
+          "[wave-integration] state=needs-more-work claims=0 conflicts=1 blockers=0 detail=integration-still-has-contradictions\n",
+          "utf8",
+        );
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual(["A8"]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      agentId: "A8",
+      statusCode: "integration-needs-more-work",
+    });
   });
 });
 

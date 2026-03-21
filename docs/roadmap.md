@@ -1,6 +1,6 @@
 # Wave Orchestrator Roadmap
 
-This roadmap proposes the highest-value upgrades to Wave Orchestration that preserve the current architecture:
+This roadmap records the highest-value upgrades for Wave Orchestration while preserving the current architecture:
 
 - lane-scoped runs
 - wave markdown as the authored plan surface
@@ -8,6 +8,18 @@ This roadmap proposes the highest-value upgrades to Wave Orchestration that pres
 - component promotions, exit contracts, documentation stewardship, and evaluator closure
 
 The goal is not to replace waves with a different orchestration model. The goal is to make the existing wave model more durable for long-running, multi-agent, multi-lane repository work.
+
+## Current Status
+
+As of the current repository state:
+
+- the package-first install and upgrade flow is shipped
+- the canonical coordination JSONL store, rendered board projection, compiled inboxes, per-wave ledger, docs queue, integration summaries, and trace bundles are shipped
+- `A8` integration stewardship and staged closure are shipped
+- orchestrator-first clarification triage and human-escalation artifacts are shipped
+- per-agent executor profiles, per-lane runtime policy, hard runtime mix targets, retry-time fallback, and generic budgets are shipped
+
+The remaining roadmap work is mostly about extending those foundations rather than inventing a new orchestration model.
 
 ## Design Position
 
@@ -24,11 +36,13 @@ Wave Orchestration already has a strong base:
 
 - wave parsing and role imports
 - lane-scoped state under `.tmp/`
-- message boards
-- basic per-agent executor overrides for Codex, Claude, and OpenCode
+- canonical coordination JSONL plus generated message boards
+- compiled shared summaries and per-agent inboxes
+- per-agent executor overrides, profiles, per-lane runtime policy, and retry fallback for Codex, Claude, and OpenCode
 - structured proof and documentation markers
-- documentation closure and evaluator closure sweep
-- a file-backed human feedback queue
+- integration, documentation, and evaluator closure sweep
+- a file-backed human feedback queue plus orchestrator-first clarification triage
+- ledger, docs queue, and trace bundles
 
 The next step is to evolve the harness from “agents write progress notes” into “agents coordinate through typed shared state, compiled inboxes, runtime-aware planning, and an explicit integration phase.”
 
@@ -259,7 +273,7 @@ Lane config additions:
 Example runtime mix target:
 
 - `codex: 3`
-- `claude: 2`
+- `claude: 3`
 - `opencode: 2`
 
 Use:
@@ -580,15 +594,4 @@ without forcing a rewrite of wave files, lane structure, or existing proof marke
 
 ## Source References
 
-- [Effective harnesses for long-running agents](./research/agent-context-cache/articles/effective-harnesses-for-long-running-agents.md)
-- [Harness engineering: leveraging Codex in an agent-first world](./research/agent-context-cache/articles/harness-engineering-leveraging-codex-in-an-agent-first-world.md)
-- [Unlocking the Codex harness: how we built the App Server](./research/agent-context-cache/articles/unlocking-the-codex-harness-how-we-built-the-app-server.md)
-- [Building Effective AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned](./research/agent-context-cache/papers/building-effective-ai-coding-agents-for-the-terminal-scaffolding-harness-context-engineering-and-lessons-learned.md)
-- [VeRO: An Evaluation Harness for Agents to Optimize Agents](./research/agent-context-cache/papers/vero-an-evaluation-harness-for-agents-to-optimize-agents.md)
-- [EvoClaw: Evaluating AI Agents on Continuous Software Evolution](./research/agent-context-cache/papers/evoclaw-evaluating-ai-agents-on-continuous-software-evolution.md)
-- [LLM-based Multi-Agent Blackboard System for Information Discovery in Data Science](./research/agent-context-cache/papers/llm-based-multi-agent-blackboard-system-for-information-discovery-in-data-science.md)
-- [Exploring Advanced LLM Multi-Agent Systems Based on Blackboard Architecture](./research/agent-context-cache/papers/exploring-advanced-llm-multi-agent-systems-based-on-blackboard-architecture.md)
-- [DOVA: Deliberation-First Multi-Agent Orchestration for Autonomous Research Automation](./research/agent-context-cache/papers/dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation.md)
-- [Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems](./research/agent-context-cache/papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md)
-- [SYMPHONY: Synergistic Multi-agent Planning with Heterogeneous Language Model Assembly](./research/agent-context-cache/papers/symphony-synergistic-multi-agent-planning-with-heterogeneous-language-model-assembly.md)
-- [An Open Agent Architecture](./research/agent-context-cache/papers/an-open-agent-architecture.md)
+The canonical source list now lives at the bottom of [README.md](../../README.md). Keep the committed source manifest in [docs/research/agent-context-sources.md](./research/agent-context-sources.md) and keep hydrated caches local-only.

@@ -175,7 +175,9 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     ),
     feedbackStateDir,
     feedbackRequestsDir: path.join(feedbackStateDir, "requests"),
+    feedbackTriageDir: path.join(stateDir, "feedback", "triage"),
     crossLaneDependenciesDir: path.join(REPO_ROOT, laneProfile.paths.orchestratorStateDir, "dependencies"),
+    runtimePolicy: laneProfile.runtimePolicy,
   };
 }
 

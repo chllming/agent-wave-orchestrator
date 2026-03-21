@@ -14,6 +14,7 @@ import {
   SHARED_PLAN_DOC_PATHS,
   validateWaveComponentMatrixCurrentLevels,
   validateWaveDefinition,
+  validateWaveRuntimeMixAssignments,
   WAVE_DOCUMENTATION_ROLE_PROMPT_PATH,
   WAVE_EVALUATOR_ROLE_PROMPT_PATH,
   WAVE_INTEGRATION_ROLE_PROMPT_PATH,
@@ -687,6 +688,33 @@ describe("validateWaveDefinition", () => {
 });
 
 describe("completedWavesFromStatusFiles", () => {
+  it("rejects waves that exceed configured runtime mix targets", () => {
+    expect(
+      validateWaveRuntimeMixAssignments(
+        {
+          wave: 3,
+          agents: [
+            { agentId: "A1", executorResolved: { id: "claude" } },
+            { agentId: "A2", executorResolved: { id: "claude" } },
+          ],
+        },
+        {
+          laneProfile: {
+            executors: { default: "codex" },
+            runtimePolicy: {
+              runtimeMixTargets: {
+                claude: 1,
+              },
+            },
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "runtime-mix-exceeded",
+    });
+  });
+
   it("requires prompt-hash-matching status files and evaluator PASS", () => {
     const tempRoot = registerTempPath(
       path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-completion`),
@@ -1097,6 +1125,139 @@ describe("completedWavesFromStatusFiles", () => {
         logsDir,
         requireComponentPromotionsFromWave: 0,
         requireIntegrationStewardFromWave: 0,
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not mark a wave complete while clarification follow-up requests remain open", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-clarification-open`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+
+    const reportRelPath = `.tmp/${path.basename(tempRoot)}/wave-0-evaluator.md`;
+    const wave = {
+      wave: 0,
+      file: "docs/plans/waves/wave-0.md",
+      componentPromotions: [],
+      agents: [
+        {
+          agentId: "A0",
+          slug: "0-a0",
+          prompt: `File ownership (only touch these paths):\n- ${reportRelPath}`,
+          rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
+        },
+        {
+          agentId: "A1",
+          slug: "0-a1",
+          prompt: "File ownership (only touch these paths):\n- src/example.ts",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+      ],
+      evaluatorReportPath: reportRelPath,
+    };
+
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# Evaluator\n\nVerdict: PASS\n", "utf8");
+    for (const agent of wave.agents) {
+      fs.writeFileSync(
+        path.join(statusDir, `wave-0-${agent.slug}.status`),
+        JSON.stringify(
+          {
+            code: 0,
+            promptHash: hashAgentPromptFingerprint(agent),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    }
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a0.summary.json"),
+      JSON.stringify(
+        {
+          gate: {
+            architecture: "pass",
+            integration: "pass",
+            durability: "pass",
+            live: "pass",
+            docs: "pass",
+          },
+          verdict: { verdict: "pass" },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a1.summary.json"),
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["src/example.ts"],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(coordinationDir, "wave-0.jsonl"),
+      [
+        JSON.stringify({
+          id: "clarify-a1",
+          kind: "clarification-request",
+          wave: 0,
+          lane: "main",
+          agentId: "A1",
+          status: "in_progress",
+          priority: "high",
+          targets: ["agent:A9"],
+          summary: "Need shared plan answer",
+          detail: "Waiting on shared plan guidance",
+        }),
+        JSON.stringify({
+          id: "route-clarify-a1-1",
+          kind: "request",
+          wave: 0,
+          lane: "main",
+          agentId: "launcher",
+          status: "open",
+          priority: "high",
+          targets: ["agent:A9"],
+          dependsOn: ["clarify-a1"],
+          closureCondition: "clarification:clarify-a1",
+          summary: "Clarification follow-up for A1",
+          detail: "Resolve docs scope",
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    expect(
+      completedWavesFromStatusFiles([wave], statusDir, {
+        logsDir,
+        coordinationDir,
       }),
     ).toEqual([]);
   });

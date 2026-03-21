@@ -186,15 +186,37 @@ export function buildExecutorLaunchSpec({ agent, promptPath, logPath, overlayDir
   return buildCodexLaunchSpec({ agent, promptPath, logPath });
 }
 
-export function preflightExecutorCommand(command, executorId) {
+export function commandForExecutor(executor, executorId = executor?.id) {
+  if (executorId === "codex") {
+    return executor?.codex?.command || DEFAULT_CODEX_COMMAND;
+  }
+  if (executorId === "claude") {
+    return executor?.claude?.command || "claude";
+  }
+  if (executorId === "opencode") {
+    return executor?.opencode?.command || "opencode";
+  }
+  return "node";
+}
+
+export function isExecutorCommandAvailable(command) {
   const result = spawnSync("bash", ["-lc", `command -v ${shellQuote(command)}`], {
     cwd: REPO_ROOT,
     encoding: "utf8",
     env: process.env,
   });
-  if (result.status === 0) {
+  return result.status === 0;
+}
+
+export function preflightExecutorCommand(command, executorId) {
+  if (isExecutorCommandAvailable(command)) {
     return;
   }
+  const result = spawnSync("bash", ["-lc", `command -v ${shellQuote(command)}`], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: process.env,
+  });
   const detail = (result.stderr || result.stdout || "").trim();
   throw new Error(
     `Executor "${executorId}" requires "${command}" on PATH${detail ? ` (${detail})` : ""}`,
@@ -209,14 +231,7 @@ export function preflightExecutorsForWaves(waves) {
       if (!executor) {
         continue;
       }
-      const command =
-        executor.id === "codex"
-          ? executor.codex.command
-          : executor.id === "claude"
-            ? executor.claude.command
-            : executor.id === "opencode"
-              ? executor.opencode.command
-              : "node";
+      const command = commandForExecutor(executor, executor.id);
       const key = `${executor.id}:${command}`;
       if (seen.has(key)) {
         continue;

@@ -100,21 +100,33 @@ pnpm install
 4. Dry-parse the starter wave:
 
 ```bash
-pnpm exec wave launch --lane main --dry-run --no-dashboard
+node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 ```
 
 5. When the wave parses cleanly, launch a single wave:
 
 ```bash
-pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
+node scripts/wave.mjs launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
 ```
 
 Alternative real executors:
 
 ```bash
-pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor claude
-pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor opencode
+node scripts/wave.mjs launch --lane main --start-wave 0 --end-wave 0 --executor claude
+node scripts/wave.mjs launch --lane main --start-wave 0 --end-wave 0 --executor opencode
 ```
+
+## Documentation Map
+
+- [README.md](/home/coder/wave-orchestration/README.md): package entry point, install flow, executor behavior, Context7 behavior, and command quick reference
+- [docs/plans/wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/wave-orchestrator.md): operator runbook for launch, coordination, closure, and upgrade flow
+- [docs/plans/context7-wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/context7-wave-orchestrator.md): Context7 setup, bundle authoring, injection order, and executor layering
+- [docs/plans/current-state.md](/home/coder/wave-orchestration/docs/plans/current-state.md): shipped runtime and package capabilities
+- [docs/plans/master-plan.md](/home/coder/wave-orchestration/docs/plans/master-plan.md): next priorities after the current shipped runtime
+- [docs/plans/migration.md](/home/coder/wave-orchestration/docs/plans/migration.md): adopt this package into another repository
+- [docs/reference/github-packages-setup.md](/home/coder/wave-orchestration/docs/reference/github-packages-setup.md): `.npmrc` and GitHub Packages auth details
+- [docs/reference/migration-0.2-to-0.5.md](/home/coder/wave-orchestration/docs/reference/migration-0.2-to-0.5.md): migration guide for older Wave repos
+- [docs/roadmap.md](/home/coder/wave-orchestration/docs/roadmap.md): rationale, delivered phases, and remaining roadmap items
 
 ## Typical Harness Workflow
 
@@ -159,7 +171,7 @@ pnpm exec wave launch --lane main --reconcile-status
 pnpm exec wave feedback list --lane main --pending
 ```
 
-The harness now tries to resolve clarification requests before asking a human. Agents should emit `clarification-request` coordination records first; unresolved items are written into `.tmp/<lane>-wave-launcher/feedback/triage/` and only then become human feedback tickets.
+The harness now tries to resolve clarification requests before asking a human. Agents should emit `clarification-request` coordination records first; unresolved items are written into `.tmp/<lane>-wave-launcher/feedback/triage/` and only then become human feedback tickets. Routed clarification follow-ups stay blocking until the linked request or escalation is fully resolved.
 
 10. Launch one wave at a time until the plan is stable:
 
@@ -187,7 +199,7 @@ The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
 - `feedback/triage/wave-<n>.jsonl|/pending-human.md`: clarification triage log plus unresolved human escalations
 - `prompts/`, `logs/`, `status/`, `executors/`, and `context7-cache/`: run artifacts, overlays, and cached external-doc snippets
 
-`wave.config.json` can now declare executor profiles and lane runtime policy. In this repo, `main` defaults implementation roles to `codex`, integration/documentation/evaluator roles to `claude`, and research or ops-heavy roles to `opencode`, with fallbacks recorded in the runtime artifacts and traces.
+`wave.config.json` can now declare executor profiles and lane runtime policy. In this repo, `main` defaults implementation roles to `codex`, integration/documentation/evaluator roles to `claude`, and research or ops-heavy roles to `opencode`. Runtime mix targets are enforced before launch, retry fallbacks are chosen from the configured fallback chain when a failed agent can move safely, and those fallback decisions are recorded in the ledger, integration summary, and traces. Generic `budget.minutes` now caps attempt timeouts, and `budget.turns` seeds vendor turn or step limits when the executor-specific settings are absent.
 
 ## Wave File Shape
 
@@ -408,12 +420,18 @@ pnpm exec wave init
 pnpm exec wave init --adopt-existing
 pnpm exec wave doctor
 pnpm exec wave launch --lane main --dry-run --no-dashboard
+pnpm exec wave coord show --lane main --wave 0 --dry-run --json
+pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
+pnpm exec wave coord render --lane main --wave 0 --dry-run
+pnpm exec wave coord post --lane main --wave 0 --agent A1 --kind blocker --summary "Need repository decision"
 pnpm exec wave launch --lane main --reconcile-status
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --executor codex --codex-sandbox danger-full-access
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --executor claude
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --executor opencode
 pnpm exec wave launch --lane main --auto-next --executor codex --codex-sandbox danger-full-access
 pnpm exec wave feedback list --lane main --pending
+pnpm exec wave feedback show --id <request-id>
+pnpm exec wave feedback respond --id <request-id> --response "..." --operator "<name>"
 pnpm exec wave autonomous --lane main --executor codex --codex-sandbox danger-full-access
 pnpm exec wave autonomous --lane main --executor claude
 pnpm exec wave autonomous --lane main --executor opencode
@@ -424,3 +442,16 @@ pnpm exec wave changelog --since-installed
 ## Research Sources
 
 The repository only commits a source index. Hydrated paper or article caches should stay local and ignored under `docs/research/cache/` or `docs/research/agent-context-cache/`.
+
+- [Effective harnesses for long-running agents](./docs/research/agent-context-cache/articles/effective-harnesses-for-long-running-agents.md)
+- [Harness engineering: leveraging Codex in an agent-first world](./docs/research/agent-context-cache/articles/harness-engineering-leveraging-codex-in-an-agent-first-world.md)
+- [Unlocking the Codex harness: how we built the App Server](./docs/research/agent-context-cache/articles/unlocking-the-codex-harness-how-we-built-the-app-server.md)
+- [Building Effective AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned](./docs/research/agent-context-cache/papers/building-effective-ai-coding-agents-for-the-terminal-scaffolding-harness-context-engineering-and-lessons-learned.md)
+- [VeRO: An Evaluation Harness for Agents to Optimize Agents](./docs/research/agent-context-cache/papers/vero-an-evaluation-harness-for-agents-to-optimize-agents.md)
+- [EvoClaw: Evaluating AI Agents on Continuous Software Evolution](./docs/research/agent-context-cache/papers/evoclaw-evaluating-ai-agents-on-continuous-software-evolution.md)
+- [LLM-based Multi-Agent Blackboard System for Information Discovery in Data Science](./docs/research/agent-context-cache/papers/llm-based-multi-agent-blackboard-system-for-information-discovery-in-data-science.md)
+- [Exploring Advanced LLM Multi-Agent Systems Based on Blackboard Architecture](./docs/research/agent-context-cache/papers/exploring-advanced-llm-multi-agent-systems-based-on-blackboard-architecture.md)
+- [DOVA: Deliberation-First Multi-Agent Orchestration for Autonomous Research Automation](./docs/research/agent-context-cache/papers/dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation.md)
+- [Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems](./docs/research/agent-context-cache/papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md)
+- [SYMPHONY: Synergistic Multi-agent Planning with Heterogeneous Language Model Assembly](./docs/research/agent-context-cache/papers/symphony-synergistic-multi-agent-planning-with-heterogeneous-language-model-assembly.md)
+- [An Open Agent Architecture](./docs/research/agent-context-cache/papers/an-open-agent-architecture.md)

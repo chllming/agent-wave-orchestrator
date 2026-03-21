@@ -6,6 +6,7 @@ export function buildDocsQueue({
   summariesByAgentId = {},
   sharedPlanDocs = [],
   componentPromotions = [],
+  runtimeAssignments = [],
 }) {
   const items = [];
   for (const [agentId, summary] of Object.entries(summariesByAgentId || {})) {
@@ -60,6 +61,7 @@ export function buildDocsQueue({
     createdAt: toIsoTimestamp(),
     updatedAt: toIsoTimestamp(),
     releaseNotesRequired,
+    runtimeAssignments,
     items,
   };
 }

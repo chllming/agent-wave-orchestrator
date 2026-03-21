@@ -170,6 +170,19 @@ function normalizeOptionalStringOrStringArray(value, label) {
   return normalized ? [normalized] : [];
 }
 
+function normalizeExecutorModeArray(value, label) {
+  if (value === undefined || value === null || value === "") {
+    return [];
+  }
+  const list = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+  return list.map((entry, index) => normalizeExecutorMode(entry, `${label}[${index}]`));
+}
+
 function normalizeOptionalJsonObject(value, label) {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -178,6 +191,17 @@ function normalizeOptionalJsonObject(value, label) {
     return JSON.parse(JSON.stringify(value));
   }
   throw new Error(`${label} must be a JSON object`);
+}
+
+function normalizeExecutorBudget(rawBudget = {}, label = "budget") {
+  const budget =
+    rawBudget && typeof rawBudget === "object" && !Array.isArray(rawBudget) ? rawBudget : {};
+  const turns = normalizeOptionalPositiveInt(budget.turns, `${label}.turns`, null);
+  const minutes = normalizeOptionalPositiveInt(budget.minutes, `${label}.minutes`, null);
+  if (turns === null && minutes === null) {
+    return null;
+  }
+  return { turns, minutes };
 }
 
 function normalizeThreshold(value, fallback) {
@@ -306,6 +330,64 @@ function normalizeCapabilityRouting(rawCapabilityRouting = {}) {
   };
 }
 
+function normalizeRuntimeMixTargets(rawRuntimeMixTargets = {}) {
+  if (
+    !rawRuntimeMixTargets ||
+    typeof rawRuntimeMixTargets !== "object" ||
+    Array.isArray(rawRuntimeMixTargets)
+  ) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(rawRuntimeMixTargets).map(([executorId, rawCount]) => {
+      const normalizedExecutor = normalizeExecutorMode(
+        executorId,
+        `runtimeMixTargets.${executorId}`,
+      );
+      const count = Number.parseInt(String(rawCount), 10);
+      if (!Number.isFinite(count) || count < 0) {
+        throw new Error(`runtimeMixTargets.${executorId} must be a non-negative integer`);
+      }
+      return [normalizedExecutor, count];
+    }),
+  );
+}
+
+function normalizeDefaultExecutorByRole(rawDefaultExecutorByRole = {}) {
+  if (
+    !rawDefaultExecutorByRole ||
+    typeof rawDefaultExecutorByRole !== "object" ||
+    Array.isArray(rawDefaultExecutorByRole)
+  ) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(rawDefaultExecutorByRole).map(([role, executorId]) => [
+      String(role || "")
+        .trim()
+        .toLowerCase(),
+      normalizeExecutorMode(executorId, `defaultExecutorByRole.${role}`),
+    ]),
+  );
+}
+
+function normalizeRuntimePolicy(rawRuntimePolicy = {}) {
+  const runtimePolicy =
+    rawRuntimePolicy && typeof rawRuntimePolicy === "object" && !Array.isArray(rawRuntimePolicy)
+      ? rawRuntimePolicy
+      : {};
+  return {
+    runtimeMixTargets: normalizeRuntimeMixTargets(runtimePolicy.runtimeMixTargets),
+    defaultExecutorByRole: normalizeDefaultExecutorByRole(
+      runtimePolicy.defaultExecutorByRole,
+    ),
+    fallbackExecutorOrder: normalizeExecutorModeArray(
+      runtimePolicy.fallbackExecutorOrder,
+      "runtimePolicy.fallbackExecutorOrder",
+    ),
+  };
+}
+
 function normalizeClaudePromptMode(value, label = "executors.claude.appendSystemPromptMode") {
   const normalized = String(value || "append")
     .trim()
@@ -336,10 +418,115 @@ function normalizeOpenCodeFormat(value, label = "executors.opencode.format") {
   return normalized;
 }
 
+function normalizeExecutorProfile(rawProfile = {}, label = "executors.profiles.<profile>") {
+  if (!rawProfile || typeof rawProfile !== "object" || Array.isArray(rawProfile)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return {
+    id:
+      rawProfile.id === undefined || rawProfile.id === null || rawProfile.id === ""
+        ? null
+        : normalizeExecutorMode(rawProfile.id, `${label}.id`),
+    model: normalizeOptionalString(rawProfile.model, null),
+    fallbacks: normalizeExecutorModeArray(rawProfile.fallbacks, `${label}.fallbacks`),
+    tags: normalizeOptionalStringArray(rawProfile.tags, []),
+    budget: normalizeExecutorBudget(rawProfile.budget, `${label}.budget`),
+    codex: rawProfile.codex
+      ? {
+          command: normalizeOptionalString(rawProfile.codex.command, null),
+          sandbox:
+            rawProfile.codex.sandbox === undefined ||
+            rawProfile.codex.sandbox === null ||
+            rawProfile.codex.sandbox === ""
+              ? null
+              : normalizeCodexSandboxMode(
+                  rawProfile.codex.sandbox,
+                  `${label}.codex.sandbox`,
+                ),
+        }
+      : null,
+    claude: rawProfile.claude
+      ? {
+          command: normalizeOptionalString(rawProfile.claude.command, null),
+          agent: normalizeOptionalString(rawProfile.claude.agent, null),
+          permissionMode: normalizeOptionalString(
+            rawProfile.claude.permissionMode,
+            null,
+          ),
+          permissionPromptTool: normalizeOptionalString(
+            rawProfile.claude.permissionPromptTool,
+            null,
+          ),
+          maxTurns: normalizeOptionalPositiveInt(
+            rawProfile.claude.maxTurns,
+            `${label}.claude.maxTurns`,
+            null,
+          ),
+          mcpConfig: normalizeOptionalStringOrStringArray(
+            rawProfile.claude.mcpConfig,
+            `${label}.claude.mcpConfig`,
+          ),
+          strictMcpConfig:
+            rawProfile.claude.strictMcpConfig === undefined
+              ? null
+              : normalizeOptionalBoolean(
+                  rawProfile.claude.strictMcpConfig,
+                  false,
+                ),
+          settings: normalizeOptionalString(rawProfile.claude.settings, null),
+          outputFormat:
+            rawProfile.claude.outputFormat === undefined ||
+            rawProfile.claude.outputFormat === null ||
+            rawProfile.claude.outputFormat === ""
+              ? null
+              : normalizeClaudeOutputFormat(
+                  rawProfile.claude.outputFormat,
+                  `${label}.claude.outputFormat`,
+                ),
+          allowedTools: normalizeOptionalStringArray(rawProfile.claude.allowedTools, []),
+          disallowedTools: normalizeOptionalStringArray(
+            rawProfile.claude.disallowedTools,
+            [],
+          ),
+        }
+      : null,
+    opencode: rawProfile.opencode
+      ? {
+          command: normalizeOptionalString(rawProfile.opencode.command, null),
+          agent: normalizeOptionalString(rawProfile.opencode.agent, null),
+          attach: normalizeOptionalString(rawProfile.opencode.attach, null),
+          format:
+            rawProfile.opencode.format === undefined ||
+            rawProfile.opencode.format === null ||
+            rawProfile.opencode.format === ""
+              ? null
+              : normalizeOpenCodeFormat(
+                  rawProfile.opencode.format,
+                  `${label}.opencode.format`,
+                ),
+          steps: normalizeOptionalPositiveInt(
+            rawProfile.opencode.steps,
+            `${label}.opencode.steps`,
+            null,
+          ),
+          instructions: normalizeOptionalStringArray(rawProfile.opencode.instructions, []),
+          permission: normalizeOptionalJsonObject(
+            rawProfile.opencode.permission,
+            `${label}.opencode.permission`,
+          ),
+        }
+      : null,
+  };
+}
+
 function mergeExecutors(baseExecutors = {}, overrideExecutors = {}) {
   return {
     ...baseExecutors,
     ...overrideExecutors,
+    profiles: {
+      ...(baseExecutors.profiles || {}),
+      ...(overrideExecutors.profiles || {}),
+    },
     codex: {
       ...(baseExecutors.codex || {}),
       ...(overrideExecutors.codex || {}),
@@ -359,6 +546,22 @@ function normalizeExecutors(rawExecutors = {}) {
   const executors = rawExecutors && typeof rawExecutors === "object" ? rawExecutors : {};
   return {
     default: normalizeExecutorMode(executors.default || DEFAULT_EXECUTOR_MODE, "executors.default"),
+    profiles:
+      executors.profiles &&
+      typeof executors.profiles === "object" &&
+      !Array.isArray(executors.profiles)
+        ? Object.fromEntries(
+            Object.entries(executors.profiles).map(([profileName, profile]) => [
+              String(profileName || "")
+                .trim()
+                .toLowerCase(),
+              normalizeExecutorProfile(
+                profile,
+                `executors.profiles.${profileName}`,
+              ),
+            ]),
+          )
+        : {},
     codex: {
       command: normalizeOptionalString(
         executors.codex?.command,
@@ -468,6 +671,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     validation: normalizeValidation(rawConfig.validation),
     executors: normalizeExecutors(rawConfig.executors),
     capabilityRouting: normalizeCapabilityRouting(rawConfig.capabilityRouting),
+    runtimePolicy: normalizeRuntimePolicy(rawConfig.runtimePolicy),
     sharedPlanDocs,
     lanes,
     configPath,
@@ -504,6 +708,17 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     ...config.capabilityRouting,
     ...(laneConfig.capabilityRouting || {}),
   });
+  const runtimePolicy = normalizeRuntimePolicy({
+    ...config.runtimePolicy,
+    ...(laneConfig.runtimePolicy || {}),
+    ...(laneConfig.runtimeMixTargets ? { runtimeMixTargets: laneConfig.runtimeMixTargets } : {}),
+    ...(laneConfig.defaultExecutorByRole
+      ? { defaultExecutorByRole: laneConfig.defaultExecutorByRole }
+      : {}),
+    ...(laneConfig.fallbackExecutorOrder
+      ? { fallbackExecutorOrder: laneConfig.fallbackExecutorOrder }
+      : {}),
+  });
   return {
     lane,
     docsDir,
@@ -517,6 +732,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     validation,
     executors,
     capabilityRouting,
+    runtimePolicy,
     paths: {
       terminalsPath: normalizeRepoRelativePath(
         laneConfig.terminalsPath || config.paths.terminalsPath,

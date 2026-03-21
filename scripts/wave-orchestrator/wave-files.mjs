@@ -30,6 +30,10 @@ import {
 } from "./shared.mjs";
 import { normalizeContext7Config, hashAgentPromptFingerprint } from "./context7.mjs";
 import {
+  openClarificationLinkedRequests,
+  readMaterializedCoordinationState,
+} from "./coordination-store.mjs";
+import {
   normalizeExitContract,
   readAgentExecutionSummary,
   validateDocumentationClosureSummary,
@@ -237,6 +241,24 @@ function parsePositiveExecutorInt(value, label, filePath) {
   return parsed;
 }
 
+function parseExecutorStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cleanExecutorValue(entry)).filter(Boolean);
+  }
+  return String(value || "")
+    .split(",")
+    .map((entry) => cleanExecutorValue(entry))
+    .filter(Boolean);
+}
+
+function parseExecutorJson(value, label, filePath) {
+  try {
+    return JSON.parse(String(value || ""));
+  } catch (error) {
+    throw new Error(`Invalid JSON for ${label} in ${filePath}: ${error.message}`);
+  }
+}
+
 function cleanExecutorValue(value) {
   return String(value || "")
     .trim()
@@ -268,23 +290,42 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
   }
   const executorConfig = {
     id: null,
+    profile: null,
     model: null,
+    fallbacks: [],
+    tags: [],
+    budget: null,
     codex: null,
     claude: null,
     opencode: null,
   };
   const allowedKeys = new Set([
     "id",
+    "profile",
     "model",
+    "fallbacks",
+    "tags",
+    "budget.turns",
+    "budget.minutes",
+    "codex.command",
     "codex.sandbox",
+    "claude.command",
     "claude.agent",
     "claude.permission_mode",
+    "claude.permission_prompt_tool",
     "claude.max_turns",
     "claude.mcp_config",
+    "claude.settings",
+    "claude.output_format",
+    "claude.allowed_tools",
+    "claude.disallowed_tools",
+    "opencode.command",
     "opencode.agent",
     "opencode.attach",
     "opencode.format",
     "opencode.steps",
+    "opencode.instructions",
+    "opencode.permission",
   ]);
   for (const [key, rawValue] of Object.entries(rawSettings)) {
     if (!allowedKeys.has(key)) {
@@ -296,12 +337,39 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
     }
     if (key === "id") {
       executorConfig.id = normalizeExecutorMode(value, `${label}.id`);
+    } else if (key === "profile") {
+      executorConfig.profile = value.toLowerCase();
     } else if (key === "model") {
       executorConfig.model = value;
+    } else if (key === "fallbacks") {
+      executorConfig.fallbacks = parseExecutorStringList(value).map((entry, index) =>
+        normalizeExecutorMode(entry, `${label}.fallbacks[${index}]`),
+      );
+    } else if (key === "tags") {
+      executorConfig.tags = parseExecutorStringList(value);
+    } else if (key === "budget.turns" || key === "budget.minutes") {
+      executorConfig.budget = {
+        ...(executorConfig.budget || { turns: null, minutes: null }),
+        [key.endsWith(".turns") ? "turns" : "minutes"]: parsePositiveExecutorInt(
+          value,
+          `${label}.${key}`,
+          filePath,
+        ),
+      };
+    } else if (key === "codex.command") {
+      executorConfig.codex = {
+        ...(executorConfig.codex || {}),
+        command: value,
+      };
     } else if (key === "codex.sandbox") {
       executorConfig.codex = {
         ...(executorConfig.codex || {}),
         sandbox: normalizeCodexSandboxMode(value, `${label}.codex.sandbox`),
+      };
+    } else if (key === "claude.command") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        command: value,
       };
     } else if (key === "claude.agent") {
       executorConfig.claude = {
@@ -313,6 +381,11 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
         ...(executorConfig.claude || {}),
         permissionMode: value,
       };
+    } else if (key === "claude.permission_prompt_tool") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        permissionPromptTool: value,
+      };
     } else if (key === "claude.max_turns") {
       executorConfig.claude = {
         ...(executorConfig.claude || {}),
@@ -321,7 +394,38 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
     } else if (key === "claude.mcp_config") {
       executorConfig.claude = {
         ...(executorConfig.claude || {}),
-        mcpConfig: value,
+        mcpConfig: parseExecutorStringList(value),
+      };
+    } else if (key === "claude.settings") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        settings: value,
+      };
+    } else if (key === "claude.output_format") {
+      const normalizedOutputFormat = value.toLowerCase();
+      if (!["text", "json", "stream-json"].includes(normalizedOutputFormat)) {
+        throw new Error(
+          `Invalid ${label}.claude.output_format "${value}" in ${filePath}; expected text, json, or stream-json`,
+        );
+      }
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        outputFormat: normalizedOutputFormat,
+      };
+    } else if (key === "claude.allowed_tools") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        allowedTools: parseExecutorStringList(value),
+      };
+    } else if (key === "claude.disallowed_tools") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        disallowedTools: parseExecutorStringList(value),
+      };
+    } else if (key === "opencode.command") {
+      executorConfig.opencode = {
+        ...(executorConfig.opencode || {}),
+        command: value,
       };
     } else if (key === "opencode.agent") {
       executorConfig.opencode = {
@@ -348,6 +452,16 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
       executorConfig.opencode = {
         ...(executorConfig.opencode || {}),
         steps: parsePositiveExecutorInt(value, `${label}.opencode.steps`, filePath),
+      };
+    } else if (key === "opencode.instructions") {
+      executorConfig.opencode = {
+        ...(executorConfig.opencode || {}),
+        instructions: parseExecutorStringList(value),
+      };
+    } else if (key === "opencode.permission") {
+      executorConfig.opencode = {
+        ...(executorConfig.opencode || {}),
+        permission: parseExecutorJson(value, `${label}.opencode.permission`, filePath),
       };
     }
   }
@@ -931,6 +1045,12 @@ export function validateWaveDefinition(wave, options = {}) {
   if (context7Threshold !== null && wave.wave >= context7Threshold && !wave.context7Defaults) {
     errors.push(`Waves ${context7Threshold} and later must declare a ## Context7 defaults section`);
   }
+  const runtimeMixValidation = validateWaveRuntimeMixAssignments(wave, { laneProfile });
+  if (!runtimeMixValidation.ok) {
+    errors.push(
+      `Wave ${wave.wave} exceeds lane runtime mix targets (${runtimeMixValidation.detail})`,
+    );
+  }
   for (const [componentId, owners] of componentOwners.entries()) {
     if (owners.size === 0) {
       errors.push(
@@ -1031,31 +1151,189 @@ function cloneExecutorValue(value) {
   return value ? JSON.parse(JSON.stringify(value)) : value;
 }
 
+function mergeUniqueStringArrays(...lists) {
+  return Array.from(
+    new Set(
+      lists.flatMap((list) => (Array.isArray(list) ? list.map((entry) => String(entry || "").trim()) : []))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function mergeExecutorSections(baseSection, profileSection, inlineSection, arrayKeys = []) {
+  const merged = {
+    ...(cloneExecutorValue(baseSection) || {}),
+    ...(cloneExecutorValue(profileSection) || {}),
+    ...(cloneExecutorValue(inlineSection) || {}),
+  };
+  for (const key of arrayKeys) {
+    const mergedArray = mergeUniqueStringArrays(
+      baseSection?.[key],
+      profileSection?.[key],
+      inlineSection?.[key],
+    );
+    if (mergedArray.length > 0) {
+      merged[key] = mergedArray;
+    }
+  }
+  return merged;
+}
+
+function inferAgentRuntimeRole(agent, laneProfile) {
+  if (agent?.agentId === laneProfile.roles.evaluatorAgentId) {
+    return "evaluator";
+  }
+  if (agent?.agentId === laneProfile.roles.integrationAgentId) {
+    return "integration";
+  }
+  if (agent?.agentId === laneProfile.roles.documentationAgentId) {
+    return "documentation";
+  }
+  const capabilities = Array.isArray(agent?.capabilities)
+    ? agent.capabilities.map((entry) => String(entry || "").trim().toLowerCase())
+    : [];
+  const title = String(agent?.title || "").trim().toLowerCase();
+  if (capabilities.some((capability) => capability.startsWith("infra")) || /\binfra\b/.test(title)) {
+    return "infra";
+  }
+  if (capabilities.some((capability) => capability.startsWith("deploy")) || /\bdeploy\b/.test(title)) {
+    return "deploy";
+  }
+  if (capabilities.some((capability) => capability.startsWith("research")) || /\bresearch\b/.test(title)) {
+    return "research";
+  }
+  return "implementation";
+}
+
+export function validateWaveRuntimeMixAssignments(wave, options = {}) {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const targets = laneProfile.runtimePolicy?.runtimeMixTargets || {};
+  if (Object.keys(targets).length === 0) {
+    return {
+      ok: true,
+      statusCode: "pass",
+      detail: "No runtime mix targets configured.",
+      counts: {},
+      targets,
+    };
+  }
+  const counts = {};
+  for (const agent of wave.agents || []) {
+    const executorId =
+      agent?.executorResolved?.id ||
+      options.executorMode ||
+      laneProfile.executors.default;
+    counts[executorId] = (counts[executorId] || 0) + 1;
+  }
+  const violations = Object.entries(counts).filter(
+    ([executorId, count]) =>
+      Number.isFinite(targets[executorId]) && count > Number(targets[executorId]),
+  );
+  if (violations.length > 0) {
+    return {
+      ok: false,
+      statusCode: "runtime-mix-exceeded",
+      detail: violations
+        .map(
+          ([executorId, count]) =>
+            `${executorId}=${count} exceeds target ${targets[executorId]}`,
+        )
+        .join("; "),
+      counts,
+      targets,
+    };
+  }
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail: "Runtime mix assignments are within configured targets.",
+    counts,
+    targets,
+  };
+}
+
 export function resolveAgentExecutor(agent, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
-  const defaultExecutorMode = normalizeExecutorMode(
-    options.executorMode || laneProfile.executors.default,
-    "executor",
-  );
   const executorConfig = agent?.executorConfig || null;
+  const role = inferAgentRuntimeRole(agent, laneProfile);
+  const profileName = executorConfig?.profile || null;
+  if (profileName && !laneProfile.executors.profiles?.[profileName]) {
+    throw new Error(
+      `Agent ${agent?.agentId || "unknown"} references unknown executor profile "${profileName}"`,
+    );
+  }
+  const profile =
+    profileName && laneProfile.executors.profiles?.[profileName]
+      ? laneProfile.executors.profiles[profileName]
+      : null;
+  const selectedBy = executorConfig?.id
+    ? "agent-id"
+    : profile?.id
+      ? "agent-profile"
+      : laneProfile.runtimePolicy?.defaultExecutorByRole?.[role]
+        ? "lane-role-default"
+        : options.executorMode
+          ? "cli-default"
+          : "lane-default";
   const executorId = normalizeExecutorMode(
-    executorConfig?.id || defaultExecutorMode,
+    executorConfig?.id ||
+      profile?.id ||
+      laneProfile.runtimePolicy?.defaultExecutorByRole?.[role] ||
+      options.executorMode ||
+      laneProfile.executors.default,
     `agent ${agent?.agentId || "unknown"} executor`,
   );
   const resolvedModel =
     executorConfig?.model ||
+    profile?.model ||
     (executorId === "claude"
       ? laneProfile.executors.claude.model
       : executorId === "opencode"
         ? laneProfile.executors.opencode.model
         : null);
+  const fallbacks = mergeUniqueStringArrays(
+    profile?.fallbacks,
+    executorConfig?.fallbacks,
+  );
+  const runtimeFallbacks =
+    fallbacks.length > 0
+      ? fallbacks
+      : (laneProfile.runtimePolicy?.fallbackExecutorOrder || []).filter(
+          (candidate) => candidate !== executorId,
+        );
+  const runtimeTags = mergeUniqueStringArrays(profile?.tags, executorConfig?.tags);
+  const runtimeBudget = {
+    turns:
+      executorConfig?.budget?.turns ??
+      profile?.budget?.turns ??
+      null,
+    minutes:
+      executorConfig?.budget?.minutes ??
+      profile?.budget?.minutes ??
+      null,
+  };
   return {
     id: executorId,
+    initialExecutorId: executorId,
     model: resolvedModel || null,
+    role,
+    profile: profileName,
+    selectedBy,
+    fallbacks: runtimeFallbacks,
+    tags: runtimeTags,
+    budget:
+      runtimeBudget.turns !== null || runtimeBudget.minutes !== null ? runtimeBudget : null,
+    fallbackUsed: false,
+    fallbackReason: null,
+    executorHistory: [{ attempt: 0, executorId, reason: "initial" }],
     codex: {
-      command: laneProfile.executors.codex.command,
+      command:
+        executorConfig?.codex?.command ||
+        profile?.codex?.command ||
+        laneProfile.executors.codex.command,
       sandbox:
         executorConfig?.codex?.sandbox ||
+        profile?.codex?.sandbox ||
         (executorId === "codex"
           ? normalizeCodexSandboxMode(
               options.codexSandboxMode || laneProfile.executors.codex.sandbox,
@@ -1064,27 +1342,38 @@ export function resolveAgentExecutor(agent, options = {}) {
           : laneProfile.executors.codex.sandbox || DEFAULT_CODEX_SANDBOX_MODE),
     },
     claude: {
-      ...cloneExecutorValue(laneProfile.executors.claude),
-      model: executorId === "claude" ? resolvedModel || laneProfile.executors.claude.model : laneProfile.executors.claude.model,
-      agent: executorConfig?.claude?.agent || laneProfile.executors.claude.agent,
-      permissionMode:
-        executorConfig?.claude?.permissionMode || laneProfile.executors.claude.permissionMode,
-      maxTurns: executorConfig?.claude?.maxTurns ?? laneProfile.executors.claude.maxTurns,
-      mcpConfig:
-        executorConfig?.claude?.mcpConfig
-          ? [executorConfig.claude.mcpConfig]
-          : cloneExecutorValue(laneProfile.executors.claude.mcpConfig),
+      ...mergeExecutorSections(
+        laneProfile.executors.claude,
+        profile?.claude,
+        executorConfig?.claude,
+        ["mcpConfig", "allowedTools", "disallowedTools"],
+      ),
+      model:
+        executorId === "claude"
+          ? resolvedModel || laneProfile.executors.claude.model
+          : laneProfile.executors.claude.model,
+      maxTurns:
+        executorConfig?.claude?.maxTurns ??
+        profile?.claude?.maxTurns ??
+        runtimeBudget.turns ??
+        laneProfile.executors.claude.maxTurns,
     },
     opencode: {
-      ...cloneExecutorValue(laneProfile.executors.opencode),
+      ...mergeExecutorSections(
+        laneProfile.executors.opencode,
+        profile?.opencode,
+        executorConfig?.opencode,
+        ["instructions"],
+      ),
       model:
         executorId === "opencode"
           ? resolvedModel || laneProfile.executors.opencode.model
           : laneProfile.executors.opencode.model,
-      agent: executorConfig?.opencode?.agent || laneProfile.executors.opencode.agent,
-      attach: executorConfig?.opencode?.attach || laneProfile.executors.opencode.attach,
-      format: executorConfig?.opencode?.format || laneProfile.executors.opencode.format,
-      steps: executorConfig?.opencode?.steps ?? laneProfile.executors.opencode.steps,
+      steps:
+        executorConfig?.opencode?.steps ??
+        profile?.opencode?.steps ??
+        runtimeBudget.turns ??
+        laneProfile.executors.opencode.steps,
     },
   };
 }
@@ -1357,6 +1646,8 @@ export function readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId } =
 
 export function completedWavesFromStatusFiles(allWaves, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
+  const coordinationDir =
+    options.coordinationDir || path.join(path.resolve(statusDir, ".."), "coordination");
   const evaluatorAgentId = options.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
   const integrationAgentId = options.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
@@ -1437,6 +1728,25 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
       !readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId }).ok
     ) {
       waveIsComplete = false;
+    }
+    if (waveIsComplete) {
+      const coordinationState = readMaterializedCoordinationState(
+        path.join(coordinationDir, `wave-${wave.wave}.jsonl`),
+      );
+      if (
+        coordinationState.clarifications.some((record) =>
+          ["open", "acknowledged", "in_progress"].includes(record.status),
+        ) ||
+        openClarificationLinkedRequests(coordinationState).length > 0 ||
+        coordinationState.humanEscalations.some((record) =>
+          ["open", "acknowledged", "in_progress"].includes(record.status),
+        ) ||
+        coordinationState.humanFeedback.some((record) =>
+          ["open", "acknowledged", "in_progress"].includes(record.status),
+        )
+      ) {
+        waveIsComplete = false;
+      }
     }
     if (waveIsComplete) {
       completed.push(wave.wave);

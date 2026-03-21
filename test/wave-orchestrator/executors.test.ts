@@ -21,6 +21,87 @@ afterEach(() => {
   }
 });
 
+function makeLaneProfile() {
+  return {
+    lane: "main",
+    sharedPlanDocs: [],
+    roles: {
+      rolePromptDir: "docs/agents",
+      evaluatorAgentId: "A0",
+      integrationAgentId: "A8",
+      documentationAgentId: "A9",
+      evaluatorRolePromptPath: "docs/agents/wave-evaluator-role.md",
+      integrationRolePromptPath: "docs/agents/wave-integration-role.md",
+      documentationRolePromptPath: "docs/agents/wave-documentation-role.md",
+    },
+    validation: {
+      requiredPromptReferences: [],
+      requireDocumentationStewardFromWave: 0,
+      requireContext7DeclarationsFromWave: null,
+      requireExitContractsFromWave: null,
+      requireIntegrationStewardFromWave: 0,
+      requireComponentPromotionsFromWave: null,
+      requireAgentComponentsFromWave: null,
+    },
+    executors: {
+      default: "codex",
+      profiles: {
+        "docs-pass": {
+          id: "claude",
+          tags: ["documentation"],
+          budget: { turns: 8, minutes: 20 },
+          fallbacks: ["opencode"],
+          claude: { agent: "docs-reviewer" },
+        },
+      },
+      codex: {
+        command: "codex",
+        sandbox: "danger-full-access",
+      },
+      claude: {
+        command: "claude",
+        model: "claude-sonnet-4-6",
+        appendSystemPromptMode: "append",
+        permissionMode: null,
+        permissionPromptTool: null,
+        maxTurns: null,
+        mcpConfig: [],
+        strictMcpConfig: false,
+        settings: null,
+        outputFormat: "text",
+        allowedTools: [],
+        disallowedTools: [],
+      },
+      opencode: {
+        command: "opencode",
+        model: "anthropic/claude-sonnet-4-20250514",
+        agent: null,
+        attach: null,
+        format: "default",
+        steps: null,
+        instructions: [],
+        permission: null,
+      },
+    },
+    capabilityRouting: {
+      preferredAgents: {},
+    },
+    runtimePolicy: {
+      runtimeMixTargets: { codex: 3, claude: 2, opencode: 2 },
+      defaultExecutorByRole: {
+        implementation: "codex",
+        integration: "claude",
+        documentation: "claude",
+        evaluator: "claude",
+        research: "opencode",
+        infra: "opencode",
+        deploy: "opencode",
+      },
+      fallbackExecutorOrder: ["claude", "opencode", "codex"],
+    },
+  };
+}
+
 describe("executor parsing and resolution", () => {
   it("parses per-agent executor settings and resolves mixed executors", () => {
     const wave = applyExecutorSelectionsToWave(
@@ -68,13 +149,17 @@ File ownership (only touch these paths):
 
     expect(wave.agents[0]?.executorConfig).toEqual({
       id: "claude",
+      profile: null,
       model: "claude-sonnet-4-6",
+      fallbacks: [],
+      tags: [],
+      budget: null,
       codex: null,
       claude: {
         agent: "reviewer",
         permissionMode: "plan",
         maxTurns: 4,
-        mcpConfig: ".tmp/mcp.json",
+        mcpConfig: [".tmp/mcp.json"],
       },
       opencode: null,
     });
@@ -89,7 +174,60 @@ File ownership (only touch these paths):
       },
     });
     expect(wave.agents[1]?.executorResolved).toMatchObject({
-      id: "opencode",
+      id: "codex",
+      selectedBy: "lane-role-default",
+    });
+  });
+
+  it("applies lane role defaults and executor profiles", () => {
+    const laneProfile = makeLaneProfile();
+    const wave = applyExecutorSelectionsToWave(
+      parseWaveContent(
+        `# Wave 4 - Runtime Plan
+
+## Agent A1: Implementation Worker
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- src/example.ts
+\`\`\`
+
+## Agent A9: Documentation Steward
+
+### Executor
+
+- profile: docs-pass
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- docs/plans/master-plan.md
+\`\`\`
+`,
+        "/tmp/wave-4.md",
+        { laneProfile },
+      ),
+      { laneProfile },
+    );
+
+    expect(wave.agents[0]?.executorResolved).toMatchObject({
+      id: "codex",
+      role: "implementation",
+      selectedBy: "lane-role-default",
+      fallbacks: ["claude", "opencode"],
+    });
+    expect(wave.agents[1]?.executorResolved).toMatchObject({
+      id: "claude",
+      role: "documentation",
+      profile: "docs-pass",
+      selectedBy: "agent-profile",
+      tags: ["documentation"],
+      budget: { turns: 8, minutes: 20 },
+      fallbacks: ["opencode"],
+      claude: {
+        agent: "docs-reviewer",
+      },
     });
   });
 });

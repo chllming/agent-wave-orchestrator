@@ -23,6 +23,40 @@
   },
   "executors": {
     "default": "codex",
+    "profiles": {
+      "implement-fast": {
+        "id": "codex",
+        "tags": ["implementation"],
+        "budget": {
+          "turns": 12,
+          "minutes": 45
+        }
+      },
+      "deep-review": {
+        "id": "claude",
+        "tags": ["integration", "review"],
+        "budget": {
+          "turns": 10,
+          "minutes": 30
+        }
+      },
+      "docs-pass": {
+        "id": "claude",
+        "tags": ["documentation"],
+        "budget": {
+          "turns": 8,
+          "minutes": 20
+        }
+      },
+      "ops-triage": {
+        "id": "opencode",
+        "tags": ["ops", "research"],
+        "budget": {
+          "turns": 8,
+          "minutes": 20
+        }
+      }
+    },
     "codex": {
       "command": "codex",
       "sandbox": "danger-full-access"
@@ -56,5 +90,26 @@
   },
   "capabilityRouting": {
     "preferredAgents": {}
+  },
+  "lanes": {
+    "main": {
+      "runtimePolicy": {
+        "runtimeMixTargets": {
+          "codex": 3,
+          "claude": 3,
+          "opencode": 2
+        },
+        "defaultExecutorByRole": {
+          "implementation": "codex",
+          "integration": "claude",
+          "documentation": "claude",
+          "evaluator": "claude",
+          "research": "opencode",
+          "infra": "opencode",
+          "deploy": "opencode"
+        },
+        "fallbackExecutorOrder": ["claude", "opencode", "codex"]
+      }
+    }
   }
 }

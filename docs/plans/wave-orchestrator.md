@@ -91,7 +91,8 @@ Clarification flow is orchestrator-first:
 1. Agent emits `clarification-request` through `wave coord post`.
 2. The launcher triages it from repo policy, ownership, prior decisions, or targeted rerouting.
 3. Only unresolved items become human feedback tickets.
-4. Human escalations are written back into coordination state, the ledger, and trace artifacts.
+4. Routed clarification follow-up requests remain blocking until they resolve.
+5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
 
 ## Upgrade Flow
 
@@ -153,7 +154,9 @@ pnpm exec wave changelog --since-installed
 - `--executor local` exists only for smoke-testing prompt and closure behavior.
 - `--codex-sandbox danger-full-access` is the default because it avoids host bubblewrap assumptions.
 - Resolution order is: per-agent explicit executor id, executor profile id, lane role default, CLI `--executor`, then `executors.default`.
-- Fallbacks are declared in profiles or lane policy and are recorded in the ledger, integration summary, and traces when used.
+- Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
+- Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
+- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set.
 - The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 ## Human Feedback Queue
@@ -168,4 +171,4 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, and the integration recommendation. Then it reruns the documentation steward and evaluator so the final gate reflects the landed state after implementation settles.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, and the integration recommendation first. Documentation and evaluator closure only run after integration is explicitly ready for doc closure; if integration reports `needs-more-work`, the wave stops there and retries only the implicated owners plus the integration steward.

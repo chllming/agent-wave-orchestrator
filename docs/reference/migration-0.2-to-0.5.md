@@ -1,21 +1,23 @@
 ---
 title: "Wave Orchestration Migration Guide: 0.2 to 0.5"
-summary: "How to migrate a repository from the earlier 0.2 wave baseline to the post-roadmap 0.5 model."
+summary: "How to migrate a repository from the earlier 0.2 wave baseline to the current post-roadmap Wave model."
 ---
 
 # Wave Orchestration Migration Guide: 0.2 to 0.5
 
 This guide explains how to migrate a repository from the earlier Wave
-Orchestration 0.2 baseline to the post-roadmap 0.5 model.
+Orchestration 0.2 baseline to the current post-roadmap Wave model.
 
 It uses two concrete references:
 
 - the 0.2-style baseline in the sibling `~/slowfast.ai` repo
-- the target 0.5 shape in this standalone `wave-orchestration` repo
+- the current target shape in this standalone `wave-orchestration` repo
 
-This is a migration guide for the target 0.5 architecture described in
+This is a migration guide for the current architecture described in
 [Roadmap](../roadmap.md), not just a changelog of whatever happens to be landed
-in one point-in-time package build.
+in one point-in-time package build. The package version may still be lower than
+`0.5.x`; this document is about the shipped runtime shape, not only the semver
+label.
 
 ## Baseline And Target
 
@@ -24,10 +26,10 @@ Use these files as the concrete examples while migrating:
 - 0.2 baseline config: `~/slowfast.ai/wave-orchestration/wave.config.json`
 - 0.2 baseline runbook: `~/slowfast.ai/docs/plans/wave-orchestrator.md`
 - 0.2 baseline wave example: `~/slowfast.ai/docs/plans/waves/wave-7.md`
-- 0.5 target config: [wave.config.json](../../wave.config.json)
-- 0.5 target sample wave: [wave-0.md](../plans/waves/wave-0.md)
-- 0.5 target architecture: [roadmap.md](../roadmap.md)
-- 0.5 target package workflow: [README.md](../../README.md)
+- current target config: [wave.config.json](../../wave.config.json)
+- current target sample wave: [wave-0.md](../plans/waves/wave-0.md)
+- current target architecture: [roadmap.md](../roadmap.md)
+- current package workflow: [README.md](../../README.md)
 
 The migration is intentionally evolutionary:
 
@@ -102,7 +104,7 @@ pnpm wave:feedback -- list --lane <lane> --pending
 If the repo consumes Wave as a package:
 
 ```bash
-pnpm up @chllming/wave-orchestration@0.5.0
+pnpm up @chllming/wave-orchestration
 pnpm exec wave upgrade
 pnpm exec wave doctor
 ```
@@ -193,7 +195,7 @@ adds the missing surfaces:
   "lanes": {
     "main": {
       "runtimePolicy": {
-        "runtimeMixTargets": { "codex": 3, "claude": 2, "opencode": 2 },
+        "runtimeMixTargets": { "codex": 3, "claude": 3, "opencode": 2 },
         "defaultExecutorByRole": {
           "implementation": "codex",
           "integration": "claude",

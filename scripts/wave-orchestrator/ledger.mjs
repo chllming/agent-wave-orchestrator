@@ -8,6 +8,7 @@ import {
   validateEvaluatorSummary,
   validateImplementationSummary,
 } from "./agent-state.mjs";
+import { openClarificationLinkedRequests } from "./coordination-store.mjs";
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
 
 function taskId(prefix, suffix) {
@@ -26,6 +27,12 @@ function openHighPriorityBlockers(state) {
     (record) =>
       ["open", "acknowledged", "in_progress"].includes(record.status) &&
       ["high", "urgent"].includes(record.priority),
+  );
+}
+
+function openClarifications(state) {
+  return (state?.clarifications || []).filter((record) =>
+    ["open", "acknowledged", "in_progress"].includes(record.status),
   );
 }
 
@@ -59,6 +66,16 @@ export function buildSeedWaveLedger({
       priority:
         kind === "implementation" ? "normal" : kind === "integration" ? "high" : "high",
       artifactRefs: agent.ownedPaths || [],
+      runtime: agent.executorResolved
+        ? {
+            executorId: agent.executorResolved.id,
+            role: agent.executorResolved.role,
+            profile: agent.executorResolved.profile,
+            selectedBy: agent.executorResolved.selectedBy,
+            fallbacks: agent.executorResolved.fallbacks || [],
+            fallbackUsed: agent.executorResolved.fallbackUsed === true,
+          }
+        : null,
     });
   }
   for (const promotion of wave.componentPromotions || []) {
@@ -74,6 +91,7 @@ export function buildSeedWaveLedger({
       infraState: "n/a",
       priority: "high",
       artifactRefs: [promotion.componentId],
+      runtime: null,
     });
   }
   return {
@@ -84,7 +102,10 @@ export function buildSeedWaveLedger({
     tasks,
     blockers: [],
     openRequests: [],
+    openClarifications: [],
+    clarificationLinkedRequests: [],
     humanFeedback: [],
+    humanEscalations: [],
     integrationState: "pending",
     docClosureState: "pending",
     evaluatorState: "pending",
@@ -96,6 +117,12 @@ function derivePhase({ tasks, integrationSummary, docValidation, evaluatorValida
   const blockers = openHighPriorityBlockers(state);
   if (blockers.length > 0) {
     return "blocked";
+  }
+  if (
+    openClarifications(state).length > 0 ||
+    openClarificationLinkedRequests(state).length > 0
+  ) {
+    return "clarifying";
   }
   const implementationTasks = tasks.filter((task) => task.kind === "implementation");
   const allImplementationDone = implementationTasks.every((task) => task.state === "done");
@@ -218,10 +245,22 @@ export function deriveWaveLedger({
     }),
     tasks,
     blockers: (coordinationState?.blockers || []).map((record) => record.id),
+    openClarifications: openClarifications(coordinationState).map((record) => record.id),
+    clarificationLinkedRequests: openClarificationLinkedRequests(coordinationState).map(
+      (record) => record.id,
+    ),
     openRequests: (coordinationState?.requests || [])
       .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
       .map((record) => record.id),
-    humanFeedback: (coordinationState?.humanFeedback || [])
+    humanFeedback: [
+      ...(coordinationState?.humanFeedback || [])
+        .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
+        .map((record) => record.id),
+      ...(coordinationState?.humanEscalations || [])
+        .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
+        .map((record) => record.id),
+    ],
+    humanEscalations: (coordinationState?.humanEscalations || [])
       .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
       .map((record) => record.id),
     integrationState: integrationSummary?.recommendation || "pending",

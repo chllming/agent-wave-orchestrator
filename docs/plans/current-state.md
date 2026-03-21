@@ -1,7 +1,26 @@
 # Current State
 
-- The repository contains the publishable wave-orchestrator package plus starter scaffold assets used by `wave init`.
+- The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
+- The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - The default lane is `main`.
+- The harness supports `codex`, `claude`, `opencode`, and `local` executors.
+- The runtime now includes:
+  - a canonical coordination JSONL log
+  - a generated markdown board projection
+  - compiled shared summaries and per-agent inboxes
+  - a per-wave ledger
+  - docs queues
+  - explicit integration summaries
+  - per-attempt trace bundles
+  - orchestrator-first clarification triage plus human escalation artifacts
+- Lane runtime policy is active through `wave.config.json`:
+  - role-based default executors
+  - executor profiles
+  - hard runtime mix targets
+  - retry-time fallback order
+  - generic runtime budgets
+- Closure now runs in staged order: implementation and proof, then `A8` integration, then `A9` documentation, then `A0` evaluator.
+- Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
 - Component maturity and starter wave promotions are tracked in `docs/plans/component-cutover-matrix.md` and `docs/plans/component-cutover-matrix.json`.
 - Context7 bundle selection and launcher-side prompt injection are enabled through `docs/context7/bundles.json`.
 - Research source links are committed in `docs/research/agent-context-sources.md`; hydrated caches stay local and ignored.

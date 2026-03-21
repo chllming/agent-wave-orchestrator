@@ -8,7 +8,7 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
 - seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
-- derives a per-wave ledger, docs queue, integration summary, and per-attempt trace bundle
+- derives a per-wave ledger, docs queue, integration summary, and versioned per-attempt trace bundle
 - validates Context7 declarations and exit contracts from configurable wave thresholds
 - validates component promotions and component-owned proof from configurable wave thresholds
 - writes prompts, logs, dashboards, coordination state, and status summaries under `.tmp/`
@@ -129,6 +129,28 @@ pnpm exec wave changelog --since-installed
 - executor overlays: `.tmp/<lane>-wave-launcher/executors/`
 - cross-lane dependencies: `.tmp/wave-orchestrator/dependencies/`
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
+
+## Trace Contract
+
+- Dry-run is pre-attempt only. It writes manifest, coordination, board projection, inboxes, ledger, docs queue, and integration state under `.tmp/<lane>-wave-launcher/dry-run/`.
+- Dry-run does not write `attempt-<k>` snapshots. The dry-run `traces/` directory can exist, but it should remain file-empty.
+- A live attempt writes a hermetic `traceVersion: 2` bundle at `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/` with:
+  - `manifest.json`
+  - `coordination.raw.jsonl`
+  - `coordination.materialized.json`
+  - `ledger.json`
+  - `docs-queue.json`
+  - `integration.json`
+  - `shared-summary.md`
+  - copied prompt, log, status, inbox, and summary artifacts per launched agent
+  - `structured-signals.json`
+  - `quality.json`
+  - `run-metadata.json`
+- `run-metadata.json` is the canonical trace index. It records attempt settings, artifact presence, executor history, prompt hashes, Context7 snippet hashes, the gate snapshot, `replayContext`, and the cumulative `historySnapshot` for that attempt.
+- For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
+- `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
+- Replay support is internal. The source tree contains helpers to load, validate, and replay trace bundles against the same gate logic the launcher uses, but there is no public replay CLI yet.
+- Replay is read-only and hash-validating for `traceVersion: 2` bundles. It ignores inline summary duplicates in `run-metadata.json`. Legacy `traceVersion: 1` bundles remain best-effort and emit warnings instead of claiming full hermetic replay.
 
 ## Authoring Rules
 

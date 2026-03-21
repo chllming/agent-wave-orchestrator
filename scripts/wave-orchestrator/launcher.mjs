@@ -121,7 +121,7 @@ import {
 } from "./agent-state.mjs";
 import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
 import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
-import { writeStructuredSignalsSnapshot, writeTraceBundle } from "./traces.mjs";
+import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 export { CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE, normalizeCodexSandboxMode, buildCodexExecInvocation };
 
@@ -325,10 +325,7 @@ export function readWaveEvaluatorGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const summary =
-    evaluatorRun.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(evaluatorRun.statusPath))
-      ? readAgentExecutionSummary(evaluatorRun.statusPath)
-      : null;
+  const summary = readRunExecutionSummary(evaluatorRun);
   if (summary) {
     const validation = validateEvaluatorSummary(evaluatorRun.agent, summary);
     return {
@@ -397,6 +394,19 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
   });
   writeAgentExecutionSummary(runInfo.statusPath, summary);
   return summary;
+}
+
+function readRunExecutionSummary(runInfo) {
+  if (runInfo?.summary && typeof runInfo.summary === "object") {
+    return runInfo.summary;
+  }
+  if (runInfo?.summaryPath && fs.existsSync(runInfo.summaryPath)) {
+    return readAgentExecutionSummary(runInfo.summaryPath);
+  }
+  if (runInfo?.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(runInfo.statusPath))) {
+    return readAgentExecutionSummary(runInfo.statusPath);
+  }
+  return null;
 }
 
 function materializeAgentExecutionSummaries(wave, agentRuns) {
@@ -618,36 +628,7 @@ function writeWaveDerivedState({
   };
 }
 
-function buildQualityMetrics({
-  coordinationState,
-  integrationSummary,
-  ledger,
-  summariesByAgentId,
-  attempt,
-}) {
-  const implementationSummaries = Object.values(summariesByAgentId || {}).filter(Boolean);
-  const proofMarkers = implementationSummaries.filter((summary) => summary?.proof);
-  const proofMet = proofMarkers.filter((summary) => summary.proof?.state === "met");
-  return {
-    attempt,
-    unresolvedRequestCount: (coordinationState?.requests || []).filter((record) =>
-      ["open", "acknowledged", "in_progress"].includes(record.status),
-    ).length,
-    contradictionCount: integrationSummary?.conflictingClaims?.length || 0,
-    documentationDriftCount: (ledger?.tasks || []).filter(
-      (task) => task.kind === "documentation" && task.state !== "done",
-    ).length,
-    proofCompletenessRatio:
-      proofMarkers.length > 0 ? Number((proofMet.length / proofMarkers.length).toFixed(2)) : 1,
-    relaunchCountByRole: {},
-    meanTimeToFirstAckMs: null,
-    meanTimeToBlockerResolutionMs: null,
-    evaluatorReversal: false,
-    finalRecommendation: integrationSummary?.recommendation || "unknown",
-  };
-}
-
-function readWaveImplementationGate(wave, agentRuns) {
+export function readWaveImplementationGate(wave, agentRuns) {
   const evaluatorAgentId = wave.evaluatorAgentId || "A0";
   const integrationAgentId = wave.integrationAgentId || "A8";
   const documentationAgentId = wave.documentationAgentId || "A9";
@@ -655,7 +636,7 @@ function readWaveImplementationGate(wave, agentRuns) {
     if ([evaluatorAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId)) {
       continue;
     }
-    const summary = readAgentExecutionSummary(runInfo.statusPath);
+    const summary = readRunExecutionSummary(runInfo);
     const validation = validateImplementationSummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -678,7 +659,7 @@ function readWaveImplementationGate(wave, agentRuns) {
 
 export function readWaveComponentGate(wave, agentRuns, options = {}) {
   const summariesByAgentId = Object.fromEntries(
-    agentRuns.map((runInfo) => [runInfo.agent.agentId, readAgentExecutionSummary(runInfo.statusPath)]),
+    agentRuns.map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo)]),
   );
   const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
   if (validation.ok) {
@@ -729,7 +710,7 @@ export function readWaveComponentMatrixGate(wave, agentRuns, options = {}) {
   };
 }
 
-function readWaveDocumentationGate(wave, agentRuns) {
+export function readWaveDocumentationGate(wave, agentRuns) {
   const documentationAgentId = wave.documentationAgentId || "A9";
   const docRun =
     agentRuns.find((run) => run.agent.agentId === documentationAgentId) ?? null;
@@ -742,7 +723,7 @@ function readWaveDocumentationGate(wave, agentRuns) {
       logPath: null,
     };
   }
-  const summary = readAgentExecutionSummary(docRun.statusPath);
+  const summary = readRunExecutionSummary(docRun);
   const validation = validateDocumentationClosureSummary(docRun.agent, summary);
   return {
     ok: validation.ok,
@@ -753,7 +734,7 @@ function readWaveDocumentationGate(wave, agentRuns) {
   };
 }
 
-function readWaveIntegrationGate(wave, agentRuns, options = {}) {
+export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
   const integrationAgentId =
     options.integrationAgentId || wave.integrationAgentId || "A8";
   const requireIntegration =
@@ -774,7 +755,7 @@ function readWaveIntegrationGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const summary = readAgentExecutionSummary(integrationRun.statusPath);
+  const summary = readRunExecutionSummary(integrationRun);
   const validation = validateIntegrationSummary(integrationRun.agent, summary);
   return {
     ok: validation.ok,
@@ -785,7 +766,7 @@ function readWaveIntegrationGate(wave, agentRuns, options = {}) {
   };
 }
 
-function readWaveIntegrationBarrier(wave, agentRuns, derivedState, options = {}) {
+export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, options = {}) {
   const markerGate = readWaveIntegrationGate(wave, agentRuns, options);
   if (!markerGate.ok) {
     return markerGate;
@@ -946,6 +927,10 @@ export async function runClosureSweepPhase({
       agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
       context7Enabled: options.context7Enabled,
     });
+    runInfo.lastLaunchAttempt = dashboardState?.attempt || null;
+    runInfo.lastPromptHash = launchResult?.promptHash || null;
+    runInfo.lastContext7 = launchResult?.context7 || null;
+    runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
     setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
       state: "running",
       detail: `Closure sweep launched${launchResult?.context7?.mode ? ` (${launchResult.context7.mode})` : ""}`,
@@ -1888,7 +1873,7 @@ function retryBarrierFromOutcomes(outcomes, failures) {
   };
 }
 
-function readClarificationBarrier(derivedState) {
+export function readClarificationBarrier(derivedState) {
   const openClarifications = (derivedState?.coordinationState?.clarifications || []).filter(
     (record) => isOpenCoordinationStatus(record.status),
   );
@@ -1928,6 +1913,77 @@ function readClarificationBarrier(derivedState) {
     ok: true,
     statusCode: "pass",
     detail: "",
+  };
+}
+
+export function buildGateSnapshot({
+  wave,
+  agentRuns,
+  derivedState,
+  lanePaths,
+  componentMatrixPayload,
+  componentMatrixJsonPath,
+}) {
+  const implementationGate = readWaveImplementationGate(wave, agentRuns);
+  const componentGate = readWaveComponentGate(wave, agentRuns, {
+    laneProfile: lanePaths?.laneProfile,
+  });
+  const integrationGate = readWaveIntegrationGate(wave, agentRuns, {
+    integrationAgentId: lanePaths?.integrationAgentId,
+    requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
+  });
+  const integrationBarrier = readWaveIntegrationBarrier(wave, agentRuns, derivedState, {
+    integrationAgentId: lanePaths?.integrationAgentId,
+    requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
+  });
+  const documentationGate = readWaveDocumentationGate(wave, agentRuns);
+  const componentMatrixGate = readWaveComponentMatrixGate(wave, agentRuns, {
+    laneProfile: lanePaths?.laneProfile,
+    documentationAgentId: lanePaths?.documentationAgentId,
+    componentMatrixPayload,
+    componentMatrixJsonPath,
+  });
+  const evaluatorGate = readWaveEvaluatorGate(wave, agentRuns, {
+    evaluatorAgentId: lanePaths?.evaluatorAgentId,
+  });
+  const infraGate = readWaveInfraGate(agentRuns);
+  const clarificationBarrier = readClarificationBarrier(derivedState);
+  const orderedGates = [
+    ["implementationGate", implementationGate],
+    ["componentGate", componentGate],
+    ["integrationBarrier", integrationBarrier],
+    ["documentationGate", documentationGate],
+    ["componentMatrixGate", componentMatrixGate],
+    ["evaluatorGate", evaluatorGate],
+    ["infraGate", infraGate],
+    ["clarificationBarrier", clarificationBarrier],
+  ];
+  const firstFailure = orderedGates.find(([, gate]) => gate?.ok === false);
+  return {
+    implementationGate,
+    componentGate,
+    integrationGate,
+    integrationBarrier,
+    documentationGate,
+    componentMatrixGate,
+    evaluatorGate,
+    infraGate,
+    clarificationBarrier,
+    overall: firstFailure
+      ? {
+          ok: false,
+          gate: firstFailure[0],
+          statusCode: firstFailure[1].statusCode,
+          detail: firstFailure[1].detail,
+          agentId: firstFailure[1].agentId || null,
+        }
+      : {
+          ok: true,
+          gate: "pass",
+          statusCode: "pass",
+          detail: "All replayed wave gates passed.",
+          agentId: null,
+        },
   };
 }
 
@@ -2461,7 +2517,7 @@ export async function runLauncherCli(argv) {
         const refreshDerivedState = (attemptNumber = 0) => {
           const summariesByAgentId = Object.fromEntries(
             agentRuns
-              .map((run) => [run.agent.agentId, readAgentExecutionSummary(run.statusPath)])
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
               .filter(([, summary]) => summary),
           );
           const feedbackRequests = readWaveHumanFeedbackRequests({
@@ -2634,6 +2690,10 @@ export async function runLauncherCli(argv) {
                 agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
                 context7Enabled: options.context7Enabled,
               });
+              runInfo.lastLaunchAttempt = attempt;
+              runInfo.lastPromptHash = launchResult?.promptHash || null;
+              runInfo.lastContext7 = launchResult?.context7 || null;
+              runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
               setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
                 state: "running",
                 detail: "Session launched",
@@ -2960,8 +3020,21 @@ export async function runLauncherCli(argv) {
           const structuredSignals = Object.fromEntries(
             agentRuns.map((run) => [run.agent.agentId, parseStructuredSignalsFromLog(run.logPath)]),
           );
+          const summariesByAgentId = Object.fromEntries(
+            agentRuns
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
+              .filter(([, summary]) => summary),
+          );
+          const gateSnapshot = buildGateSnapshot({
+            wave,
+            agentRuns,
+            derivedState,
+            lanePaths,
+          });
           const traceDir = writeTraceBundle({
             tracesDir: lanePaths.tracesDir,
+            lanePaths,
+            launcherOptions: options,
             wave,
             attempt,
             manifest: buildManifest(lanePaths, [wave]),
@@ -2973,19 +3046,22 @@ export async function runLauncherCli(argv) {
             integrationMarkdownPath: derivedState.integrationMarkdownPath,
             clarificationTriage: derivedState.clarificationTriage,
             agentRuns,
+            structuredSignals,
+            gateSnapshot,
             quality: buildQualityMetrics({
+              tracesDir: lanePaths.tracesDir,
+              wave,
               coordinationState: derivedState.coordinationState,
               integrationSummary: derivedState.integrationSummary,
               ledger: derivedState.ledger,
-              summariesByAgentId: Object.fromEntries(
-                agentRuns
-                  .map((run) => [run.agent.agentId, readAgentExecutionSummary(run.statusPath)])
-                  .filter(([, summary]) => summary),
-              ),
+              docsQueue: derivedState.docsQueue,
+              summariesByAgentId,
+              agentRuns,
+              gateSnapshot,
               attempt,
+              coordinationLogPath: derivedState.coordinationLogPath,
             }),
           });
-          writeStructuredSignalsSnapshot(path.join(traceDir, "structured-signals.json"), structuredSignals);
 
           if (failures.length === 0) {
             dashboardState.status = "completed";

@@ -30,4 +30,8 @@ Completion requires:
 - shared-plan documentation closure is resolved when required
 - no routed clarification chain or unresolved human escalation remains open
 - runtime mix targets and retry fallbacks remain within lane policy
+- live attempts write a hermetic `traceVersion: 2` trace bundle with `run-metadata.json`, `quality.json`, structured signals, copied launched-agent summaries, and recorded artifact hashes
+
+Dry-run rule:
+- `wave launch --dry-run` is pre-attempt only. It should seed derived state and leave `traces/` without `attempt-<k>` files.
 ```

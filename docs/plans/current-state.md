@@ -11,7 +11,8 @@
   - a per-wave ledger
   - docs queues
   - explicit integration summaries
-  - per-attempt trace bundles
+  - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, run metadata, and cumulative quality metrics
+  - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
 - Lane runtime policy is active through `wave.config.json`:
   - role-based default executors
@@ -21,6 +22,7 @@
   - generic runtime budgets
 - Closure now runs in staged order: implementation and proof, then `A8` integration, then `A9` documentation, then `A0` evaluator.
 - Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
+- Dry-run remains pre-attempt only: it seeds derived state under `.tmp/<lane>-wave-launcher/dry-run/` and leaves `traces/` file-empty.
 - Component maturity and starter wave promotions are tracked in `docs/plans/component-cutover-matrix.md` and `docs/plans/component-cutover-matrix.json`.
 - Context7 bundle selection and launcher-side prompt injection are enabled through `docs/context7/bundles.json`.
 - Research source links are committed in `docs/research/agent-context-sources.md`; hydrated caches stay local and ignored.

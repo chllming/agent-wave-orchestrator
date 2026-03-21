@@ -18,6 +18,7 @@ As of the current repository state:
 - `A8` integration stewardship and staged closure are shipped
 - orchestrator-first clarification triage and human-escalation artifacts are shipped
 - per-agent executor profiles, per-lane runtime policy, hard runtime mix targets, retry-time fallback, and generic budgets are shipped
+- cumulative `quality.json` metrics and internal, read-only hermetic trace replay validation are shipped
 
 The remaining roadmap work is mostly about extending those foundations rather than inventing a new orchestration model.
 
@@ -352,14 +353,14 @@ Escalation policy:
 
 ### 9. Reproducible Harness Traces
 
-Add replayable trace capture for evaluation and regression control.
+The base trace-and-replay layer is now shipped. The remaining work is operator-facing replay tooling and larger continuous-history scenario sets.
 
 Why this is mandatory:
 
 - VeRO and EvoClaw both argue that long-running agent systems need reproducible traces and continuous-history evaluation
 - without this, harness changes are anecdotal
 
-Per-attempt trace bundle:
+Current per-attempt trace bundle:
 
 - wave file hash
 - prompt fingerprints
@@ -371,10 +372,22 @@ Per-attempt trace bundle:
 - evaluator verdict
 - docs closure state
 - runtime budgets and retries
+- cumulative quality metrics
+- gate snapshot and artifact-presence metadata
+- replay context and cumulative history snapshot for hermetic replay
 
-Proposed artifact:
+Artifact:
 
 - `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/`
+
+Current contract:
+
+- dry-run remains pre-attempt only and should not create `attempt-<k>` snapshots
+- `traceVersion: 2` bundles are hermetic and replayable in isolation
+- replay is read-only and revalidates recorded artifact hashes
+- launched agents carry copied summary artifacts, and promoted-component waves carry the copied component matrix JSON
+- legacy `traceVersion: 1` bundles remain best-effort with explicit warnings
+- replay validation is internal today, not a public CLI
 
 ## Upgraded Architecture
 
@@ -552,10 +565,14 @@ Why second:
 
 ### Phase 3: Evaluation And Replay
 
-- trace bundles
-- wave quality metrics
-- runtime-mix and clarification metrics
-- continuous-history replay scenarios
+- shipped:
+  - trace bundles
+  - cumulative wave quality metrics
+  - runtime-mix and clarification metrics
+  - internal replay validation against stored attempt bundles
+- still open:
+  - larger continuous-history replay scenario sets
+  - a public replay CLI if the internal helper proves stable
 
 Why third:
 

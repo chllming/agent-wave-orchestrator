@@ -7,7 +7,7 @@ It includes:
 - wave parsing and validation
 - launcher, dashboard, autonomous, and human-feedback CLIs
 - coordination log, generated board projection, compiled inboxes, and a per-wave ledger
-- integration stewardship, docs queues, and trace bundles under `.tmp/`
+- integration stewardship, docs queues, and versioned trace bundles under `.tmp/`
 - role prompt imports and closure-sweep gating
 - component-cutover tracking and promotion gates
 - Context7 bundle selection, prefetch, caching, and prompt injection
@@ -202,11 +202,23 @@ The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
 - `ledger/wave-<n>.json`: derived task/blocker/closure state
 - `integration/wave-<n>.json|md`: explicit or synthesized integration summary
 - `docs-queue/wave-<n>.json`: documentation reconciliation queue
-- `traces/wave-<n>/attempt-<k>/`: replay-oriented attempt bundle
+- `traces/wave-<n>/attempt-<k>/`: versioned attempt bundle with run metadata, quality metrics, prompts, logs, statuses, inboxes, and structured signals
 - `feedback/triage/wave-<n>.jsonl|/pending-human.md`: clarification triage log plus unresolved human escalations
 - `prompts/`, `logs/`, `status/`, `executors/`, and `context7-cache/`: run artifacts, overlays, and cached external-doc snippets
 
 `wave.config.json` can now declare executor profiles and lane runtime policy. In this repo, `main` defaults implementation roles to `codex`, integration/documentation/evaluator roles to `claude`, and research or ops-heavy roles to `opencode`. Runtime mix targets are enforced before launch, retry fallbacks are chosen from the configured fallback chain when a failed agent can move safely, and those fallback decisions are recorded in the ledger, integration summary, and traces. Generic `budget.minutes` now caps attempt timeouts, and `budget.turns` seeds vendor turn or step limits when the executor-specific settings are absent.
+
+## Trace And Replay
+
+- `--dry-run` is still pre-attempt only. It writes the manifest, coordination log, rendered board, ledger, docs queue, integration summary, and compiled inboxes under `.tmp/<lane>-wave-launcher/dry-run/`.
+- `--dry-run` does not write `attempt-<k>` trace snapshots. The `traces/` directory may exist in dry-run state, but it should remain file-empty.
+- Real attempts write a full hermetic `traceVersion: 2` bundle under `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/`.
+- `run-metadata.json` is the canonical bundle index. It records the wave hash, attempt number, launcher settings, agent prompt hashes, executor history, Context7 snippet hashes, gate snapshot, artifact-presence map, `replayContext`, and `historySnapshot`.
+- For `traceVersion: 2`, every launched agent must have copied prompt, log, status, inbox, and summary artifacts inside the bundle. Waves with `## Component promotions` must also carry the copied component matrix JSON.
+- `quality.json` is cumulative through the current attempt. It reports unresolved request and clarification counts, human-escalation and orchestrator-resolution counts, contradiction and documentation-drift counts, proof completeness, relaunch counts, fallback rate, acknowledgement and blocker timing, evaluator reversal, and the final integration recommendation.
+- Hermetic replay is read-only. Replay uses only the stored bundle contents, ignores inline summary duplicates in `run-metadata.json`, revalidates recorded artifact hashes, and does not rewrite summaries or other bundle files.
+- Legacy `traceVersion: 1` bundles are still accepted in best-effort mode with explicit warnings. They are not treated as fully hermetic.
+- Replay validation is internal today. The source tree exposes helper modules for loading, validating, and replaying trace bundles, but there is no supported `wave replay` public CLI yet.
 
 ## Wave File Shape
 

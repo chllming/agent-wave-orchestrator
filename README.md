@@ -122,7 +122,7 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor opencod
    Use `pnpm exec wave init` for a fresh repo or `pnpm exec wave init --adopt-existing` for an existing repo you do not want seeded with starter content.
 
 2. Configure the repo:
-   Edit [wave.config.json](/home/coder/wave-orchestration/wave.config.json) for your docs layout, shared plan docs, role prompt paths, validator thresholds, component-cutover matrix paths, and Context7 bundle index path.
+   Edit [wave.config.json](/home/coder/wave-orchestration/wave.config.json) for your docs layout, shared plan docs, role prompt paths, validator thresholds, component-cutover matrix paths, Context7 bundle index path, executor profiles, and per-lane runtime policy.
 
 3. Write or revise the shared docs:
    Keep the shared plan docs aligned with the work you want the harness to execute.
@@ -159,6 +159,8 @@ pnpm exec wave launch --lane main --reconcile-status
 pnpm exec wave feedback list --lane main --pending
 ```
 
+The harness now tries to resolve clarification requests before asking a human. Agents should emit `clarification-request` coordination records first; unresolved items are written into `.tmp/<lane>-wave-launcher/feedback/triage/` and only then become human feedback tickets.
+
 10. Launch one wave at a time until the plan is stable:
 
 ```bash
@@ -182,7 +184,10 @@ The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
 - `integration/wave-<n>.json|md`: explicit or synthesized integration summary
 - `docs-queue/wave-<n>.json`: documentation reconciliation queue
 - `traces/wave-<n>/attempt-<k>/`: replay-oriented attempt bundle
+- `feedback/triage/wave-<n>.jsonl|/pending-human.md`: clarification triage log plus unresolved human escalations
 - `prompts/`, `logs/`, `status/`, `executors/`, and `context7-cache/`: run artifacts, overlays, and cached external-doc snippets
+
+`wave.config.json` can now declare executor profiles and lane runtime policy. In this repo, `main` defaults implementation roles to `codex`, integration/documentation/evaluator roles to `claude`, and research or ops-heavy roles to `opencode`, with fallbacks recorded in the runtime artifacts and traces.
 
 ## Wave File Shape
 
@@ -204,6 +209,11 @@ Under the starter config in this repo, wave 0 and later also require:
 - `A0` as the evaluator
 - `A8` as the integration steward
 - `A9` as the documentation steward
+
+Optional standing roles are also available for infra- or rollout-heavy waves:
+
+- `docs/agents/wave-infra-role.md`
+- `docs/agents/wave-deploy-verifier-role.md`
 
 The sample [wave-0.md](/home/coder/wave-orchestration/docs/plans/waves/wave-0.md) is a complete valid example. The excerpt below shows the implementation-agent portion of a full wave:
 

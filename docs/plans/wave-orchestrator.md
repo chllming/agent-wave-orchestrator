@@ -35,7 +35,7 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
@@ -82,9 +82,16 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 - `wave coord show` reads the materialized coordination state for a wave.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
-- `wave coord post` appends a structured record to the coordination log. This is the machine-readable path for blockers, handoffs, evidence, and targeted requests.
+- `wave coord post` appends a structured record to the coordination log. This is the machine-readable path for blockers, handoffs, evidence, targeted requests, and clarification requests.
 
 The canonical state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not the scheduler's source of truth.
+
+Clarification flow is orchestrator-first:
+
+1. Agent emits `clarification-request` through `wave coord post`.
+2. The launcher triages it from repo policy, ownership, prior decisions, or targeted rerouting.
+3. Only unresolved items become human feedback tickets.
+4. Human escalations are written back into coordination state, the ledger, and trace artifacts.
 
 ## Upgrade Flow
 
@@ -115,6 +122,7 @@ pnpm exec wave changelog --since-installed
 - integration summaries: `.tmp/<lane>-wave-launcher/integration/`
 - docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
+- clarification triage: `.tmp/<lane>-wave-launcher/feedback/triage/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
 - Context7 cache: `.tmp/<lane>-wave-launcher/context7-cache/`
 - executor overlays: `.tmp/<lane>-wave-launcher/executors/`
@@ -128,8 +136,10 @@ pnpm exec wave changelog --since-installed
 - From the configured thresholds onward, declare `## Component promotions` and keep them aligned with the component cutover matrix.
 - From the configured thresholds onward, every non-A0/A8/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
 - `### Capabilities` is optional and lets the scheduler route targeted follow-up work by capability.
-- Use `### Executor` only when an agent should override the run-level executor default.
+- `### Executor` can declare `profile`, `fallbacks`, `tags`, and runtime budgets in addition to vendor-specific overrides.
+- Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
+- Optional standing roles available in this repo include `docs/agents/wave-infra-role.md` for infra proof and `docs/agents/wave-deploy-verifier-role.md` for rollout verification.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
 - Agents should use `wave coord post` for durable blockers, handoffs, evidence, and requests instead of relying on ad hoc board edits.
@@ -142,12 +152,13 @@ pnpm exec wave changelog --since-installed
 - `--executor opencode` uses `opencode run` with a generated runtime `opencode.json` and agent prompt overlay.
 - `--executor local` exists only for smoke-testing prompt and closure behavior.
 - `--codex-sandbox danger-full-access` is the default because it avoids host bubblewrap assumptions.
-- Per-agent overrides in the wave file beat both the CLI `--executor` and `wave.config.json` `executors.default`.
+- Resolution order is: per-agent explicit executor id, executor profile id, lane role default, CLI `--executor`, then `executors.default`.
+- Fallbacks are declared in profiles or lane policy and are recorded in the ledger, integration summary, and traces when used.
 - The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 ## Human Feedback Queue
 
-Agents can request clarification through the file-backed feedback queue. Operators can inspect and answer requests with:
+The file-backed feedback queue is now the final escalation layer, not the first-line clarification path. Operators can inspect and answer unresolved tickets with:
 
 ```bash
 pnpm exec wave feedback list --lane main --pending

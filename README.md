@@ -7,6 +7,7 @@ It includes:
 - wave parsing and validation
 - launcher, dashboard, autonomous, and human-feedback CLIs
 - role prompt imports and closure-sweep gating
+- component-cutover tracking and promotion gates
 - Context7 bundle selection, prefetch, caching, and prompt injection
 - starter docs and a sample wave scaffold
 
@@ -28,7 +29,7 @@ pnpm install
 
 2. Review the repo-level config in [wave.config.json](/home/coder/wave-orchestration/wave.config.json).
 
-3. Review the starter runbook in [docs/plans/wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/wave-orchestrator.md) and [docs/plans/context7-wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/context7-wave-orchestrator.md).
+3. Review the starter runbook in [docs/plans/wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/wave-orchestrator.md), [docs/plans/context7-wave-orchestrator.md](/home/coder/wave-orchestration/docs/plans/context7-wave-orchestrator.md), and [docs/plans/component-cutover-matrix.md](/home/coder/wave-orchestration/docs/plans/component-cutover-matrix.md).
 
 4. Dry-parse the starter wave:
 
@@ -52,39 +53,42 @@ pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor opencode
 ## Typical Harness Workflow
 
 1. Configure the repo:
-   Edit [wave.config.json](/home/coder/wave-orchestration/wave.config.json) for your docs layout, shared plan docs, role prompt paths, validator thresholds, and Context7 bundle index path.
+   Edit [wave.config.json](/home/coder/wave-orchestration/wave.config.json) for your docs layout, shared plan docs, role prompt paths, validator thresholds, component-cutover matrix paths, and Context7 bundle index path.
 
 2. Write or revise the shared docs:
    Keep [docs/plans/current-state.md](/home/coder/wave-orchestration/docs/plans/current-state.md), [docs/plans/master-plan.md](/home/coder/wave-orchestration/docs/plans/master-plan.md), and [docs/plans/migration.md](/home/coder/wave-orchestration/docs/plans/migration.md) aligned with the work you want the waves to execute.
 
-3. Create a wave file:
+3. Replace or revise the component cutover matrix:
+   Keep [docs/plans/component-cutover-matrix.md](/home/coder/wave-orchestration/docs/plans/component-cutover-matrix.md) and [docs/plans/component-cutover-matrix.json](/home/coder/wave-orchestration/docs/plans/component-cutover-matrix.json) aligned with the components and maturity levels your repo actually uses.
+
+4. Create a wave file:
    Put wave markdown under [docs/plans/waves](/home/coder/wave-orchestration/docs/plans/waves) using the same sections as the sample [wave-0.md](/home/coder/wave-orchestration/docs/plans/waves/wave-0.md).
 
-4. Dry-run first:
+5. Dry-run first:
 
 ```bash
 pnpm wave:launch -- --lane main --dry-run --no-dashboard
 ```
 
-5. Reconcile stale state if needed:
+6. Reconcile stale state if needed:
 
 ```bash
 pnpm wave:launch -- --lane main --reconcile-status
 ```
 
-6. Check pending human feedback:
+7. Check pending human feedback:
 
 ```bash
 pnpm wave:feedback -- list --lane main --pending
 ```
 
-7. Launch one wave at a time until the plan is stable:
+8. Launch one wave at a time until the plan is stable:
 
 ```bash
 pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
 ```
 
-8. Use autonomous mode only after the wave set is already solid:
+9. Use autonomous mode only after the wave set is already solid:
 
 ```bash
 pnpm wave:autonomous -- --lane main --executor codex --codex-sandbox danger-full-access
@@ -94,11 +98,13 @@ pnpm wave:autonomous -- --lane main --executor codex --codex-sandbox danger-full
 
 Each wave is regular markdown. The harness looks for:
 
+- `## Component promotions`
 - `## Context7 defaults`
 - `## Agent <id>: <title>`
 - `### Executor`
 - `### Role prompts`
 - `### Context7`
+- `### Components`
 - `### Exit contract`
 - `### Prompt`
 
@@ -106,6 +112,10 @@ Minimal example:
 
 ````md
 # Wave 1 - Example
+
+## Component promotions
+
+- wave-parser-and-launcher: repo-landed
 
 ## Context7 defaults
 
@@ -144,6 +154,10 @@ File ownership (only touch these paths):
 - bundle: node-typescript
 - query: "Node child_process and test execution"
 
+### Components
+
+- wave-parser-and-launcher
+
 ### Exit contract
 
 - completion: integrated
@@ -161,6 +175,8 @@ File ownership (only touch these paths):
 - test/example.test.ts
 ```
 ````
+
+`## Component promotions` declares the component levels this wave is responsible for proving. `### Components` assigns each promoted component to one or more implementation agents.
 
 `### Executor` is optional. Resolution order is:
 
@@ -181,6 +197,14 @@ Supported keys:
 - `opencode.attach`
 - `opencode.format`
 - `opencode.steps`
+
+When an implementation agent owns components, it must emit:
+
+```text
+[wave-component] component=<id> level=<level> state=<met|gap> detail=<short-note>
+```
+
+The launcher will not accept final completion until every promoted component has at least one matching `state=met` proof marker at the declared level.
 
 ## Executor Behavior
 

@@ -10,6 +10,7 @@ import {
   parseWaveFiles,
   readRunState,
   reconcileRunStateFromStatusFiles,
+  requiredDocumentationStewardPathsForWave,
   SHARED_PLAN_DOC_PATHS,
   validateWaveDefinition,
   WAVE_DOCUMENTATION_ROLE_PROMPT_PATH,
@@ -28,6 +29,15 @@ afterEach(() => {
     fs.rmSync(targetPath, { recursive: true, force: true });
   }
 });
+
+const starterComponentPromotions = [
+  { componentId: "wave-parser-and-launcher", targetLevel: "repo-landed" },
+  { componentId: "starter-docs-and-adoption-guidance", targetLevel: "repo-landed" },
+];
+const starterComponentTargets = Object.fromEntries(
+  starterComponentPromotions.map((promotion) => [promotion.componentId, promotion.targetLevel]),
+);
+const starterDocumentationPaths = requiredDocumentationStewardPathsForWave(0);
 
 describe("parseWaveContent", () => {
   it("extracts the commit message and agent prompts", () => {
@@ -404,7 +414,7 @@ describe("validateWaveDefinition", () => {
     "Read docs/research/agent-context-sources.md.",
     "",
     "File ownership (only touch these paths):",
-    ...SHARED_PLAN_DOC_PATHS.map((docPath) => `- ${docPath}`),
+    ...starterDocumentationPaths.map((docPath) => `- ${docPath}`),
   ].join("\n");
 
   it("accepts a valid leap-claw wave definition", () => {
@@ -413,6 +423,7 @@ describe("validateWaveDefinition", () => {
         {
           wave: 0,
           file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
           agents: [
             {
               agentId: "A0",
@@ -424,9 +435,17 @@ describe("validateWaveDefinition", () => {
               ownedPaths: ["docs/plans/waves/reviews/wave-0-evaluator.md"],
             },
             {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
               agentId: "A1",
               prompt: leapClawPrompt,
               ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
             },
           ],
         },
@@ -508,6 +527,7 @@ describe("validateWaveDefinition", () => {
         {
           wave: 5,
           file: "docs/plans/waves/wave-5.md",
+          componentPromotions: starterComponentPromotions,
           agents: [
             {
               agentId: "A0",
@@ -530,38 +550,41 @@ describe("validateWaveDefinition", () => {
     ).toThrow(new RegExp(`must include exactly one documentation steward importing ${WAVE_DOCUMENTATION_ROLE_PROMPT_PATH}`));
   });
 
-  it("accepts leap-claw waves 5 and later when the documentation steward owns the shared plan docs", () => {
+  it("accepts waves when the documentation steward owns the shared plan and matrix docs", () => {
     expect(
       validateWaveDefinition(
         {
-          wave: 5,
-          file: "docs/plans/waves/wave-5.md",
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
           agents: [
             {
               agentId: "A0",
               prompt: leapClawPrompt.replace(
                 "go/example/file.go",
-                "docs/plans/waves/reviews/wave-5-evaluator.md",
+                "docs/plans/waves/reviews/wave-0-evaluator.md",
               ),
               rolePromptPaths: [WAVE_EVALUATOR_ROLE_PROMPT_PATH],
-              ownedPaths: ["docs/plans/waves/reviews/wave-5-evaluator.md"],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-evaluator.md"],
             },
             {
               agentId: "A9",
               prompt: documentationStewardPrompt,
               rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
-              ownedPaths: SHARED_PLAN_DOC_PATHS,
+              ownedPaths: starterDocumentationPaths,
             },
             {
               agentId: "A1",
               prompt: leapClawPrompt,
               ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
             },
           ],
         },
         { lane: "leap-claw" },
       ),
-    ).toMatchObject({ wave: 5 });
+    ).toMatchObject({ wave: 0 });
   });
 
   it("requires Context7 declarations and exit contracts for leap-claw waves 6 and later", () => {
@@ -574,6 +597,7 @@ describe("validateWaveDefinition", () => {
             bundle: "plugins",
             query: "Plugin host work",
           },
+          componentPromotions: starterComponentPromotions,
           agents: [
             {
               agentId: "A0",
@@ -589,7 +613,7 @@ describe("validateWaveDefinition", () => {
               agentId: "A9",
               prompt: documentationStewardPrompt,
               rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
-              ownedPaths: SHARED_PLAN_DOC_PATHS,
+              ownedPaths: starterDocumentationPaths,
               context7Config: { bundle: "none", query: "repo truth only" },
             },
             {
@@ -597,6 +621,8 @@ describe("validateWaveDefinition", () => {
               prompt: leapClawPrompt,
               ownedPaths: ["go/example/file.go"],
               context7Config: { bundle: "plugins", query: "Node lifecycle" },
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
             },
           ],
         },
@@ -643,6 +669,9 @@ describe("completedWavesFromStatusFiles", () => {
     const wave = {
       wave: 0,
       file: "docs/plans/waves/wave-0.md",
+      componentPromotions: [
+        { componentId: "wave-parser-and-launcher", targetLevel: "repo-landed" },
+      ],
       agents: [
         {
           agentId: "A0",
@@ -653,6 +682,10 @@ describe("completedWavesFromStatusFiles", () => {
           agentId: "A1",
           slug: "0-a1",
           prompt: workerPrompt,
+          components: ["wave-parser-and-launcher"],
+          componentTargets: {
+            "wave-parser-and-launcher": "repo-landed",
+          },
         },
       ],
       evaluatorReportPath: reportRelPath,
@@ -709,8 +742,41 @@ describe("completedWavesFromStatusFiles", () => {
       ),
       "utf8",
     );
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a1.summary.json"),
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["go/example/file.go"],
+          },
+          components: [
+            {
+              componentId: "wave-parser-and-launcher",
+              level: "repo-landed",
+              state: "met",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
 
-    expect(completedWavesFromStatusFiles([wave], statusDir, { logsDir })).toEqual([0]);
+    expect(
+      completedWavesFromStatusFiles([wave], statusDir, {
+        logsDir,
+        requireComponentPromotionsFromWave: 0,
+      }),
+    ).toEqual([0]);
   });
 });
 

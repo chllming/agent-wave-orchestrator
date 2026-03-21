@@ -11,6 +11,7 @@ import {
   markLauncherFailed,
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
+  readWaveComponentGate,
   readWaveEvaluatorGate,
   readWaveInfraGate,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
@@ -178,6 +179,77 @@ describe("readWaveInfraGate", () => {
     ).toMatchObject({
       ok: true,
       statusCode: "pass",
+    });
+  });
+});
+
+describe("readWaveComponentGate", () => {
+  it("requires promoted components to be proven at the declared level", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-0-a1.status");
+    const summaryPath = path.join(dir, "wave-0-a1.summary.json");
+    const logPath = path.join(dir, "wave-0-a1.log");
+
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+    fs.writeFileSync(logPath, "", "utf8");
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          agentId: "A1",
+          components: [
+            {
+              componentId: "wave-parser-and-launcher",
+              level: "baseline-proved",
+              state: "met",
+            },
+          ],
+          logPath,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      readWaveComponentGate(
+        {
+          wave: 0,
+          componentPromotions: [
+            {
+              componentId: "wave-parser-and-launcher",
+              targetLevel: "repo-landed",
+            },
+          ],
+          agents: [
+            {
+              agentId: "A1",
+              components: ["wave-parser-and-launcher"],
+              componentTargets: {
+                "wave-parser-and-launcher": "repo-landed",
+              },
+            },
+          ],
+        },
+        [
+          {
+            agent: {
+              agentId: "A1",
+              components: ["wave-parser-and-launcher"],
+              componentTargets: {
+                "wave-parser-and-launcher": "repo-landed",
+              },
+            },
+            statusPath,
+            logPath,
+          },
+        ],
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "component-promotion-gap",
+      componentId: "wave-parser-and-launcher",
     });
   });
 });

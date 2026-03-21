@@ -10,5 +10,6 @@
 ## Near-Term Work
 
 - Finish genericizing remaining tests and runtime helpers.
+- Keep the starter component cutover matrix and sample wave aligned with the shipped harness behavior.
 - Add additional starter templates for common repository shapes.
 - Expand package-level documentation and install guidance.

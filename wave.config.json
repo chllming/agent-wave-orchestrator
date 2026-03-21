@@ -8,7 +8,9 @@
     "stateRoot": ".tmp",
     "orchestratorStateDir": ".tmp/wave-orchestrator",
     "terminalsPath": ".vscode/terminals.json",
-    "context7BundleIndexPath": "docs/context7/bundles.json"
+    "context7BundleIndexPath": "docs/context7/bundles.json",
+    "componentCutoverMatrixDocPath": "docs/plans/component-cutover-matrix.md",
+    "componentCutoverMatrixJsonPath": "docs/plans/component-cutover-matrix.json"
   },
   "roles": {
     "rolePromptDir": "docs/agents",
@@ -43,8 +45,10 @@
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md"
     ],
-    "requireDocumentationStewardFromWave": 5,
+    "requireDocumentationStewardFromWave": 0,
     "requireContext7DeclarationsFromWave": 6,
-    "requireExitContractsFromWave": 6
+    "requireExitContractsFromWave": 6,
+    "requireComponentPromotionsFromWave": 0,
+    "requireAgentComponentsFromWave": 0
   }
 }

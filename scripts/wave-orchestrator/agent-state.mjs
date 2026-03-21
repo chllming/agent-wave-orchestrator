@@ -30,6 +30,8 @@ const WAVE_GATE_REGEX =
   /^\[wave-gate\]\s*architecture=(pass|concerns|blocked)\s+integration=(pass|concerns|blocked)\s+durability=(pass|concerns|blocked)\s+live=(pass|concerns|blocked)\s+docs=(pass|concerns|blocked)\s*(?:detail=(.*))?$/gim;
 const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
+const WAVE_COMPONENT_REGEX =
+  /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
 
 function cleanText(value) {
   return String(value || "").trim();
@@ -68,6 +70,20 @@ function findAllMatches(text, regex, mapper) {
     match = regex.exec(text);
   }
   return out;
+}
+
+function findLatestComponentMatches(text) {
+  const matches = findAllMatches(text, WAVE_COMPONENT_REGEX, (match) => ({
+    componentId: match[1],
+    level: match[2],
+    state: match[3],
+    detail: cleanText(match[4]),
+  }));
+  const byComponent = new Map();
+  for (const match of matches) {
+    byComponent.set(match.componentId, match);
+  }
+  return Array.from(byComponent.values());
 }
 
 function meetsOrExceeds(actual, required, orderMap) {
@@ -174,6 +190,7 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       docs: match[5],
       detail: cleanText(match[6]),
     })),
+    components: findLatestComponentMatches(logText),
     gaps: findAllMatches(logText, WAVE_GAP_REGEX, (match) => ({
       kind: match[1],
       detail: cleanText(match[2]),
@@ -257,6 +274,41 @@ export function validateImplementationSummary(agent, summary) {
       statusCode: "doc-impact-gap",
       detail: `Agent ${agent.agentId} only reported ${summary.docDelta.state} doc impact; exit contract requires ${contract.docImpact}.`,
     };
+  }
+  const ownedComponents = Array.isArray(agent?.components) ? agent.components : [];
+  if (ownedComponents.length > 0) {
+    const componentMarkers = new Map(
+      Array.isArray(summary.components)
+        ? summary.components.map((component) => [component.componentId, component])
+        : [],
+    );
+    for (const componentId of ownedComponents) {
+      const marker = componentMarkers.get(componentId);
+      if (!marker) {
+        return {
+          ok: false,
+          statusCode: "missing-wave-component",
+          detail: `Missing [wave-component] marker for ${agent.agentId} component ${componentId}.`,
+        };
+      }
+      const expectedLevel = agent?.componentTargets?.[componentId] || null;
+      if (expectedLevel && marker.level !== expectedLevel) {
+        return {
+          ok: false,
+          statusCode: "component-level-mismatch",
+          detail: `Agent ${agent.agentId} reported ${componentId} at ${marker.level}; wave requires ${expectedLevel}.`,
+        };
+      }
+      if (marker.state !== "met") {
+        return {
+          ok: false,
+          statusCode: "component-gap",
+          detail:
+            marker.detail ||
+            `Agent ${agent.agentId} reported a component gap for ${componentId}.`,
+        };
+      }
+    }
   }
   return {
     ok: true,

@@ -2,6 +2,11 @@
 
 **Commit message**: `Chore: validate starter wave scaffold`
 
+## Component promotions
+
+- wave-parser-and-launcher: repo-landed
+- starter-docs-and-adoption-guidance: repo-landed
+
 ## Context7 defaults
 
 - bundle: node-typescript
@@ -55,14 +60,21 @@ File ownership (only touch these paths):
 - docs/plans/current-state.md
 - docs/plans/master-plan.md
 - docs/plans/migration.md
+- docs/plans/component-cutover-matrix.md
+- docs/plans/component-cutover-matrix.json
 ```
 
-## Agent A1: Starter Runtime Review
+## Agent A1: Starter Runtime and Docs Review
 
 ### Context7
 
 - bundle: node-typescript
 - query: "Node.js module layout, process spawning, and vitest test execution"
+
+### Components
+
+- wave-parser-and-launcher
+- starter-docs-and-adoption-guidance
 
 ### Exit contract
 
@@ -83,5 +95,7 @@ Required context before coding:
 
 File ownership (only touch these paths):
 - README.md
-- test/wave-orchestrator/shared.test.ts
+- docs/plans/wave-orchestrator.md
+- scripts/wave-orchestrator/wave-files.mjs
+- test/wave-orchestrator/wave-files.test.ts
 ```

@@ -5,6 +5,7 @@ Context7 is for external library truth. Repository docs and source are for repos
 ## Rules
 
 - Prefer a narrow bundle per agent or wave.
+- Keep bundle defaults and agent overrides aligned with the components the wave is promoting.
 - Do not load broad external docs by default.
 - Treat prefetched Context7 text as non-canonical prompt context.
 - Keep Context7 bundle definitions in `docs/context7/bundles.json`.

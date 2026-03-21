@@ -8,6 +8,7 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
 - validates Context7 declarations and exit contracts from configurable wave thresholds
+- validates component promotions and component-owned proof from configurable wave thresholds
 - writes prompts, logs, dashboards, message boards, and status summaries under `.tmp/`
 - supports launcher-side Context7 prefetch and injection for headless runs
 - supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
@@ -27,8 +28,9 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, component-cutover matrix paths, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
+- `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 
 ## Setup
 
@@ -80,11 +82,13 @@ pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --c
 ## Authoring Rules
 
 - Every wave must include the configured evaluator agent.
+- From the configured thresholds onward, declare `## Component promotions` and keep them aligned with the component cutover matrix.
+- From the configured thresholds onward, every non-A0/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
 - Use `### Executor` only when an agent should override the run-level executor default.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
-- Keep shared plan docs owned by the configured documentation steward once that rule becomes active.
+- Keep shared plan docs and the component cutover matrix owned by the configured documentation steward once that rule becomes active.
 
 ## Executor Modes
 
@@ -108,4 +112,4 @@ pnpm wave:feedback -- respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It reruns the documentation steward and evaluator so the final gate reflects the landed state after implementation settles.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, checks promoted component proof, then reruns the documentation steward and evaluator so the final gate reflects the landed state after implementation settles.

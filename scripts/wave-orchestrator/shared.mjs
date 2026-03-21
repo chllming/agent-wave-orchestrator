@@ -120,6 +120,14 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     stateDir,
     terminalsPath: path.join(REPO_ROOT, laneProfile.paths.terminalsPath),
     context7BundleIndexPath: path.join(REPO_ROOT, laneProfile.paths.context7BundleIndexPath),
+    componentCutoverMatrixDocPath: path.join(
+      REPO_ROOT,
+      laneProfile.paths.componentCutoverMatrixDocPath,
+    ),
+    componentCutoverMatrixJsonPath: path.join(
+      REPO_ROOT,
+      laneProfile.paths.componentCutoverMatrixJsonPath,
+    ),
     sharedPlanDocs: laneProfile.sharedPlanDocs,
     requiredPromptReferences: laneProfile.validation.requiredPromptReferences,
     rolePromptDir: laneProfile.roles.rolePromptDir,
@@ -132,6 +140,9 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     requireContext7DeclarationsFromWave:
       laneProfile.validation.requireContext7DeclarationsFromWave,
     requireExitContractsFromWave: laneProfile.validation.requireExitContractsFromWave,
+    requireComponentPromotionsFromWave:
+      laneProfile.validation.requireComponentPromotionsFromWave,
+    requireAgentComponentsFromWave: laneProfile.validation.requireAgentComponentsFromWave,
     executors: laneProfile.executors,
     defaultManifestPath: path.join(stateDir, "waves.manifest.json"),
     defaultRunStatePath: path.join(stateDir, "run-state.json"),

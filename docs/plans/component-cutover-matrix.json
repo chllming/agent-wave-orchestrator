@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "levels": [
+    "inventoried",
+    "contract-frozen",
+    "repo-landed",
+    "baseline-proved",
+    "pilot-live",
+    "qa-proved",
+    "fleet-ready",
+    "cutover-ready",
+    "deprecation-ready"
+  ],
+  "components": {
+    "wave-parser-and-launcher": {
+      "title": "Wave parser and launcher",
+      "canonicalDocs": [
+        "README.md",
+        "docs/plans/wave-orchestrator.md"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [
+        {
+          "wave": 0,
+          "target": "repo-landed"
+        }
+      ],
+      "proofSurfaces": [
+        "wave parsing",
+        "launcher dry-run",
+        "wave parser tests"
+      ]
+    },
+    "executor-abstraction-and-prompt-transport": {
+      "title": "Executor abstraction and prompt transport",
+      "canonicalDocs": [
+        "README.md",
+        "docs/plans/context7-wave-orchestrator.md"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [],
+      "proofSurfaces": [
+        "executor launch specs",
+        "runtime overlays",
+        "executor tests"
+      ]
+    },
+    "closure-sweep-and-role-gates": {
+      "title": "Closure sweep and role gates",
+      "canonicalDocs": [
+        "docs/plans/wave-orchestrator.md",
+        "docs/agents/wave-evaluator-role.md",
+        "docs/agents/wave-documentation-role.md"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [],
+      "proofSurfaces": [
+        "structured gate markers",
+        "closure sweep",
+        "launcher tests"
+      ]
+    },
+    "context7-scope-and-prefetch": {
+      "title": "Context7 scope and prefetch",
+      "canonicalDocs": [
+        "docs/plans/context7-wave-orchestrator.md",
+        "docs/context7/bundles.json"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [],
+      "proofSurfaces": [
+        "bundle resolution",
+        "prefetch cache",
+        "prompt injection"
+      ]
+    },
+    "state-artifacts-and-feedback": {
+      "title": "State artifacts and feedback",
+      "canonicalDocs": [
+        "docs/plans/wave-orchestrator.md",
+        "docs/plans/current-state.md"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [],
+      "proofSurfaces": [
+        "status summaries",
+        "dashboards",
+        "feedback queue"
+      ]
+    },
+    "starter-docs-and-adoption-guidance": {
+      "title": "Starter docs and adoption guidance",
+      "canonicalDocs": [
+        "README.md",
+        "docs/plans/master-plan.md",
+        "docs/plans/migration.md"
+      ],
+      "currentLevel": "repo-landed",
+      "promotions": [
+        {
+          "wave": 0,
+          "target": "repo-landed"
+        }
+      ],
+      "proofSurfaces": [
+        "starter wave docs",
+        "adoption guidance",
+        "shared-plan closure"
+      ]
+    }
+  }
+}

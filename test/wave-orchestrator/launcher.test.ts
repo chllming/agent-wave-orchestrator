@@ -229,7 +229,8 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected.map((run) => run.agent.agentId)).toEqual(["A2"]);
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A2"]);
   });
 
   it("routes capability-targeted retries to the least-busy matching agent", () => {
@@ -272,7 +273,8 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected.map((run) => run.agent.agentId)).toEqual(["A2"]);
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A2"]);
   });
 
   it("halts retries while human escalation remains unresolved", () => {
@@ -305,7 +307,7 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected).toEqual([]);
+    expect(selected).toEqual({ runs: [], barrier: null });
   });
 
   it("prioritizes launcher-routed clarification follow-up requests", () => {
@@ -352,7 +354,8 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected.map((run) => run.agent.agentId)).toEqual(["A9"]);
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A9"]);
   });
 
   it("switches failed agents to an allowed fallback executor on retry", () => {
@@ -432,7 +435,8 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected.map((run) => run.agent.agentId)).toEqual(["A1"]);
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A1"]);
     expect(agentRuns[0].agent.executorResolved).toMatchObject({
       id: "claude",
       fallbackUsed: true,
@@ -441,7 +445,7 @@ describe("resolveRelaunchRuns", () => {
     });
   });
 
-  it("blocks relaunch when configured fallbacks are unavailable or violate mix policy", () => {
+  it("blocks retry when a configured fallback would violate runtime mix targets", () => {
     const agentRuns = [
       {
         agent: {
@@ -489,21 +493,20 @@ describe("resolveRelaunchRuns", () => {
         },
       },
     ];
-    const derivedState = {
-      coordinationState: {
-        humanFeedback: [],
-        humanEscalations: [],
-        clarifications: [],
-        requests: [],
-        blockers: [],
-      },
-      ledger: { phase: "running", attempt: 1, tasks: [] },
-    };
 
     const selected = resolveRelaunchRuns(
       agentRuns,
-      [{ agentId: "A1", statusCode: "127" }],
-      derivedState,
+      [{ agentId: "A1", statusCode: "127", logPath: "logs/a1.log" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [],
+          requests: [],
+          blockers: [],
+        },
+        ledger: { phase: "running", attempt: 1, tasks: [] },
+      },
       {
         documentationAgentId: "A9",
         evaluatorAgentId: "A0",
@@ -519,17 +522,19 @@ describe("resolveRelaunchRuns", () => {
       },
     );
 
-    expect(selected).toEqual([]);
-    expect(derivedState.retryFallbackBlockers).toEqual([
+    expect(selected.runs).toEqual([]);
+    expect(selected.barrier).toMatchObject({
+      statusCode: "retry-fallback-blocked",
+    });
+    expect(selected.barrier.failures).toMatchObject([
       {
         agentId: "A1",
-        detail: expect.stringContaining("violates runtime mix targets"),
+        statusCode: "retry-fallback-blocked",
       },
     ]);
     expect(agentRuns[0].agent.executorResolved).toMatchObject({
       id: "codex",
       fallbackUsed: false,
-      fallbackReason: null,
     });
   });
 });

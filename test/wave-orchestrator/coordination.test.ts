@@ -78,6 +78,7 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("completion: integrated");
     expect(prompt).toContain("Component promotions for this wave:");
     expect(prompt).toContain("Components you own in this wave:");
+    expect(prompt).not.toContain("# Wave 2 Message Board");
     expect(prompt).not.toContain("docs/leap-claw/plans");
   });
 

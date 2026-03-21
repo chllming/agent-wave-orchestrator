@@ -401,11 +401,6 @@ export function buildExecutionPrompt({
     ...(inboxText
       ? ["Current agent inbox:", "```markdown", inboxText, "```", ""]
       : []),
-    "Current wave board projection:",
-    "```markdown",
-    messageBoardSnapshot,
-    "```",
-    "",
     ...exitContractLines,
     ...promotedComponentLines,
     ...ownedComponentLines,

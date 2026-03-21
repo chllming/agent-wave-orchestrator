@@ -71,17 +71,17 @@ import {
   readFileTail,
   readJsonOrNull,
   REPORT_VERDICT_REGEX,
-    sanitizeOrchestratorId,
-    shellQuote,
-    sleep,
-    PACKAGE_ROOT,
-    TMUX_COMMAND_TIMEOUT_MS,
-    WAVE_VERDICT_REGEX,
-    WAVE_TERMINAL_STATES,
-    toIsoTimestamp,
-    writeJsonAtomic,
-    writeTextAtomic,
-  } from "./shared.mjs";
+  sanitizeOrchestratorId,
+  shellQuote,
+  sleep,
+  PACKAGE_ROOT,
+  TMUX_COMMAND_TIMEOUT_MS,
+  WAVE_VERDICT_REGEX,
+  WAVE_TERMINAL_STATES,
+  toIsoTimestamp,
+  writeJsonAtomic,
+  writeTextAtomic,
+} from "./shared.mjs";
 import {
   appendTerminalEntries,
   createGlobalDashboardTerminalEntry,
@@ -122,7 +122,7 @@ import {
 } from "./agent-state.mjs";
 import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
 import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
-import { writeStructuredSignalsSnapshot, writeTraceBundle } from "./traces.mjs";
+import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 export { CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE, normalizeCodexSandboxMode, buildCodexExecInvocation };
 
@@ -326,10 +326,7 @@ export function readWaveEvaluatorGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const summary =
-    evaluatorRun.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(evaluatorRun.statusPath))
-      ? readAgentExecutionSummary(evaluatorRun.statusPath)
-      : null;
+  const summary = readRunExecutionSummary(evaluatorRun);
   if (summary) {
     const validation = validateEvaluatorSummary(evaluatorRun.agent, summary);
     return {
@@ -398,6 +395,19 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
   });
   writeAgentExecutionSummary(runInfo.statusPath, summary);
   return summary;
+}
+
+function readRunExecutionSummary(runInfo) {
+  if (runInfo?.summary && typeof runInfo.summary === "object") {
+    return runInfo.summary;
+  }
+  if (runInfo?.summaryPath && fs.existsSync(runInfo.summaryPath)) {
+    return readAgentExecutionSummary(runInfo.summaryPath);
+  }
+  if (runInfo?.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(runInfo.statusPath))) {
+    return readAgentExecutionSummary(runInfo.statusPath);
+  }
+  return null;
 }
 
 function materializeAgentExecutionSummaries(wave, agentRuns) {
@@ -619,36 +629,7 @@ function writeWaveDerivedState({
   };
 }
 
-function buildQualityMetrics({
-  coordinationState,
-  integrationSummary,
-  ledger,
-  summariesByAgentId,
-  attempt,
-}) {
-  const implementationSummaries = Object.values(summariesByAgentId || {}).filter(Boolean);
-  const proofMarkers = implementationSummaries.filter((summary) => summary?.proof);
-  const proofMet = proofMarkers.filter((summary) => summary.proof?.state === "met");
-  return {
-    attempt,
-    unresolvedRequestCount: (coordinationState?.requests || []).filter((record) =>
-      ["open", "acknowledged", "in_progress"].includes(record.status),
-    ).length,
-    contradictionCount: integrationSummary?.conflictingClaims?.length || 0,
-    documentationDriftCount: (ledger?.tasks || []).filter(
-      (task) => task.kind === "documentation" && task.state !== "done",
-    ).length,
-    proofCompletenessRatio:
-      proofMarkers.length > 0 ? Number((proofMet.length / proofMarkers.length).toFixed(2)) : 1,
-    relaunchCountByRole: {},
-    meanTimeToFirstAckMs: null,
-    meanTimeToBlockerResolutionMs: null,
-    evaluatorReversal: false,
-    finalRecommendation: integrationSummary?.recommendation || "unknown",
-  };
-}
-
-function readWaveImplementationGate(wave, agentRuns) {
+export function readWaveImplementationGate(wave, agentRuns) {
   const evaluatorAgentId = wave.evaluatorAgentId || "A0";
   const integrationAgentId = wave.integrationAgentId || "A8";
   const documentationAgentId = wave.documentationAgentId || "A9";
@@ -656,7 +637,7 @@ function readWaveImplementationGate(wave, agentRuns) {
     if ([evaluatorAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId)) {
       continue;
     }
-    const summary = readAgentExecutionSummary(runInfo.statusPath);
+    const summary = readRunExecutionSummary(runInfo);
     const validation = validateImplementationSummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -679,7 +660,7 @@ function readWaveImplementationGate(wave, agentRuns) {
 
 export function readWaveComponentGate(wave, agentRuns, options = {}) {
   const summariesByAgentId = Object.fromEntries(
-    agentRuns.map((runInfo) => [runInfo.agent.agentId, readAgentExecutionSummary(runInfo.statusPath)]),
+    agentRuns.map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo)]),
   );
   const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
   if (validation.ok) {
@@ -730,7 +711,7 @@ export function readWaveComponentMatrixGate(wave, agentRuns, options = {}) {
   };
 }
 
-function readWaveDocumentationGate(wave, agentRuns) {
+export function readWaveDocumentationGate(wave, agentRuns) {
   const documentationAgentId = wave.documentationAgentId || "A9";
   const docRun =
     agentRuns.find((run) => run.agent.agentId === documentationAgentId) ?? null;
@@ -743,7 +724,7 @@ function readWaveDocumentationGate(wave, agentRuns) {
       logPath: null,
     };
   }
-  const summary = readAgentExecutionSummary(docRun.statusPath);
+  const summary = readRunExecutionSummary(docRun);
   const validation = validateDocumentationClosureSummary(docRun.agent, summary);
   return {
     ok: validation.ok,
@@ -754,7 +735,7 @@ function readWaveDocumentationGate(wave, agentRuns) {
   };
 }
 
-function readWaveIntegrationGate(wave, agentRuns, options = {}) {
+export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
   const integrationAgentId =
     options.integrationAgentId || wave.integrationAgentId || "A8";
   const requireIntegration =
@@ -775,7 +756,7 @@ function readWaveIntegrationGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const summary = readAgentExecutionSummary(integrationRun.statusPath);
+  const summary = readRunExecutionSummary(integrationRun);
   const validation = validateIntegrationSummary(integrationRun.agent, summary);
   return {
     ok: validation.ok,
@@ -786,7 +767,7 @@ function readWaveIntegrationGate(wave, agentRuns, options = {}) {
   };
 }
 
-function readWaveIntegrationBarrier(wave, agentRuns, derivedState, options = {}) {
+export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, options = {}) {
   const markerGate = readWaveIntegrationGate(wave, agentRuns, options);
   if (!markerGate.ok) {
     return markerGate;
@@ -947,6 +928,10 @@ export async function runClosureSweepPhase({
       agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
       context7Enabled: options.context7Enabled,
     });
+    runInfo.lastLaunchAttempt = dashboardState?.attempt || null;
+    runInfo.lastPromptHash = launchResult?.promptHash || null;
+    runInfo.lastContext7 = launchResult?.context7 || null;
+    runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
     setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
       state: "running",
       detail: `Closure sweep launched${launchResult?.context7?.mode ? ` (${launchResult.context7.mode})` : ""}`,
@@ -1788,13 +1773,29 @@ function buildFallbackExecutorState(executorState, executorId, attempt, reason) 
 function applyRetryFallbacks(agentRuns, failures, lanePaths, attemptNumber) {
   const failedAgentIds = new Set(failures.map((failure) => failure.agentId));
   let changed = false;
-  const blockedFailures = [];
+  const outcomes = new Map();
   for (const run of agentRuns) {
     if (!failedAgentIds.has(run.agent.agentId)) {
       continue;
     }
     const executorState = run.agent.executorResolved;
     if (!executorState) {
+      outcomes.set(run.agent.agentId, {
+        applied: false,
+        blocking: false,
+        statusCode: "no-executor-state",
+        detail: `Agent ${run.agent.agentId} has no resolved executor state.`,
+      });
+      continue;
+    }
+    const fallbackChain = executorFallbackChain(executorState);
+    if (fallbackChain.length === 0) {
+      outcomes.set(run.agent.agentId, {
+        applied: false,
+        blocking: false,
+        statusCode: "no-fallback-configured",
+        detail: `Agent ${run.agent.agentId} has no configured fallback executors.`,
+      });
       continue;
     }
     const attemptedExecutors = new Set(
@@ -1803,15 +1804,17 @@ function applyRetryFallbacks(agentRuns, failures, lanePaths, attemptNumber) {
         : [executorState.id],
     );
     const fallbackReason = failures.find((failure) => failure.agentId === run.agent.agentId);
-    let blockedDetail = null;
-    let appliedToRun = false;
-    for (const candidate of executorFallbackChain(executorState)) {
+    const blockedCandidates = [];
+    for (const candidate of fallbackChain) {
       if (!candidate || candidate === executorState.id || attemptedExecutors.has(candidate)) {
+        if (candidate) {
+          blockedCandidates.push(`${candidate}: already tried`);
+        }
         continue;
       }
       const command = commandForExecutor(executorState, candidate);
       if (!isExecutorCommandAvailable(command)) {
-        blockedDetail = `fallback ${candidate} is unavailable on PATH`;
+        blockedCandidates.push(`${candidate}: command unavailable`);
         continue;
       }
       const nextState = buildFallbackExecutorState(
@@ -1829,26 +1832,60 @@ function applyRetryFallbacks(agentRuns, failures, lanePaths, attemptNumber) {
         lanePaths,
       );
       if (!validation.ok) {
-        blockedDetail = `fallback ${candidate} violates runtime mix targets (${validation.detail})`;
+        blockedCandidates.push(`${candidate}: ${validation.detail}`);
         continue;
       }
       run.agent.executorResolved = nextState;
       changed = true;
-      appliedToRun = true;
-      blockedDetail = null;
+      outcomes.set(run.agent.agentId, {
+        applied: true,
+        blocking: false,
+        statusCode: "fallback-applied",
+        detail: `Agent ${run.agent.agentId} will retry on ${candidate}.`,
+        executorId: candidate,
+      });
       break;
     }
-    if (executorFallbackChain(executorState).length > 0 && !appliedToRun && blockedDetail) {
-      blockedFailures.push({
-        agentId: run.agent.agentId,
-        detail: blockedDetail,
+    if (!outcomes.has(run.agent.agentId)) {
+      outcomes.set(run.agent.agentId, {
+        applied: false,
+        blocking: true,
+        statusCode: "retry-fallback-blocked",
+        detail: `Agent ${run.agent.agentId} cannot retry safely on a configured fallback (${blockedCandidates.join("; ") || "no safe fallback remained"}).`,
       });
     }
   }
-  return { changed, blockedFailures };
+  return {
+    changed,
+    outcomes,
+  };
 }
 
-function readClarificationBarrier(derivedState) {
+function retryBarrierFromOutcomes(outcomes, failures) {
+  const blockingFailures = [];
+  for (const failure of failures) {
+    const outcome = outcomes.get(failure.agentId);
+    if (!outcome?.blocking) {
+      continue;
+    }
+    blockingFailures.push({
+      agentId: failure.agentId,
+      statusCode: outcome.statusCode,
+      logPath: failure.logPath,
+      detail: outcome.detail,
+    });
+  }
+  if (blockingFailures.length === 0) {
+    return null;
+  }
+  return {
+    statusCode: "retry-fallback-blocked",
+    detail: blockingFailures.map((failure) => failure.detail).join(" "),
+    failures: blockingFailures,
+  };
+}
+
+export function readClarificationBarrier(derivedState) {
   const openClarifications = (derivedState?.coordinationState?.clarifications || []).filter(
     (record) => isOpenCoordinationStatus(record.status),
   );
@@ -1891,6 +1928,77 @@ function readClarificationBarrier(derivedState) {
   };
 }
 
+export function buildGateSnapshot({
+  wave,
+  agentRuns,
+  derivedState,
+  lanePaths,
+  componentMatrixPayload,
+  componentMatrixJsonPath,
+}) {
+  const implementationGate = readWaveImplementationGate(wave, agentRuns);
+  const componentGate = readWaveComponentGate(wave, agentRuns, {
+    laneProfile: lanePaths?.laneProfile,
+  });
+  const integrationGate = readWaveIntegrationGate(wave, agentRuns, {
+    integrationAgentId: lanePaths?.integrationAgentId,
+    requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
+  });
+  const integrationBarrier = readWaveIntegrationBarrier(wave, agentRuns, derivedState, {
+    integrationAgentId: lanePaths?.integrationAgentId,
+    requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
+  });
+  const documentationGate = readWaveDocumentationGate(wave, agentRuns);
+  const componentMatrixGate = readWaveComponentMatrixGate(wave, agentRuns, {
+    laneProfile: lanePaths?.laneProfile,
+    documentationAgentId: lanePaths?.documentationAgentId,
+    componentMatrixPayload,
+    componentMatrixJsonPath,
+  });
+  const evaluatorGate = readWaveEvaluatorGate(wave, agentRuns, {
+    evaluatorAgentId: lanePaths?.evaluatorAgentId,
+  });
+  const infraGate = readWaveInfraGate(agentRuns);
+  const clarificationBarrier = readClarificationBarrier(derivedState);
+  const orderedGates = [
+    ["implementationGate", implementationGate],
+    ["componentGate", componentGate],
+    ["integrationBarrier", integrationBarrier],
+    ["documentationGate", documentationGate],
+    ["componentMatrixGate", componentMatrixGate],
+    ["evaluatorGate", evaluatorGate],
+    ["infraGate", infraGate],
+    ["clarificationBarrier", clarificationBarrier],
+  ];
+  const firstFailure = orderedGates.find(([, gate]) => gate?.ok === false);
+  return {
+    implementationGate,
+    componentGate,
+    integrationGate,
+    integrationBarrier,
+    documentationGate,
+    componentMatrixGate,
+    evaluatorGate,
+    infraGate,
+    clarificationBarrier,
+    overall: firstFailure
+      ? {
+          ok: false,
+          gate: firstFailure[0],
+          statusCode: firstFailure[1].statusCode,
+          detail: firstFailure[1].detail,
+          agentId: firstFailure[1].agentId || null,
+        }
+      : {
+          ok: true,
+          gate: "pass",
+          statusCode: "pass",
+          detail: "All replayed wave gates passed.",
+          agentId: null,
+        },
+  };
+}
+
 export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths) {
   const runsByAgentId = new Map(agentRuns.map((run) => [run.agent.agentId, run]));
   const pendingFeedback = (derivedState?.coordinationState?.humanFeedback || []).filter((record) =>
@@ -1900,15 +2008,18 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
     (record) => isOpenCoordinationStatus(record.status),
   );
   if (pendingFeedback.length > 0 || pendingHumanEscalations.length > 0) {
-    return [];
+    return { runs: [], barrier: null };
   }
   const nextAttemptNumber = Number(derivedState?.ledger?.attempt || 0) + 1;
-  const fallbackOutcome = applyRetryFallbacks(agentRuns, failures, lanePaths, nextAttemptNumber);
-  if (derivedState && typeof derivedState === "object") {
-    derivedState.retryFallbackBlockers = fallbackOutcome.blockedFailures;
-  }
-  if (fallbackOutcome.blockedFailures.length > 0) {
-    return [];
+  const fallbackResolution = applyRetryFallbacks(
+    agentRuns,
+    failures,
+    lanePaths,
+    nextAttemptNumber,
+  );
+  const retryBarrier = retryBarrierFromOutcomes(fallbackResolution.outcomes, failures);
+  if (retryBarrier) {
+    return { runs: [], barrier: retryBarrier };
   }
   const clarificationTargets = new Set();
   for (const record of openClarificationLinkedRequests(derivedState?.coordinationState)) {
@@ -1921,9 +2032,12 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
     }
   }
   if (clarificationTargets.size > 0) {
-    return Array.from(clarificationTargets)
-      .map((agentId) => runsByAgentId.get(agentId))
-      .filter(Boolean);
+    return {
+      runs: Array.from(clarificationTargets)
+        .map((agentId) => runsByAgentId.get(agentId))
+        .filter(Boolean),
+      barrier: null,
+    };
   }
   const targetedAgentIds = new Set();
   const capabilityTargets = new Set();
@@ -1942,9 +2056,12 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
     }
   }
   if (targetedAgentIds.size > 0) {
-    return Array.from(targetedAgentIds)
-      .map((agentId) => runsByAgentId.get(agentId))
-      .filter(Boolean);
+    return {
+      runs: Array.from(targetedAgentIds)
+        .map((agentId) => runsByAgentId.get(agentId))
+        .filter(Boolean),
+      barrier: null,
+    };
   }
   if (capabilityTargets.size > 0) {
     const selectedRuns = [];
@@ -1974,7 +2091,10 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
       }
     }
     if (selectedRuns.length > 0) {
-      return Array.from(new Map(selectedRuns.map((run) => [run.agent.agentId, run])).values());
+      return {
+        runs: Array.from(new Map(selectedRuns.map((run) => [run.agent.agentId, run])).values()),
+        barrier: null,
+      };
     }
   }
   const blockerAgentIds = new Set();
@@ -1990,21 +2110,36 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
     }
   }
   if (blockerAgentIds.size > 0) {
-    return Array.from(blockerAgentIds)
-      .map((agentId) => runsByAgentId.get(agentId))
-      .filter(Boolean);
+    return {
+      runs: Array.from(blockerAgentIds)
+        .map((agentId) => runsByAgentId.get(agentId))
+        .filter(Boolean),
+      barrier: null,
+    };
   }
   if (derivedState?.ledger?.phase === "docs-closure") {
-    return [runsByAgentId.get(lanePaths.documentationAgentId)].filter(Boolean);
+    return {
+      runs: [runsByAgentId.get(lanePaths.documentationAgentId)].filter(Boolean),
+      barrier: null,
+    };
   }
   if (derivedState?.ledger?.phase === "evaluator-closure") {
-    return [runsByAgentId.get(lanePaths.evaluatorAgentId)].filter(Boolean);
+    return {
+      runs: [runsByAgentId.get(lanePaths.evaluatorAgentId)].filter(Boolean),
+      barrier: null,
+    };
   }
   if (derivedState?.ledger?.phase === "integrating") {
-    return [runsByAgentId.get(lanePaths.integrationAgentId)].filter(Boolean);
+    return {
+      runs: [runsByAgentId.get(lanePaths.integrationAgentId)].filter(Boolean),
+      barrier: null,
+    };
   }
   const failedAgentIds = new Set(failures.map((failure) => failure.agentId));
-  return agentRuns.filter((run) => failedAgentIds.has(run.agent.agentId));
+  return {
+    runs: agentRuns.filter((run) => failedAgentIds.has(run.agent.agentId)),
+    barrier: null,
+  };
 }
 
 function preflightWavesForExecutorAvailability(waves, lanePaths) {
@@ -2435,7 +2570,7 @@ export async function runLauncherCli(argv) {
         const refreshDerivedState = (attemptNumber = 0) => {
           const summariesByAgentId = Object.fromEntries(
             agentRuns
-              .map((run) => [run.agent.agentId, readAgentExecutionSummary(run.statusPath)])
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
               .filter(([, summary]) => summary),
           );
           const feedbackRequests = readWaveHumanFeedbackRequests({
@@ -2608,6 +2743,10 @@ export async function runLauncherCli(argv) {
                 agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
                 context7Enabled: options.context7Enabled,
               });
+              runInfo.lastLaunchAttempt = attempt;
+              runInfo.lastPromptHash = launchResult?.promptHash || null;
+              runInfo.lastContext7 = launchResult?.context7 || null;
+              runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
               setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
                 state: "running",
                 detail: "Session launched",
@@ -2934,8 +3073,21 @@ export async function runLauncherCli(argv) {
           const structuredSignals = Object.fromEntries(
             agentRuns.map((run) => [run.agent.agentId, parseStructuredSignalsFromLog(run.logPath)]),
           );
+          const summariesByAgentId = Object.fromEntries(
+            agentRuns
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
+              .filter(([, summary]) => summary),
+          );
+          const gateSnapshot = buildGateSnapshot({
+            wave,
+            agentRuns,
+            derivedState,
+            lanePaths,
+          });
           const traceDir = writeTraceBundle({
             tracesDir: lanePaths.tracesDir,
+            lanePaths,
+            launcherOptions: options,
             wave,
             attempt,
             manifest: buildManifest(lanePaths, [wave]),
@@ -2947,19 +3099,22 @@ export async function runLauncherCli(argv) {
             integrationMarkdownPath: derivedState.integrationMarkdownPath,
             clarificationTriage: derivedState.clarificationTriage,
             agentRuns,
+            structuredSignals,
+            gateSnapshot,
             quality: buildQualityMetrics({
+              tracesDir: lanePaths.tracesDir,
+              wave,
               coordinationState: derivedState.coordinationState,
               integrationSummary: derivedState.integrationSummary,
               ledger: derivedState.ledger,
-              summariesByAgentId: Object.fromEntries(
-                agentRuns
-                  .map((run) => [run.agent.agentId, readAgentExecutionSummary(run.statusPath)])
-                  .filter(([, summary]) => summary),
-              ),
+              docsQueue: derivedState.docsQueue,
+              summariesByAgentId,
+              agentRuns,
+              gateSnapshot,
               attempt,
+              coordinationLogPath: derivedState.coordinationLogPath,
             }),
           });
-          writeStructuredSignalsSnapshot(path.join(traceDir, "structured-signals.json"), structuredSignals);
 
           if (failures.length === 0) {
             dashboardState.status = "completed";
@@ -3005,7 +3160,7 @@ export async function runLauncherCli(argv) {
           const failedAgentIds = new Set(failures.map((failure) => failure.agentId));
           const failedList = Array.from(failedAgentIds).join(", ");
           console.warn(
-            `[retry] Wave ${wave.wave} had failures for agents: ${failedList}. Relaunching failed or missing agents.`,
+            `[retry] Wave ${wave.wave} had failures for agents: ${failedList}. Evaluating safe relaunch targets.`,
           );
           appendCoordination({
             event: "wave_retry",
@@ -3014,21 +3169,43 @@ export async function runLauncherCli(argv) {
             details: `attempt=${attempt + 1}/${options.maxRetriesPerWave + 1}; failed_agents=${failedList}; timed_out=${timedOut ? "yes" : "no"}`,
             actionRequested: `Lane ${lanePaths.lane} owners should inspect failed agent logs before retry completion.`,
           });
-          runsToLaunch = resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths);
+          const relaunchResolution = resolveRelaunchRuns(
+            agentRuns,
+            failures,
+            derivedState,
+            lanePaths,
+          );
+          if (relaunchResolution.barrier) {
+            for (const failure of relaunchResolution.barrier.failures) {
+              recordCombinedEvent({
+                level: "error",
+                agentId: failure.agentId,
+                message: failure.detail,
+              });
+              setWaveDashboardAgent(dashboardState, failure.agentId, {
+                state: "failed",
+                detail: failure.detail,
+              });
+            }
+            flushDashboards();
+            appendCoordination({
+              event: "wave_retry_blocked",
+              waves: [wave.wave],
+              status: "blocked",
+              details: relaunchResolution.barrier.detail,
+              actionRequested: `Lane ${lanePaths.lane} owners should resolve runtime policy or executor availability before retrying.`,
+            });
+            const error = new Error(
+              `Wave ${wave.wave} retry blocked: ${relaunchResolution.barrier.detail}`,
+            );
+            error.exitCode = 43;
+            throw error;
+          }
+          runsToLaunch = relaunchResolution.runs;
           if (runsToLaunch.length === 0) {
-            const blockedFallbacks = Array.isArray(derivedState?.retryFallbackBlockers)
-              ? derivedState.retryFallbackBlockers
-              : [];
-            const error =
-              blockedFallbacks.length > 0
-                ? new Error(
-                    `Wave ${wave.wave} cannot continue because retry fallback policy blocked relaunches:\n${blockedFallbacks
-                      .map((entry) => `  - ${entry.agentId}: ${entry.detail}`)
-                      .join("\n")}`,
-                  )
-                : new Error(
-                    `Wave ${wave.wave} is waiting on human feedback or unresolved coordination state; no safe relaunch target is available.`,
-                  );
+            const error = new Error(
+              `Wave ${wave.wave} is waiting on human feedback or unresolved coordination state; no safe relaunch target is available.`,
+            );
             error.exitCode = 43;
             throw error;
           }

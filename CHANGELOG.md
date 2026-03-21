@@ -5,8 +5,9 @@
 - Expanded the runtime surface across Codex, Claude Code, and OpenCode, including Codex `exec` model/profile/config/search/image/add-dir/JSON/ephemeral flags, Claude settings-overlay merging, and OpenCode merged config overlays plus multi-file attachments.
 - Added dry-run runtime harness coverage so `wave launch --dry-run --no-dashboard` now materializes prompts, merged runtime overlays, and executor launch previews for all supported real runtimes.
 - Added dedicated runtime configuration reference docs under `docs/reference/runtime-config/` and seeded them through `wave init` so repos can configure executor defaults, profiles, lane overrides, and per-agent `### Executor` blocks from one canonical reference.
+- Added hermetic `traceVersion: 2` trace bundles with copied launched-agent artifacts, cumulative quality metrics, hash validation, and an internal read-only replay validator for bundle integrity checks.
 - Hardened runtime retry and coordination behavior by blocking retry fallback when no policy-safe fallback is available, tightening clarification-follow-up matching, and surfacing artifact-linked coordination in owning-agent inboxes.
-- Added regression coverage for runtime config normalization, mixed-runtime dry runs, retry fallback gating, and clarification/inbox coordination behavior.
+- Added regression coverage for runtime config normalization, mixed-runtime dry runs, retry fallback gating, clarification/inbox coordination behavior, and trace replay validation.
 
 ## 0.3.0 - 2026-03-21
 

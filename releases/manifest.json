@@ -5,17 +5,19 @@
     {
       "version": "0.4.0",
       "date": "2026-03-21",
-      "summary": "Runtime surface upgrade for Codex, Claude Code, and OpenCode with dry-run previews, runtime docs, and retry/coordination hardening.",
+      "summary": "Runtime surface upgrade plus hermetic traces for Codex, Claude Code, and OpenCode.",
       "features": [
         "Expanded Codex `exec` support for model, profile, inline config, search, images, extra directories, JSON mode, and ephemeral sessions, alongside Claude settings overlay merging and OpenCode merged config overlays plus multi-file attachments.",
         "Dry-run materialization of prompts, merged runtime overlays, and executor launch previews for all supported real runtimes.",
         "Dedicated runtime configuration reference docs under `docs/reference/runtime-config/`, installed by `wave init` for config/default/profile/lane/agent authoring.",
+        "Hermetic `traceVersion: 2` trace bundles with copied launched-agent artifacts, cumulative quality metrics, hash validation, and an internal read-only replay validator.",
         "Retry and coordination hardening for policy-safe fallback blocking, clarification-follow-up matching, and artifact-linked inbox visibility."
       ],
       "manualSteps": [
         "Review any per-agent `### Executor` blocks that want the new runtime fields before cutting real waves on the upgraded package.",
         "Run `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading to confirm prompts and executor overlays materialize as expected.",
-        "Use the docs under `docs/reference/runtime-config/` as the canonical reference when migrating runtime defaults, profiles, or per-agent executor blocks."
+        "Use the docs under `docs/reference/runtime-config/` as the canonical reference when migrating runtime defaults, profiles, or per-agent executor blocks.",
+        "Treat internal trace replay as a publish gate for `0.4.0`, but keep it internal-only until a later operator-facing replay surface is designed."
       ],
       "breaking": false
     },

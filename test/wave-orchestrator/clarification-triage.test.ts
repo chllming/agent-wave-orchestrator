@@ -162,6 +162,92 @@ describe("triageClarificationRequests", () => {
     expect(fs.existsSync(path.join(lanePaths.feedbackRequestsDir))).toBe(false);
   });
 
+  it("keeps multi-clarification chains isolated when one follow-up resolves", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = makeWave();
+    const coordinationLogPath = path.join(dir, "coordination", "wave-0.jsonl");
+
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "clarify-a",
+      lane: "main",
+      wave: 0,
+      agentId: "A1",
+      kind: "clarification-request",
+      targets: ["launcher"],
+      priority: "high",
+      summary: "Need a docs answer",
+      detail: "Still waiting on the docs owner.",
+      artifactRefs: ["docs/plans/master-plan.md"],
+      status: "in_progress",
+      source: "agent",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "route-clarify-a-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "request",
+      targets: ["agent:A9"],
+      priority: "high",
+      summary: "Clarification follow-up for A1",
+      detail: "Please answer the docs ownership question.",
+      artifactRefs: ["docs/plans/master-plan.md"],
+      dependsOn: ["clarify-a"],
+      closureCondition: "clarification:clarify-a",
+      status: "open",
+      source: "launcher",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "clarify-b",
+      lane: "main",
+      wave: 0,
+      agentId: "A1",
+      kind: "clarification-request",
+      targets: ["launcher"],
+      priority: "high",
+      summary: "Need a runtime answer",
+      detail: "This one has already been answered.",
+      artifactRefs: ["src/runtime.ts"],
+      status: "in_progress",
+      source: "agent",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "route-clarify-b-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "request",
+      targets: ["agent:A8"],
+      priority: "high",
+      summary: "Clarification follow-up for A1",
+      detail: "Please answer the runtime question.",
+      artifactRefs: ["src/runtime.ts"],
+      dependsOn: ["clarify-b"],
+      closureCondition: "clarification:clarify-b",
+      status: "resolved",
+      source: "launcher",
+    });
+
+    const outcome = triageClarificationRequests({
+      lanePaths,
+      wave,
+      coordinationLogPath,
+      coordinationState: readMaterializedCoordinationState(coordinationLogPath),
+      orchestratorId: "orch-1",
+    });
+
+    expect(outcome.changed).toBe(true);
+    const updatedState = readMaterializedCoordinationState(coordinationLogPath);
+    expect(updatedState.byId.get("clarify-a")).toMatchObject({
+      status: "in_progress",
+    });
+    expect(updatedState.byId.get("clarify-b")).toMatchObject({
+      status: "resolved",
+      detail: "Resolved via route-clarify-b-1.",
+    });
+  });
+
   it("escalates unresolved clarification requests to human feedback and writes the pending summary", () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);

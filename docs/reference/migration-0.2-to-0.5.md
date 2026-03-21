@@ -436,7 +436,17 @@ Inspect:
 - `.tmp/<lane>-wave-launcher/ledger/wave-<n>.json`
 - `.tmp/<lane>-wave-launcher/integration/wave-<n>.md`
 - `.tmp/<lane>-wave-launcher/feedback/triage/wave-<n>.jsonl`
-- `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/`
+- `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/run-metadata.json`
+- `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/quality.json`
+- `.tmp/<lane>-wave-launcher/traces/wave-<n>/attempt-<k>/structured-signals.json`
+
+Trace review note:
+
+- `wave launch --dry-run` still seeds only pre-attempt state. It should not create `attempt-<k>` trace snapshots.
+- New `traceVersion: 2` bundles are hermetic: replay uses only the stored bundle, validates recorded hashes, and stays read-only.
+- Launched-agent summary files and promoted-wave component matrix files are part of that hermetic v2 contract.
+- Legacy `traceVersion: 1` bundles still replay in best-effort warning mode.
+- Trace replay support is internal in the current package. Use the stored bundle for regression review, but do not assume a supported `wave replay` CLI yet.
 
 ### New operator commands
 
@@ -530,8 +540,9 @@ Use this acceptance checklist after the migration:
    obvious ownership questions.
 9. Documentation and evaluator closure run only after the integration steward
    is ready.
-10. The trace bundle contains coordination, inbox, ledger, integration, and
-    feedback artifacts.
+10. A live attempt writes a trace bundle with coordination, inbox, ledger,
+    integration, structured signals, `run-metadata.json`, and cumulative
+    `quality.json`.
 
 ## Step 9: Roll Out In Two Passes
 

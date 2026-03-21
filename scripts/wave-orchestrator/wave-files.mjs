@@ -764,9 +764,17 @@ function normalizeMatrixStringArray(values, label, filePath) {
 }
 
 export function loadComponentCutoverMatrix(options = {}) {
-  const laneProfile = resolveLaneProfileForOptions(options);
-  const matrixJsonPath = path.resolve(REPO_ROOT, laneProfile.paths.componentCutoverMatrixJsonPath);
-  const payload = readJsonOrNull(matrixJsonPath);
+  const laneProfile =
+    options.componentMatrixPayload !== undefined ? null : resolveLaneProfileForOptions(options);
+  const matrixJsonPath =
+    options.componentMatrixJsonPath ||
+    (laneProfile
+      ? path.resolve(REPO_ROOT, laneProfile.paths.componentCutoverMatrixJsonPath)
+      : "trace-bundle/component-cutover-matrix.json");
+  const payload =
+    options.componentMatrixPayload !== undefined
+      ? options.componentMatrixPayload
+      : readJsonOrNull(matrixJsonPath);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error(
       `Component cutover matrix is missing or invalid: ${path.relative(REPO_ROOT, matrixJsonPath)}`,
@@ -857,8 +865,14 @@ export function loadComponentCutoverMatrix(options = {}) {
     levelSet,
     levelOrder,
     components,
-    docPath: laneProfile.paths.componentCutoverMatrixDocPath,
-    jsonPath: laneProfile.paths.componentCutoverMatrixJsonPath,
+    docPath:
+      laneProfile?.paths?.componentCutoverMatrixDocPath ??
+      options.componentMatrixDocPath ??
+      null,
+    jsonPath:
+      laneProfile?.paths?.componentCutoverMatrixJsonPath ??
+      options.componentMatrixJsonPath ??
+      "trace-bundle/component-cutover-matrix.json",
   };
 }
 
@@ -1576,9 +1590,10 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
       componentId: null,
     };
   }
-  const evaluatorAgentId = laneProfile.roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const roles = laneProfile.roles || {};
+  const evaluatorAgentId = roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
   const documentationAgentId =
-    laneProfile.roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+    roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const satisfied = new Set();
   for (const agent of wave.agents) {
     if ([evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
@@ -1632,7 +1647,11 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
     };
   }
 
-  const componentMatrix = loadComponentCutoverMatrix({ laneProfile });
+  const componentMatrix = loadComponentCutoverMatrix({
+    laneProfile,
+    componentMatrixPayload: options.componentMatrixPayload,
+    componentMatrixJsonPath: options.componentMatrixJsonPath,
+  });
   for (const promotion of promotions) {
     const component = componentMatrix.components[promotion.componentId];
     if (!component) {

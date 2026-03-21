@@ -12,6 +12,7 @@ import {
   reconcileRunStateFromStatusFiles,
   requiredDocumentationStewardPathsForWave,
   SHARED_PLAN_DOC_PATHS,
+  validateWaveComponentPromotions,
   validateWaveComponentMatrixCurrentLevels,
   validateWaveDefinition,
   validateWaveRuntimeMixAssignments,
@@ -1314,6 +1315,48 @@ describe("validateWaveComponentMatrixCurrentLevels", () => {
       ok: false,
       statusCode: "component-current-level-stale",
       componentId: "wave-parser-and-launcher",
+    });
+  });
+});
+
+describe("validateWaveComponentPromotions", () => {
+  it("defaults missing laneProfile roles instead of throwing", () => {
+    expect(
+      validateWaveComponentPromotions(
+        {
+          wave: 0,
+          componentPromotions: [
+            { componentId: "wave-parser-and-launcher", targetLevel: "repo-landed" },
+          ],
+          agents: [
+            {
+              agentId: "A1",
+              components: ["wave-parser-and-launcher"],
+              componentTargets: { "wave-parser-and-launcher": "repo-landed" },
+            },
+          ],
+        },
+        {
+          A1: {
+            components: [
+              {
+                componentId: "wave-parser-and-launcher",
+                level: "repo-landed",
+                state: "met",
+              },
+            ],
+          },
+        },
+        {
+          laneProfile: {
+            validation: { requireComponentPromotionsFromWave: 0 },
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+      componentId: null,
     });
   });
 });

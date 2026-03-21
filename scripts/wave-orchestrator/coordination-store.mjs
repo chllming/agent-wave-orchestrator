@@ -238,13 +238,20 @@ export function clarificationIdFromClosureCondition(value) {
 }
 
 export function isClarificationLinkedRequest(record, clarificationIds = null) {
-  const closureClarificationId = clarificationIdFromClosureCondition(record?.closureCondition);
   const clarificationIdSet =
     clarificationIds instanceof Set
       ? clarificationIds
-      : new Set(Array.isArray(clarificationIds) ? clarificationIds : []);
+      : clarificationIds === null
+        ? null
+        : new Set(Array.isArray(clarificationIds) ? clarificationIds : []);
+  const closureClarificationId = clarificationIdFromClosureCondition(record?.closureCondition);
   if (closureClarificationId) {
-    return clarificationIdSet.size === 0 || clarificationIdSet.has(closureClarificationId);
+    return clarificationIdSet === null
+      ? true
+      : clarificationIdSet.has(closureClarificationId);
+  }
+  if (clarificationIdSet === null) {
+    return false;
   }
   return Array.isArray(record?.dependsOn)
     ? record.dependsOn.some((dependencyId) => clarificationIdSet.has(String(dependencyId || "").trim()))
@@ -366,29 +373,39 @@ function isTargetedToAgent(record, agent) {
   return false;
 }
 
-function recordTouchesAgentArtifacts(record, agent) {
-  const artifactRefs = Array.isArray(record?.artifactRefs)
-    ? record.artifactRefs.map((entry) => String(entry || "").trim()).filter(Boolean)
-    : [];
+function normalizeOwnedReference(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function matchesOwnedPathArtifact(artifactRef, ownedPath) {
+  const normalizedArtifact = normalizeOwnedReference(artifactRef);
+  const normalizedOwnedPath = normalizeOwnedReference(ownedPath);
+  if (!normalizedArtifact || !normalizedOwnedPath) {
+    return false;
+  }
+  return (
+    normalizedArtifact === normalizedOwnedPath ||
+    normalizedArtifact.startsWith(`${normalizedOwnedPath}/`)
+  );
+}
+
+function isArtifactRelevantToAgent(record, agent) {
+  const artifactRefs = Array.isArray(record?.artifactRefs) ? record.artifactRefs : [];
   if (artifactRefs.length === 0) {
     return false;
   }
-  const ownedPaths = Array.isArray(agent?.ownedPaths)
-    ? agent.ownedPaths.map((entry) => String(entry || "").trim()).filter(Boolean)
-    : [];
-  for (const ref of artifactRefs) {
-    for (const ownedPath of ownedPaths) {
-      if (ref === ownedPath || ref.startsWith(`${ownedPath}/`)) {
-        return true;
-      }
+  const ownedPaths = Array.isArray(agent?.ownedPaths) ? agent.ownedPaths : [];
+  const ownedComponents = Array.isArray(agent?.components) ? agent.components : [];
+  return artifactRefs.some((artifactRef) => {
+    const normalizedArtifact = normalizeOwnedReference(artifactRef);
+    if (!normalizedArtifact) {
+      return false;
     }
-  }
-  const components = new Set(
-    Array.isArray(agent?.components)
-      ? agent.components.map((entry) => String(entry || "").trim()).filter(Boolean)
-      : [],
-  );
-  return artifactRefs.some((ref) => components.has(ref));
+    if (ownedComponents.some((componentId) => normalizedArtifact === String(componentId || "").trim())) {
+      return true;
+    }
+    return ownedPaths.some((ownedPath) => matchesOwnedPathArtifact(normalizedArtifact, ownedPath));
+  });
 }
 
 export function compileSharedSummary({
@@ -466,15 +483,23 @@ export function compileAgentInbox({
   maxChars = 8000,
 }) {
   const targetedRecords = state.openRecords.filter((record) => isTargetedToAgent(record, agent));
-  const artifactScopedRecords = state.openRecords.filter((record) =>
-    recordTouchesAgentArtifacts(record, agent),
-  );
   const ownedRecords = (state.recordsByAgentId.get(agent.agentId) || []).filter((record) =>
     OPEN_COORDINATION_STATUSES.has(record.status),
   );
   const clarificationRecords = state.clarifications.filter((record) =>
     OPEN_COORDINATION_STATUSES.has(record.status) &&
     (record.agentId === agent.agentId || isTargetedToAgent(record, agent)),
+  );
+  const excludedRecordIds = new Set([
+    ...targetedRecords.map((record) => record.id),
+    ...ownedRecords.map((record) => record.id),
+    ...clarificationRecords.map((record) => record.id),
+  ]);
+  const relevantRecords = state.openRecords.filter(
+    (record) =>
+      !excludedRecordIds.has(record.id) &&
+      record.kind !== "clarification-request" &&
+      isArtifactRelevantToAgent(record, agent),
   );
   const docsItems =
     Array.isArray(docsQueue?.items) && docsQueue.items.length > 0
@@ -489,37 +514,27 @@ export function compileAgentInbox({
     Array.isArray(ledger?.tasks) && ledger.tasks.length > 0
       ? ledger.tasks.filter((task) => task.owner === agent.agentId)
       : [];
-  const seenInboxRecordIds = new Set();
-  const uniqueRecords = (records) =>
-    records.filter((record) => {
-      const recordId = String(record?.id || "").trim();
-      if (!recordId || seenInboxRecordIds.has(recordId)) {
-        return false;
-      }
-      seenInboxRecordIds.add(recordId);
-      return true;
-    });
   const text = [
     `# Wave ${wave.wave} Inbox for ${agent.agentId}`,
     "",
     "## Targeted open coordination",
     ...(targetedRecords.length > 0
-      ? uniqueRecords(targetedRecords).map((record) => renderOpenRecord(record))
-      : ["- None."]),
-    "",
-    "## Artifact-linked open coordination",
-    ...(artifactScopedRecords.length > 0
-      ? uniqueRecords(artifactScopedRecords).map((record) => renderOpenRecord(record))
+      ? targetedRecords.map((record) => renderOpenRecord(record))
       : ["- None."]),
     "",
     "## Your open coordination items",
     ...(ownedRecords.length > 0
-      ? uniqueRecords(ownedRecords).map((record) => renderOpenRecord(record))
+      ? ownedRecords.map((record) => renderOpenRecord(record))
       : ["- None."]),
     "",
     "## Clarifications",
     ...(clarificationRecords.length > 0
-      ? uniqueRecords(clarificationRecords).map((record) => renderOpenRecord(record))
+      ? clarificationRecords.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
+    "## Relevant open coordination",
+    ...(relevantRecords.length > 0
+      ? relevantRecords.map((record) => renderOpenRecord(record))
       : ["- None."]),
     "",
     "## Ledger tasks",

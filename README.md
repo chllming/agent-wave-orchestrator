@@ -16,9 +16,9 @@ It includes:
 ## Quick Start
 
 Published package:
-- `@chllming/wave-orchestration@0.2.0`
+- `@chllming/wave-orchestration@0.3.0`
 - Registry: `https://npm.pkg.github.com`
-- Release: [v0.2.0](https://github.com/chllming/wave-orchestration/releases/tag/v0.2.0)
+- Release: [v0.3.0](https://github.com/chllming/wave-orchestration/releases/tag/v0.3.0)
 
 Install:
 

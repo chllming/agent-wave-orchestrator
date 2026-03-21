@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-03-21
+
+- Added the Phase 1 and 2 harness runtime: canonical coordination store, compiled inboxes, wave ledger, integration summaries, and clarification triage.
+- Added planning-time runtime profiles, lane runtime policy, hard runtime-mix validation, and retry fallback reassignment recording.
+- Added integration stewardship and staged closure so integration gates documentation and evaluator closure.
+
 ## 0.2.0 - 2026-03-21
 
 - Added workspace-root aware runtime support so the package can run from `node_modules` against an adopting repository.

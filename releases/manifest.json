@@ -28,6 +28,21 @@
         "For repos that already have Wave config or plans, run `pnpm exec wave init --adopt-existing` once so upgrades stay non-destructive."
       ],
       "breaking": false
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-03-21",
+      "summary": "Phase 1 and 2 roadmap runtime: typed coordination, integration gating, and runtime planning.",
+      "features": [
+        "Canonical coordination log materialization, generated board projection, compiled shared summary, per-agent inboxes, and a durable wave ledger.",
+        "Planning-time executor profiles, lane runtime policy, hard runtime-mix enforcement, and retry fallback reassignment recorded into ledger, integration, and traces.",
+        "Orchestrator-first clarification triage, explicit integration summaries, and staged closure that runs integration before documentation and evaluator closure."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave init --adopt-existing` in older repos if they do not yet have the newer role prompts and docs surfaces.",
+        "Review `wave.config.json` lane runtime policy before relying on automatic fallback behavior or strict runtime-mix limits."
+      ],
+      "breaking": false
     }
   ]
 }

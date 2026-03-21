@@ -32,6 +32,33 @@ function extractRoleAgentIds(rawPrompt) {
   };
 }
 
+function extractOwnedComponents(rawPrompt) {
+  const lines = String(rawPrompt || "").split(/\r?\n/);
+  const components = [];
+  let inComponents = false;
+  for (const line of lines) {
+    if (/^\s*Components you own in this wave:\s*$/i.test(line)) {
+      inComponents = true;
+      continue;
+    }
+    if (inComponents && /^\s*[A-Za-z][A-Za-z0-9 _/-]*:\s*$/.test(line)) {
+      inComponents = false;
+    }
+    if (!inComponents) {
+      continue;
+    }
+    const bulletMatch = line.match(/^\s*-\s+([a-z0-9._-]+)(?:\s*:\s*([a-z0-9._-]+))?\s*$/i);
+    if (!bulletMatch) {
+      continue;
+    }
+    components.push({
+      componentId: bulletMatch[1],
+      level: bulletMatch[2] || null,
+    });
+  }
+  return components;
+}
+
 function extractDeliverables(promptText) {
   const out = [];
   let inFileOwnership = false;
@@ -169,6 +196,7 @@ export function runLocalExecutorCli(argv) {
   const agentId = extractAgentId(rawPrompt);
   const { evaluatorAgentId, documentationAgentId } = extractRoleAgentIds(rawPrompt);
   const evaluatorAgent = agentId === evaluatorAgentId;
+  const ownedComponents = extractOwnedComponents(rawPrompt);
   const assignedPrompt = extractAssignedPrompt(rawPrompt);
   const deliverables = extractDeliverables(assignedPrompt);
   if (deliverables.length === 0) {
@@ -185,6 +213,11 @@ export function runLocalExecutorCli(argv) {
         "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-no-deliverables",
       );
       console.log("[wave-doc-delta] state=none detail=local-executor-no-deliverables");
+      for (const component of ownedComponents) {
+        console.log(
+          `[wave-component] component=${component.componentId} level=${component.level || "repo-landed"} state=met detail=local-executor-no-deliverables`,
+        );
+      }
     }
     return;
   }
@@ -207,6 +240,11 @@ export function runLocalExecutorCli(argv) {
       "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-smoke",
     );
     console.log("[wave-doc-delta] state=owned detail=local-executor-smoke");
+    for (const component of ownedComponents) {
+      console.log(
+        `[wave-component] component=${component.componentId} level=${component.level || "repo-landed"} state=met detail=local-executor-smoke`,
+      );
+    }
   }
   console.log("[local-executor] completed.");
 }

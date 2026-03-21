@@ -217,6 +217,9 @@ export function buildAgentPromptFingerprintSource(agent) {
   return JSON.stringify({
     prompt: String(agent?.prompt || ""),
     context7SelectionHash: String(agent?.context7Resolved?.selectionHash || ""),
+    exitContract: agent?.exitContract || null,
+    components: agent?.components || [],
+    componentTargets: agent?.componentTargets || null,
     executorResolved: agent?.executorResolved || null,
   });
 }

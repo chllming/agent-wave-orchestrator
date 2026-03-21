@@ -44,6 +44,8 @@ export const SHARED_PLAN_DOC_PATHS = [
   "docs/plans/migration.md",
 ];
 
+const COMPONENT_ID_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
+
 function resolveLaneProfileForOptions(options = {}) {
   if (options.laneProfile) {
     return options.laneProfile;
@@ -99,6 +101,68 @@ function extractTopLevelSectionBody(content, heading, filePath, options = {}) {
   const afterHeading = content.slice(headingMatch.index + headingMatch[0].length);
   const nextHeadingMatch = /^##\s+/m.exec(afterHeading);
   return (nextHeadingMatch ? afterHeading.slice(0, nextHeadingMatch.index) : afterHeading).trim();
+}
+
+function normalizeComponentId(value, label, filePath) {
+  const normalized = String(value || "").trim();
+  if (!COMPONENT_ID_REGEX.test(normalized)) {
+    throw new Error(`Invalid component id "${value}" in ${label} (${filePath})`);
+  }
+  return normalized;
+}
+
+function parseComponentPromotions(blockText, filePath, label) {
+  if (!blockText) {
+    return [];
+  }
+  const promotions = [];
+  const seen = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^-\s+([a-z0-9._-]+)\s*:\s*([a-z0-9._-]+)\s*$/i);
+    if (!bulletMatch) {
+      throw new Error(`Malformed component promotion "${trimmed}" in ${label} (${filePath})`);
+    }
+    const componentId = normalizeComponentId(bulletMatch[1], label, filePath);
+    const targetLevel = String(bulletMatch[2] || "").trim();
+    if (!targetLevel) {
+      throw new Error(`Missing component target level for ${componentId} in ${label} (${filePath})`);
+    }
+    if (seen.has(componentId)) {
+      throw new Error(`Duplicate component promotion "${componentId}" in ${label} (${filePath})`);
+    }
+    seen.add(componentId);
+    promotions.push({ componentId, targetLevel });
+  }
+  return promotions;
+}
+
+function parseComponentList(blockText, filePath, label) {
+  if (!blockText) {
+    return [];
+  }
+  const components = [];
+  const seen = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^-\s+([a-z0-9._-]+)\s*$/i);
+    if (!bulletMatch) {
+      throw new Error(`Malformed component entry "${trimmed}" in ${label} (${filePath})`);
+    }
+    const componentId = normalizeComponentId(bulletMatch[1], label, filePath);
+    if (seen.has(componentId)) {
+      throw new Error(`Duplicate component "${componentId}" in ${label} (${filePath})`);
+    }
+    seen.add(componentId);
+    components.push(componentId);
+  }
+  return components;
 }
 
 function extractFencedBlock(blockText, messagePrefix) {
@@ -311,6 +375,13 @@ export function extractWaveContext7Defaults(content, filePath) {
   return parseContext7Settings(topLevelContext7, filePath, "wave defaults");
 }
 
+export function extractWaveComponentPromotions(content, filePath) {
+  const block = extractTopLevelSectionBody(content, "Component promotions", filePath, {
+    required: false,
+  });
+  return parseComponentPromotions(block, filePath, "wave component promotions");
+}
+
 export function extractRolePromptPaths(sectionText, filePath, agentId) {
   const rolePromptsBlock = extractSectionBody(sectionText, "Role prompts", filePath, agentId, {
     required: false,
@@ -338,6 +409,13 @@ export function extractRolePromptPaths(sectionText, filePath, agentId) {
     throw new Error(`Missing role prompt paths for agent ${agentId} in ${filePath}`);
   }
   return Array.from(new Set(rolePromptPaths));
+}
+
+export function extractAgentComponentsFromSection(sectionText, filePath, agentId) {
+  const block = extractSectionBody(sectionText, "Components", filePath, agentId, {
+    required: false,
+  });
+  return parseComponentList(block, filePath, `agent ${agentId} components`);
 }
 
 export function slugify(value) {
@@ -452,6 +530,133 @@ export function resolveEvaluatorReportPath(wave, options = {}) {
   );
 }
 
+function normalizeMatrixStringArray(values, label, filePath) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .map((value, index) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value, index) => {
+      if (!value) {
+        throw new Error(`Empty ${label}[${index}] in ${filePath}`);
+      }
+      return value;
+    });
+}
+
+export function loadComponentCutoverMatrix(options = {}) {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const matrixJsonPath = path.resolve(REPO_ROOT, laneProfile.paths.componentCutoverMatrixJsonPath);
+  const payload = readJsonOrNull(matrixJsonPath);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(
+      `Component cutover matrix is missing or invalid: ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+    );
+  }
+  const levels = Array.isArray(payload.levels)
+    ? payload.levels.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  if (levels.length === 0) {
+    throw new Error(
+      `Component cutover matrix must define a non-empty "levels" array in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+    );
+  }
+  const levelSet = new Set(levels);
+  const levelOrder = Object.fromEntries(levels.map((level, index) => [level, index]));
+  const rawComponents =
+    payload.components && typeof payload.components === "object" && !Array.isArray(payload.components)
+      ? payload.components
+      : null;
+  if (!rawComponents) {
+    throw new Error(
+      `Component cutover matrix must define a "components" object in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+    );
+  }
+  const components = Object.fromEntries(
+    Object.entries(rawComponents).map(([rawComponentId, rawComponent]) => {
+      const componentId = normalizeComponentId(
+        rawComponentId,
+        "component cutover matrix",
+        path.relative(REPO_ROOT, matrixJsonPath),
+      );
+      if (!rawComponent || typeof rawComponent !== "object" || Array.isArray(rawComponent)) {
+        throw new Error(
+          `Component "${componentId}" must be an object in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+        );
+      }
+      const currentLevel = String(rawComponent.currentLevel || "").trim();
+      if (!levelSet.has(currentLevel)) {
+        throw new Error(
+          `Component "${componentId}" has invalid currentLevel "${rawComponent.currentLevel}" in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+        );
+      }
+      const promotions = Array.isArray(rawComponent.promotions)
+        ? rawComponent.promotions.map((promotion, index) => {
+            if (!promotion || typeof promotion !== "object" || Array.isArray(promotion)) {
+              throw new Error(
+                `Component "${componentId}" has malformed promotion[${index}] in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+              );
+            }
+            const wave = Number.parseInt(String(promotion.wave), 10);
+            const target = String(promotion.target || "").trim();
+            if (!Number.isFinite(wave) || wave < 0) {
+              throw new Error(
+                `Component "${componentId}" has invalid promotion wave "${promotion.wave}" in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+              );
+            }
+            if (!levelSet.has(target)) {
+              throw new Error(
+                `Component "${componentId}" has invalid promotion target "${promotion.target}" in ${path.relative(REPO_ROOT, matrixJsonPath)}`,
+              );
+            }
+            return { wave, target };
+          })
+        : [];
+      return [
+        componentId,
+        {
+          title: String(rawComponent.title || componentId).trim() || componentId,
+          canonicalDocs: normalizeMatrixStringArray(
+            rawComponent.canonicalDocs,
+            `${componentId}.canonicalDocs`,
+            path.relative(REPO_ROOT, matrixJsonPath),
+          ),
+          currentLevel,
+          promotions,
+          proofSurfaces: normalizeMatrixStringArray(
+            rawComponent.proofSurfaces,
+            `${componentId}.proofSurfaces`,
+            path.relative(REPO_ROOT, matrixJsonPath),
+          ),
+        },
+      ];
+    }),
+  );
+  return {
+    version: Number.parseInt(String(payload.version ?? "1"), 10) || 1,
+    levels,
+    levelSet,
+    levelOrder,
+    components,
+    docPath: laneProfile.paths.componentCutoverMatrixDocPath,
+    jsonPath: laneProfile.paths.componentCutoverMatrixJsonPath,
+  };
+}
+
+export function requiredDocumentationStewardPathsForWave(waveNumber, options = {}) {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const out = [...laneProfile.sharedPlanDocs];
+  const componentThreshold = laneProfile.validation.requireComponentPromotionsFromWave;
+  if (componentThreshold !== null && waveNumber >= componentThreshold) {
+    out.push(
+      laneProfile.paths.componentCutoverMatrixDocPath,
+      laneProfile.paths.componentCutoverMatrixJsonPath,
+    );
+  }
+  return Array.from(new Set(out));
+}
+
 export function validateWaveDefinition(wave, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const lane = laneProfile.lane;
@@ -461,7 +666,30 @@ export function validateWaveDefinition(wave, options = {}) {
   const documentationThreshold = laneProfile.validation.requireDocumentationStewardFromWave;
   const context7Threshold = laneProfile.validation.requireContext7DeclarationsFromWave;
   const exitContractThreshold = laneProfile.validation.requireExitContractsFromWave;
+  const componentPromotionThreshold =
+    laneProfile.validation.requireComponentPromotionsFromWave;
+  const agentComponentsThreshold = laneProfile.validation.requireAgentComponentsFromWave;
+  const componentPromotionRuleActive =
+    componentPromotionThreshold !== null && wave.wave >= componentPromotionThreshold;
+  const agentComponentsRuleActive =
+    agentComponentsThreshold !== null && wave.wave >= agentComponentsThreshold;
   const errors = [];
+  const promotedComponents = new Map(
+    Array.isArray(wave.componentPromotions)
+      ? wave.componentPromotions.map((promotion) => [promotion.componentId, promotion.targetLevel])
+      : [],
+  );
+  const componentOwners = new Map(
+    Array.from(promotedComponents.keys()).map((componentId) => [componentId, new Set()]),
+  );
+  let componentMatrix = null;
+  if (componentPromotionRuleActive || promotedComponents.size > 0 || agentComponentsRuleActive) {
+    try {
+      componentMatrix = loadComponentCutoverMatrix({ laneProfile });
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
   const agentIds = wave.agents.map((agent) => agent.agentId);
   const duplicateAgentIds = agentIds.filter(
     (agentId, index) => agentIds.indexOf(agentId) !== index,
@@ -474,6 +702,55 @@ export function validateWaveDefinition(wave, options = {}) {
   }
   if (!wave.agents.some((agent) => agent.agentId === evaluatorAgentId)) {
     errors.push(`must include Agent ${evaluatorAgentId} as the running evaluator`);
+  }
+  if (componentPromotionRuleActive && promotedComponents.size === 0) {
+    errors.push(
+      `Wave ${wave.wave} must declare a ## Component promotions section in waves ${componentPromotionThreshold} and later`,
+    );
+  }
+  if (componentMatrix) {
+    for (const [componentId, targetLevel] of promotedComponents.entries()) {
+      const component = componentMatrix.components[componentId];
+      if (!component) {
+        errors.push(
+          `Wave ${wave.wave} references unknown component "${componentId}" from ${componentMatrix.jsonPath}`,
+        );
+        continue;
+      }
+      if (!componentMatrix.levelSet.has(targetLevel)) {
+        errors.push(
+          `Wave ${wave.wave} uses invalid component level "${targetLevel}" for ${componentId}`,
+        );
+        continue;
+      }
+      const matrixPromotion = component.promotions.find((promotion) => promotion.wave === wave.wave);
+      if (!matrixPromotion) {
+        errors.push(
+          `Component "${componentId}" is missing a wave ${wave.wave} promotion entry in ${componentMatrix.jsonPath}`,
+        );
+      } else if (matrixPromotion.target !== targetLevel) {
+        errors.push(
+          `Wave ${wave.wave} promotes ${componentId} to ${targetLevel}, but ${componentMatrix.jsonPath} declares ${matrixPromotion.target}`,
+        );
+      } else if (componentMatrix.levelOrder[targetLevel] < componentMatrix.levelOrder[component.currentLevel]) {
+        errors.push(
+          `Wave ${wave.wave} promotes ${componentId} to ${targetLevel}, but ${componentMatrix.jsonPath} already records currentLevel ${component.currentLevel}`,
+        );
+      }
+    }
+    const matrixWavePromotions = Object.entries(componentMatrix.components)
+      .flatMap(([componentId, component]) =>
+        component.promotions
+          .filter((promotion) => promotion.wave === wave.wave)
+          .map((promotion) => ({ componentId, targetLevel: promotion.target })),
+      );
+    for (const promotion of matrixWavePromotions) {
+      if (promotedComponents.get(promotion.componentId) !== promotion.targetLevel) {
+        errors.push(
+          `Wave ${wave.wave} must declare component promotion ${promotion.componentId}: ${promotion.targetLevel} to match ${componentMatrix.jsonPath}`,
+        );
+      }
+    }
   }
   for (const agent of wave.agents) {
     if (!Array.isArray(agent.ownedPaths) || agent.ownedPaths.length === 0) {
@@ -532,6 +809,32 @@ export function validateWaveDefinition(wave, options = {}) {
         );
       }
     }
+    if ([evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
+      if (Array.isArray(agent.components) && agent.components.length > 0) {
+        errors.push(`Agent ${agent.agentId} must not declare a ### Components section`);
+      }
+    } else {
+      if (agentComponentsRuleActive && (!Array.isArray(agent.components) || agent.components.length === 0)) {
+        errors.push(
+          `Agent ${agent.agentId} must declare a ### Components section in waves ${agentComponentsThreshold} and later`,
+        );
+      }
+      for (const componentId of agent.components || []) {
+        if (componentMatrix && !componentMatrix.components[componentId]) {
+          errors.push(
+            `Agent ${agent.agentId} references unknown component "${componentId}" from ${componentMatrix.jsonPath}`,
+          );
+          continue;
+        }
+        if (!promotedComponents.has(componentId)) {
+          errors.push(
+            `Agent ${agent.agentId} declares component "${componentId}" that is not promoted in wave ${wave.wave}`,
+          );
+          continue;
+        }
+        componentOwners.get(componentId)?.add(agent.agentId);
+      }
+    }
     if (exitContractThreshold !== null && wave.wave >= exitContractThreshold) {
       if (![evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
         if (!agent.exitContract) {
@@ -565,7 +868,10 @@ export function validateWaveDefinition(wave, options = {}) {
   if (!resolveEvaluatorReportPath(wave, { evaluatorAgentId })) {
     errors.push(`Agent ${evaluatorAgentId} must own an evaluator report path`);
   }
-  if (documentationThreshold !== null && wave.wave >= documentationThreshold) {
+  const documentationRuleActive =
+    (documentationThreshold !== null && wave.wave >= documentationThreshold) ||
+    componentPromotionRuleActive;
+  if (documentationRuleActive) {
     const documentationStewards = wave.agents.filter((agent) =>
       agent.rolePromptPaths?.includes(laneProfile.roles.documentationRolePromptPath),
     );
@@ -575,7 +881,8 @@ export function validateWaveDefinition(wave, options = {}) {
       );
     } else {
       const documentationSteward = documentationStewards[0];
-      const missingSharedPlanDocs = laneProfile.sharedPlanDocs.filter(
+      const requiredDocPaths = requiredDocumentationStewardPathsForWave(wave.wave, { laneProfile });
+      const missingSharedPlanDocs = requiredDocPaths.filter(
         (docPath) => !documentationSteward.ownedPaths.includes(docPath),
       );
       if (missingSharedPlanDocs.length > 0) {
@@ -586,7 +893,7 @@ export function validateWaveDefinition(wave, options = {}) {
       const sharedPlanDocOwners = wave.agents.filter(
         (agent) =>
           agent.agentId !== documentationSteward.agentId &&
-          agent.ownedPaths.some((ownedPath) => laneProfile.sharedPlanDocs.includes(ownedPath)),
+          agent.ownedPaths.some((ownedPath) => requiredDocPaths.includes(ownedPath)),
       );
       if (sharedPlanDocOwners.length > 0) {
         errors.push(
@@ -597,6 +904,13 @@ export function validateWaveDefinition(wave, options = {}) {
   }
   if (context7Threshold !== null && wave.wave >= context7Threshold && !wave.context7Defaults) {
     errors.push(`Waves ${context7Threshold} and later must declare a ## Context7 defaults section`);
+  }
+  for (const [componentId, owners] of componentOwners.entries()) {
+    if (owners.size === 0) {
+      errors.push(
+        `Wave ${wave.wave} must assign promoted component "${componentId}" to at least one non-${evaluatorAgentId}/${documentationAgentId} agent`,
+      );
+    }
   }
   if (errors.length > 0) {
     throw new Error(`Invalid wave ${wave.wave} (${wave.file}): ${errors.join("; ")}`);
@@ -633,6 +947,7 @@ export function parseWaveContent(content, filePath, options = {}) {
     const context7Config = extractContext7ConfigFromSection(sectionText, filePath, current.agentId);
     const exitContract = extractExitContractFromSection(sectionText, filePath, current.agentId);
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
+    const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
     const promptOverlay = extractPromptFromSection(sectionText, filePath, current.agentId);
     const prompt = composeResolvedPrompt(
       rolePromptPaths,
@@ -654,18 +969,31 @@ export function parseWaveContent(content, filePath, options = {}) {
       context7Config,
       exitContract,
       executorConfig,
+      components,
       ownedPaths,
     });
   }
+
+  const componentPromotions = extractWaveComponentPromotions(content, filePath);
+  const componentTargetById = Object.fromEntries(
+    componentPromotions.map((promotion) => [promotion.componentId, promotion.targetLevel]),
+  );
+  const agentsWithComponentTargets = agents.map((agent) => ({
+    ...agent,
+    componentTargets: Object.fromEntries(
+      (agent.components || []).map((componentId) => [componentId, componentTargetById[componentId] || null]),
+    ),
+  }));
 
   return {
     wave: waveNumber,
     file: path.relative(REPO_ROOT, filePath),
     commitMessage: commitMessageMatch ? commitMessageMatch[1] : null,
     context7Defaults: extractWaveContext7Defaults(content, filePath),
-    agents,
+    componentPromotions,
+    agents: agentsWithComponentTargets,
     evaluatorReportPath: resolveEvaluatorReportPath(
-      { agents },
+      { agents: agentsWithComponentTargets },
       { evaluatorAgentId: laneProfile.roles.evaluatorAgentId },
     ),
   };
@@ -778,6 +1106,111 @@ export function buildManifest(lanePaths, waves) {
     source: `${path.relative(REPO_ROOT, lanePaths.docsDir).replaceAll(path.sep, "/")}/**/*`,
     waves,
     docs,
+  };
+}
+
+export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, options = {}) {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const componentThreshold = laneProfile.validation.requireComponentPromotionsFromWave;
+  if (componentThreshold === null || wave.wave < componentThreshold) {
+    return {
+      ok: true,
+      statusCode: "pass",
+      detail: "Component promotion gate is not active for this wave.",
+      componentId: null,
+    };
+  }
+  const promotions = Array.isArray(wave.componentPromotions) ? wave.componentPromotions : [];
+  if (promotions.length === 0) {
+    return {
+      ok: false,
+      statusCode: "missing-component-promotions",
+      detail: `Wave ${wave.wave} is missing component promotions.`,
+      componentId: null,
+    };
+  }
+  const evaluatorAgentId = laneProfile.roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const documentationAgentId =
+    laneProfile.roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const satisfied = new Set();
+  for (const agent of wave.agents) {
+    if ([evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
+      continue;
+    }
+    const summary = summariesByAgentId[agent.agentId] || null;
+    const markers = new Map(
+      Array.isArray(summary?.components)
+        ? summary.components.map((component) => [component.componentId, component])
+        : [],
+    );
+    for (const componentId of agent.components || []) {
+      const expectedLevel = agent.componentTargets?.[componentId] || null;
+      const marker = markers.get(componentId);
+      if (marker && marker.state === "met" && (!expectedLevel || marker.level === expectedLevel)) {
+        satisfied.add(componentId);
+      }
+    }
+  }
+  for (const promotion of promotions) {
+    if (!satisfied.has(promotion.componentId)) {
+      return {
+        ok: false,
+        statusCode: "component-promotion-gap",
+        detail: `Wave ${wave.wave} does not yet prove component ${promotion.componentId} at ${promotion.targetLevel}.`,
+        componentId: promotion.componentId,
+      };
+    }
+  }
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail: "All promoted components are proven at the declared level.",
+    componentId: null,
+  };
+}
+
+export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const componentThreshold = laneProfile.validation.requireComponentPromotionsFromWave;
+  const promotions = Array.isArray(wave.componentPromotions) ? wave.componentPromotions : [];
+  if (
+    promotions.length === 0 &&
+    (componentThreshold === null || wave.wave < componentThreshold)
+  ) {
+    return {
+      ok: true,
+      statusCode: "pass",
+      detail: "Component current-level gate is not active for this wave.",
+      componentId: null,
+    };
+  }
+
+  const componentMatrix = loadComponentCutoverMatrix({ laneProfile });
+  for (const promotion of promotions) {
+    const component = componentMatrix.components[promotion.componentId];
+    if (!component) {
+      return {
+        ok: false,
+        statusCode: "unknown-component",
+        detail: `Wave ${wave.wave} references unknown component ${promotion.componentId}.`,
+        componentId: promotion.componentId,
+      };
+    }
+    if (component.currentLevel !== promotion.targetLevel) {
+      return {
+        ok: false,
+        statusCode: "component-current-level-stale",
+        detail: `Component ${promotion.componentId} is still recorded at ${component.currentLevel} in ${componentMatrix.jsonPath}; expected ${promotion.targetLevel}.`,
+        componentId: promotion.componentId,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail: "Component matrix current levels match the promoted targets.",
+    componentId: null,
   };
 }
 
@@ -899,10 +1332,14 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
   const evaluatorAgentId = options.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
   const documentationAgentId =
     options.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
-  const exitContractThreshold = options.requireExitContractsFromWave ?? 6;
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const componentThreshold =
+    options.requireComponentPromotionsFromWave ??
+    laneProfile.validation.requireComponentPromotionsFromWave;
   const completed = [];
   for (const wave of allWaves) {
     let waveIsComplete = wave.agents.length > 0;
+    const summariesByAgentId = {};
     for (const agent of wave.agents) {
       const statusPath = path.join(statusDir, `wave-${wave.wave}-${agent.slug}.status`);
       const statusRecord = readStatusRecordIfPresent(statusPath);
@@ -916,36 +1353,41 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
         break;
       }
       const summary = readAgentExecutionSummary(statusPath);
-      if (
-        exitContractThreshold !== null &&
-        agent.agentId === evaluatorAgentId &&
-        wave.wave >= exitContractThreshold
-      ) {
+      summariesByAgentId[agent.agentId] = summary;
+      if (agent.agentId === evaluatorAgentId && summary) {
         if (!validateEvaluatorSummary(agent, summary).ok) {
           waveIsComplete = false;
           break;
         }
         continue;
       }
-      if (
-        exitContractThreshold !== null &&
-        agent.agentId === documentationAgentId &&
-        wave.wave >= exitContractThreshold
-      ) {
+      if (agent.agentId === documentationAgentId) {
         if (!validateDocumentationClosureSummary(agent, summary).ok) {
           waveIsComplete = false;
           break;
         }
         continue;
       }
-      if (
-        exitContractThreshold !== null &&
-        wave.wave >= exitContractThreshold &&
-        !validateImplementationSummary(agent, summary).ok
-      ) {
+      if (!validateImplementationSummary(agent, summary).ok) {
         waveIsComplete = false;
         break;
       }
+    }
+    if (
+      waveIsComplete &&
+      componentThreshold !== null &&
+      wave.wave >= componentThreshold &&
+      !validateWaveComponentPromotions(wave, summariesByAgentId, options).ok
+    ) {
+      waveIsComplete = false;
+    }
+    if (
+      waveIsComplete &&
+      componentThreshold !== null &&
+      wave.wave >= componentThreshold &&
+      !validateWaveComponentMatrixCurrentLevels(wave, { ...options, laneProfile }).ok
+    ) {
+      waveIsComplete = false;
     }
     if (
       waveIsComplete &&

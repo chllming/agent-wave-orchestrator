@@ -71,4 +71,45 @@ File ownership (only touch these paths):
     expect(logs.some((line) => line.includes("[wave-gate] architecture=pass"))).toBe(true);
     expect(logs.some((line) => line.includes("[wave-verdict] pass"))).toBe(true);
   });
+
+  it("emits component markers for owned components", () => {
+    const promptFile = registerTempPath(
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
+    );
+    const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}/runtime.ts`;
+    registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
+
+    fs.writeFileSync(
+      promptFile,
+      `You are the Wave executor running Wave 0 / Agent A1: Worker.
+
+Components you own in this wave:
+- wave-parser-and-launcher: repo-landed
+
+Assigned implementation prompt:
+\`\`\`text
+File ownership (only touch these paths):
+- ${deliverable}
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const logs = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+
+    runLocalExecutorCli(["--prompt-file", promptFile]);
+
+    expect(
+      logs.some((line) =>
+        line.includes(
+          "[wave-component] component=wave-parser-and-launcher level=repo-landed state=met",
+        ),
+      ),
+    ).toBe(true);
+  });
 });

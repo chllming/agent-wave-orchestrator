@@ -44,10 +44,20 @@ describe("buildExecutionPrompt", () => {
           proof: "integration",
           docImpact: "owned",
         },
+        components: ["wave-parser-and-launcher"],
+        componentTargets: {
+          "wave-parser-and-launcher": "repo-landed",
+        },
       },
       orchestratorId: "main-orch",
       messageBoardPath: "/repo/.tmp/main-wave-launcher/messageboards/wave-2.md",
       messageBoardSnapshot: "# Wave 2 Message Board",
+      componentPromotions: [
+        {
+          componentId: "wave-parser-and-launcher",
+          targetLevel: "repo-landed",
+        },
+      ],
     });
 
     expect(prompt).toContain("You are the Wave executor running Wave 2 / Agent A3: Provider Contracts.");
@@ -63,8 +73,11 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("post the exact doc paths and exact delta");
     expect(prompt).toContain("stay engaged until they confirm `closed` or `no-change`");
     expect(prompt).toContain("[wave-proof]");
+    expect(prompt).toContain("[wave-component]");
     expect(prompt).toContain("Exit contract for this run:");
     expect(prompt).toContain("completion: integrated");
+    expect(prompt).toContain("Component promotions for this wave:");
+    expect(prompt).toContain("Components you own in this wave:");
     expect(prompt).not.toContain("docs/leap-claw/plans");
   });
 

@@ -67,6 +67,42 @@ describe("validateImplementationSummary", () => {
       statusCode: "durability-gap",
     });
   });
+
+  it("rejects missing component markers for owned components", () => {
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A2",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+          components: ["wave-parser-and-launcher"],
+          componentTargets: {
+            "wave-parser-and-launcher": "repo-landed",
+          },
+        },
+        {
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: [],
+          },
+          components: [],
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-wave-component",
+    });
+  });
 });
 
 describe("validateDocumentationClosureSummary", () => {

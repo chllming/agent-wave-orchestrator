@@ -19,6 +19,8 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/agents/wave-documentation-role.md",
   "docs/agents/wave-evaluator-role.md",
   "docs/context7/bundles.json",
+  "docs/plans/component-cutover-matrix.json",
+  "docs/plans/component-cutover-matrix.md",
   "docs/plans/context7-wave-orchestrator.md",
   "docs/plans/current-state.md",
   "docs/plans/master-plan.md",

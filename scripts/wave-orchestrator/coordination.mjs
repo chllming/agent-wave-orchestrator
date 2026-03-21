@@ -186,6 +186,7 @@ export function buildExecutionPrompt({
   messageBoardPath,
   messageBoardSnapshot,
   context7 = null,
+  componentPromotions = null,
   sharedPlanDocs = null,
   evaluatorAgentId = "A0",
   documentationAgentId = "A9",
@@ -225,6 +226,11 @@ export function buildExecutionPrompt({
       ? [
           "- Emit one final structured proof marker: `[wave-proof] completion=<contract|integrated|authoritative|live> durability=<none|ephemeral|durable> proof=<unit|integration|live> state=<met|gap> detail=<short-note>`.",
           "- Emit one final structured documentation marker: `[wave-doc-delta] state=<none|owned|shared-plan> paths=<comma-separated-paths> detail=<short-note>`.",
+          ...(Array.isArray(agent.components) && agent.components.length > 0
+            ? [
+                "- Emit one final structured component marker per owned component: `[wave-component] component=<id> level=<level> state=<met|gap> detail=<short-note>`.",
+              ]
+            : []),
           "- If you leave any material architecture, integration, durability, ops, or docs gap, emit `[wave-gap] kind=<architecture|integration|durability|ops|docs> detail=<short-note>` and make the gap explicit instead of implying completion.",
         ]
       : [];
@@ -294,6 +300,29 @@ export function buildExecutionPrompt({
               : [""]),
         ]
     : [];
+  const promotedComponentLines =
+    Array.isArray(componentPromotions) && componentPromotions.length > 0
+      ? [
+          "Component promotions for this wave:",
+          ...componentPromotions.map(
+            (promotion) => `- ${promotion.componentId}: ${promotion.targetLevel}`,
+          ),
+          "",
+        ]
+      : [];
+  const ownedComponentLines =
+    ![evaluatorAgentId, documentationAgentId].includes(agent.agentId) &&
+    Array.isArray(agent.components) &&
+    agent.components.length > 0
+      ? [
+          "Components you own in this wave:",
+          ...agent.components.map((componentId) => {
+            const targetLevel = agent.componentTargets?.[componentId] || null;
+            return targetLevel ? `- ${componentId}: ${targetLevel}` : `- ${componentId}`;
+          }),
+          "",
+        ]
+      : [];
 
   return [
     `Working directory: ${REPO_ROOT}`,
@@ -337,6 +366,8 @@ export function buildExecutionPrompt({
     "```",
     "",
     ...exitContractLines,
+    ...promotedComponentLines,
+    ...ownedComponentLines,
     ...context7PromptLines,
     "Assigned implementation prompt:",
     "```",

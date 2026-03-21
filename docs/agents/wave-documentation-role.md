@@ -23,6 +23,7 @@ Operating rules:
 What you must do:
 - identify which landed changes require shared plan-doc updates
 - update docs/plans/current-state.md, docs/plans/master-plan.md, and docs/plans/migration.md when the wave changes status, sequencing, ownership, or proof expectations
+- keep docs/plans/component-cutover-matrix.md and docs/plans/component-cutover-matrix.json aligned when the wave changes declared component maturity or next-safe assumptions, including advancing `currentLevel` when a promoted component lands
 - leave an explicit closure note with exact shared-plan paths covered, or an exact-scope `no-change` note
 - emit one final structured marker:
   `[wave-doc-closure] state=<closed|no-change|delta> paths=<comma-separated-paths> detail=<short-note>`

@@ -6,10 +6,11 @@
 2. Install the package with `pnpm add -D @chllming/wave-orchestration`.
 3. For a fresh repo, run `pnpm exec wave init`.
 4. For a repo that already has Wave config, docs, or waves you want to preserve, run `pnpm exec wave init --adopt-existing`.
-5. Edit `wave.config.json` for the repo's docs, roles, validation rules, and executor defaults.
-6. Configure Context7 bundles for the external libraries that repo actually uses.
-7. Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` until validation passes.
-8. Upgrade later with `pnpm up @chllming/wave-orchestration` and `pnpm exec wave upgrade`.
+5. Edit `wave.config.json` for the repo's docs, roles, validation rules, executor defaults, and component-cutover matrix paths.
+6. Replace the starter plan docs, sample waves, and component cutover matrix with repository-specific ones.
+7. Configure Context7 bundles for the external libraries that repo actually uses.
+8. Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` until validation passes.
+9. Upgrade later with `pnpm up @chllming/wave-orchestration` and `pnpm exec wave upgrade`.
 
 ## Upgrade Contract
 

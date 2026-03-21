@@ -17,6 +17,8 @@ export const DEFAULT_DOCS_DIR = "docs";
 export const DEFAULT_STATE_ROOT = ".tmp";
 export const DEFAULT_ORCHESTRATOR_STATE_DIR = ".tmp/wave-orchestrator";
 export const DEFAULT_CONTEXT7_BUNDLE_INDEX_PATH = "docs/context7/bundles.json";
+export const DEFAULT_COMPONENT_CUTOVER_MATRIX_DOC_PATH = "docs/plans/component-cutover-matrix.md";
+export const DEFAULT_COMPONENT_CUTOVER_MATRIX_JSON_PATH = "docs/plans/component-cutover-matrix.json";
 export const DEFAULT_REQUIRED_PROMPT_REFERENCES = [
   "docs/reference/repository-guidance.md",
   "docs/research/agent-context-sources.md",
@@ -205,6 +207,14 @@ function defaultWavesDir(plansDir) {
   return `${plansDir}/waves`;
 }
 
+function defaultComponentCutoverMatrixDocPath(plansDir) {
+  return `${plansDir}/component-cutover-matrix.md`;
+}
+
+function defaultComponentCutoverMatrixJsonPath(plansDir) {
+  return `${plansDir}/component-cutover-matrix.json`;
+}
+
 function defaultSharedPlanDocs(plansDir) {
   return ["current-state.md", "master-plan.md", "migration.md"].map(
     (fileName) => `${plansDir}/${fileName}`,
@@ -241,7 +251,7 @@ function normalizeValidation(rawValidation = {}) {
     ),
     requireDocumentationStewardFromWave: normalizeThreshold(
       rawValidation.requireDocumentationStewardFromWave,
-      5,
+      0,
     ),
     requireContext7DeclarationsFromWave: normalizeThreshold(
       rawValidation.requireContext7DeclarationsFromWave,
@@ -250,6 +260,14 @@ function normalizeValidation(rawValidation = {}) {
     requireExitContractsFromWave: normalizeThreshold(
       rawValidation.requireExitContractsFromWave,
       6,
+    ),
+    requireComponentPromotionsFromWave: normalizeThreshold(
+      rawValidation.requireComponentPromotionsFromWave,
+      0,
+    ),
+    requireAgentComponentsFromWave: normalizeThreshold(
+      rawValidation.requireAgentComponentsFromWave,
+      0,
     ),
   };
 }
@@ -387,6 +405,16 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
       rawConfig.paths?.context7BundleIndexPath || DEFAULT_CONTEXT7_BUNDLE_INDEX_PATH,
       "paths.context7BundleIndexPath",
     ),
+    componentCutoverMatrixDocPath: normalizeRepoRelativePath(
+      rawConfig.paths?.componentCutoverMatrixDocPath ||
+        defaultComponentCutoverMatrixDocPath(defaultPlansDir(rawConfig.paths?.docsDir || DEFAULT_DOCS_DIR)),
+      "paths.componentCutoverMatrixDocPath",
+    ),
+    componentCutoverMatrixJsonPath: normalizeRepoRelativePath(
+      rawConfig.paths?.componentCutoverMatrixJsonPath ||
+        defaultComponentCutoverMatrixJsonPath(defaultPlansDir(rawConfig.paths?.docsDir || DEFAULT_DOCS_DIR)),
+      "paths.componentCutoverMatrixJsonPath",
+    ),
   };
   const sharedPlanDocs =
     normalizeOptionalPathArray(rawConfig.sharedPlanDocs, "sharedPlanDocs") || null;
@@ -465,6 +493,18 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
       context7BundleIndexPath: normalizeRepoRelativePath(
         laneConfig.context7BundleIndexPath || config.paths.context7BundleIndexPath,
         `${lane}.context7BundleIndexPath`,
+      ),
+      componentCutoverMatrixDocPath: normalizeRepoRelativePath(
+        laneConfig.componentCutoverMatrixDocPath ||
+          config.paths.componentCutoverMatrixDocPath ||
+          defaultComponentCutoverMatrixDocPath(plansDir),
+        `${lane}.componentCutoverMatrixDocPath`,
+      ),
+      componentCutoverMatrixJsonPath: normalizeRepoRelativePath(
+        laneConfig.componentCutoverMatrixJsonPath ||
+          config.paths.componentCutoverMatrixJsonPath ||
+          defaultComponentCutoverMatrixJsonPath(plansDir),
+        `${lane}.componentCutoverMatrixJsonPath`,
       ),
     },
   };

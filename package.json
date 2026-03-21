@@ -1,11 +1,22 @@
 {
-  "name": "wave-orchestration",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@chllming/wave-orchestration",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "Generic wave-based multi-agent orchestration for repository work.",
   "packageManager": "pnpm@10.23.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "scripts",
+    "docs",
+    "releases",
+    "wave.config.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "bin": {
+    "wave": "./scripts/wave.mjs",
     "wave-launch": "./scripts/wave-launcher.mjs",
     "wave-autonomous": "./scripts/wave-autonomous.mjs",
     "wave-feedback": "./scripts/wave-human-feedback.mjs",
@@ -18,6 +29,7 @@
     "research:index-agent-context": "node scripts/research/generate-agent-context-indexes.mjs",
     "research:refresh-agent-context": "pnpm research:import-agent-context && pnpm research:index-agent-context",
     "test": "vitest run --config vitest.config.ts",
+    "wave": "node scripts/wave.mjs",
     "wave:autonomous": "node scripts/wave-autonomous.mjs",
     "wave:dashboard": "node scripts/wave-dashboard.mjs",
     "wave:feedback": "node scripts/wave-human-feedback.mjs",

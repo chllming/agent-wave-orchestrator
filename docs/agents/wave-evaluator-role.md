@@ -26,6 +26,7 @@ What you must do:
 - detect architecture or planning drift while implementation is in progress
 - surface missing proof, missing validation, missing ownership, and missing documentation closure early
 - compare landed evidence to each agent's declared exit contract
+- compare landed evidence to the wave's declared component promotions and required target levels
 - require exact shared-doc deltas and explicit `closed` or `no-change` notes before PASS when shared plan docs are affected
 - publish an append-only evaluator report for the wave
 
@@ -38,4 +39,5 @@ Verdict contract:
   `[wave-gate] architecture=<pass|concerns|blocked> integration=<pass|concerns|blocked> durability=<pass|concerns|blocked> live=<pass|concerns|blocked> docs=<pass|concerns|blocked> detail=<short-note>`
 
 Use PASS only when the required proof is actually present.
+If the wave declares component promotions, PASS requires those components to reach the declared level instead of merely landing adjacent code.
 ```

@@ -89,6 +89,8 @@ import {
   parseWaveFiles,
   reconcileRunStateFromStatusFiles,
   resolveAutoNextWaveStart,
+  validateWaveComponentMatrixCurrentLevels,
+  validateWaveComponentPromotions,
   validateWaveDefinition,
   writeManifest,
 } from "./wave-files.mjs";
@@ -408,6 +410,59 @@ function readWaveImplementationGate(wave, agentRuns) {
     statusCode: "pass",
     detail: "All implementation exit contracts are satisfied.",
     logPath: null,
+  };
+}
+
+export function readWaveComponentGate(wave, agentRuns, options = {}) {
+  const summariesByAgentId = Object.fromEntries(
+    agentRuns.map((runInfo) => [runInfo.agent.agentId, readAgentExecutionSummary(runInfo.statusPath)]),
+  );
+  const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
+  if (validation.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      componentId: null,
+      statusCode: validation.statusCode,
+      detail: validation.detail,
+      logPath: null,
+    };
+  }
+  const ownerRun =
+    agentRuns.find((runInfo) => runInfo.agent.components?.includes(validation.componentId)) ?? null;
+  return {
+    ok: false,
+    agentId: ownerRun?.agent?.agentId || null,
+    componentId: validation.componentId || null,
+    statusCode: validation.statusCode,
+    detail: validation.detail,
+    logPath: ownerRun ? path.relative(REPO_ROOT, ownerRun.logPath) : null,
+  };
+}
+
+export function readWaveComponentMatrixGate(wave, agentRuns, options = {}) {
+  const validation = validateWaveComponentMatrixCurrentLevels(wave, options);
+  if (validation.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      componentId: null,
+      statusCode: validation.statusCode,
+      detail: validation.detail,
+      logPath: null,
+    };
+  }
+  const documentationAgentId =
+    options.documentationAgentId || wave.documentationAgentId || "A9";
+  const docRun =
+    agentRuns.find((runInfo) => runInfo.agent.agentId === documentationAgentId) ?? null;
+  return {
+    ok: false,
+    agentId: docRun?.agent?.agentId || null,
+    componentId: validation.componentId || null,
+    statusCode: validation.statusCode,
+    detail: validation.detail,
+    logPath: docRun ? path.relative(REPO_ROOT, docRun.logPath) : null,
   };
 }
 
@@ -877,6 +932,7 @@ async function launchAgentSession(lanePaths, params) {
     messageBoardPath,
     messageBoardSnapshot: readMessageBoardSnapshot(messageBoardPath),
     context7,
+    componentPromotions: wave.componentPromotions,
     sharedPlanDocs: lanePaths.sharedPlanDocs,
     evaluatorAgentId: lanePaths.evaluatorAgentId,
     documentationAgentId: lanePaths.documentationAgentId,
@@ -1203,6 +1259,8 @@ export async function runLauncherCli(argv) {
         evaluatorAgentId: lanePaths.evaluatorAgentId,
         documentationAgentId: lanePaths.documentationAgentId,
         requireExitContractsFromWave: lanePaths.requireExitContractsFromWave,
+        requireComponentPromotionsFromWave: lanePaths.requireComponentPromotionsFromWave,
+        laneProfile: lanePaths.laneProfile,
       },
     );
     if (options.reconcileStatus) {
@@ -1644,32 +1702,58 @@ export async function runLauncherCli(argv) {
                 details: `agent=${implementationGate.agentId}; reason=${implementationGate.statusCode}; ${implementationGate.detail}`,
                 actionRequested: `Lane ${lanePaths.lane} owners should resolve the implementation contract gap before wave progression.`,
               });
-            } else if (launchedImplementationRuns.length > 0) {
-              recordCombinedEvent({
-                message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
-              });
-              const closureResult = await runClosureSweepPhase({
-                lanePaths,
-                wave,
-                closureRuns: agentRuns.filter((run) =>
-                  [lanePaths.evaluatorAgentId, lanePaths.documentationAgentId].includes(
-                    run.agent.agentId,
-                  ),
-                ),
-                dashboardState,
-                recordCombinedEvent,
-                flushDashboards,
-                options,
-                feedbackStateByRequestId,
-                appendCoordination,
-              });
-              failures = closureResult.failures;
-              timedOut = timedOut || closureResult.timedOut;
-              materializeAgentExecutionSummaries(wave, agentRuns);
             } else {
-              recordCombinedEvent({
-                message: "Implementation exit contracts satisfied.",
+              const componentGate = readWaveComponentGate(wave, agentRuns, {
+                laneProfile: lanePaths.laneProfile,
               });
+              if (!componentGate.ok) {
+                failures = [
+                  {
+                    agentId: componentGate.agentId,
+                    statusCode: componentGate.statusCode,
+                    logPath:
+                      componentGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                  },
+                ];
+                recordCombinedEvent({
+                  level: "error",
+                  agentId: componentGate.agentId,
+                  message: `Component promotion blocked wave ${wave.wave}: ${componentGate.detail}`,
+                });
+                appendCoordination({
+                  event: "wave_gate_blocked",
+                  waves: [wave.wave],
+                  status: "blocked",
+                  details: `component=${componentGate.componentId || "unknown"}; reason=${componentGate.statusCode}; ${componentGate.detail}`,
+                  actionRequested: `Lane ${lanePaths.lane} owners should close the component promotion gap before wave progression.`,
+                });
+              } else if (launchedImplementationRuns.length > 0) {
+                recordCombinedEvent({
+                  message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
+                });
+                const closureResult = await runClosureSweepPhase({
+                  lanePaths,
+                  wave,
+                  closureRuns: agentRuns.filter((run) =>
+                    [lanePaths.evaluatorAgentId, lanePaths.documentationAgentId].includes(
+                      run.agent.agentId,
+                    ),
+                  ),
+                  dashboardState,
+                  recordCombinedEvent,
+                  flushDashboards,
+                  options,
+                  feedbackStateByRequestId,
+                  appendCoordination,
+                });
+                failures = closureResult.failures;
+                timedOut = timedOut || closureResult.timedOut;
+                materializeAgentExecutionSummaries(wave, agentRuns);
+              } else {
+                recordCombinedEvent({
+                  message: "Implementation exit contracts and component promotions are satisfied.",
+                });
+              }
             }
           }
 
@@ -1694,6 +1778,35 @@ export async function runLauncherCli(argv) {
                 status: "blocked",
                 details: `agent=${documentationGate.agentId}; reason=${documentationGate.statusCode}; ${documentationGate.detail}`,
                 actionRequested: `Lane ${lanePaths.lane} owners should resolve the shared-plan closure state before wave progression.`,
+              });
+            }
+          }
+
+          if (failures.length === 0) {
+            const componentMatrixGate = readWaveComponentMatrixGate(wave, agentRuns, {
+              laneProfile: lanePaths.laneProfile,
+              documentationAgentId: lanePaths.documentationAgentId,
+            });
+            if (!componentMatrixGate.ok) {
+              failures = [
+                {
+                  agentId: componentMatrixGate.agentId,
+                  statusCode: componentMatrixGate.statusCode,
+                  logPath:
+                    componentMatrixGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                },
+              ];
+              recordCombinedEvent({
+                level: "error",
+                agentId: componentMatrixGate.agentId,
+                message: `Component matrix update blocked wave ${wave.wave}: ${componentMatrixGate.detail}`,
+              });
+              appendCoordination({
+                event: "wave_gate_blocked",
+                waves: [wave.wave],
+                status: "blocked",
+                details: `component=${componentMatrixGate.componentId || "unknown"}; reason=${componentMatrixGate.statusCode}; ${componentMatrixGate.detail}`,
+                actionRequested: `Lane ${lanePaths.lane} owners should update the component cutover matrix current levels before wave progression.`,
               });
             }
           }

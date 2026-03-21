@@ -5,15 +5,17 @@
     {
       "version": "0.4.0",
       "date": "2026-03-21",
-      "summary": "Runtime surface upgrade for Codex, Claude Code, and OpenCode plus dry-run launch previews.",
+      "summary": "Runtime surface upgrade for Codex, Claude Code, and OpenCode with dry-run previews, runtime docs, and retry/coordination hardening.",
       "features": [
-        "Expanded Codex `exec` support for model, profile, inline config, search, images, extra directories, JSON mode, and ephemeral sessions.",
-        "Claude settings overlay merging for inline settings JSON, hooks JSON, and allowed HTTP hook URLs.",
-        "OpenCode merged config overlays, multi-file attachments, and dry-run materialization of prompts plus executor launch previews."
+        "Expanded Codex `exec` support for model, profile, inline config, search, images, extra directories, JSON mode, and ephemeral sessions, alongside Claude settings overlay merging and OpenCode merged config overlays plus multi-file attachments.",
+        "Dry-run materialization of prompts, merged runtime overlays, and executor launch previews for all supported real runtimes.",
+        "Dedicated runtime configuration reference docs under `docs/reference/runtime-config/`, installed by `wave init` for config/default/profile/lane/agent authoring.",
+        "Retry and coordination hardening for policy-safe fallback blocking, clarification-follow-up matching, and artifact-linked inbox visibility."
       ],
       "manualSteps": [
         "Review any per-agent `### Executor` blocks that want the new runtime fields before cutting real waves on the upgraded package.",
-        "Run `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading to confirm prompts and executor overlays materialize as expected."
+        "Run `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading to confirm prompts and executor overlays materialize as expected.",
+        "Use the docs under `docs/reference/runtime-config/` as the canonical reference when migrating runtime defaults, profiles, or per-agent executor blocks."
       ],
       "breaking": false
     },

@@ -116,6 +116,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     messageboardsDir: path.join(stateDir, "messageboards"),
     dashboardsDir: path.join(stateDir, "dashboards"),
     context7CacheDir: path.join(stateDir, "context7-cache"),
+    executorOverlaysDir: path.join(stateDir, "executors"),
     stateDir,
     terminalsPath: path.join(REPO_ROOT, laneProfile.paths.terminalsPath),
     context7BundleIndexPath: path.join(REPO_ROOT, laneProfile.paths.context7BundleIndexPath),
@@ -131,6 +132,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     requireContext7DeclarationsFromWave:
       laneProfile.validation.requireContext7DeclarationsFromWave,
     requireExitContractsFromWave: laneProfile.validation.requireExitContractsFromWave,
+    executors: laneProfile.executors,
     defaultManifestPath: path.join(stateDir, "waves.manifest.json"),
     defaultRunStatePath: path.join(stateDir, "run-state.json"),
     globalDashboardPath: path.join(stateDir, "dashboards", "global.json"),

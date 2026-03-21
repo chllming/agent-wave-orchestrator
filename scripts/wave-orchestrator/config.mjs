@@ -21,6 +21,37 @@ export const DEFAULT_REQUIRED_PROMPT_REFERENCES = [
   "docs/reference/repository-guidance.md",
   "docs/research/agent-context-sources.md",
 ];
+export const SUPPORTED_EXECUTOR_MODES = ["codex", "claude", "opencode", "local"];
+export const DEFAULT_EXECUTOR_MODE = "codex";
+export const DEFAULT_CODEX_COMMAND = "codex";
+export const DEFAULT_CODEX_SANDBOX_MODE = "danger-full-access";
+export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
+export const DEFAULT_CLAUDE_COMMAND = "claude";
+export const DEFAULT_OPENCODE_COMMAND = "opencode";
+
+export function normalizeExecutorMode(value, label = "executor") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!SUPPORTED_EXECUTOR_MODES.includes(normalized)) {
+    throw new Error(
+      `${label} must be one of: ${SUPPORTED_EXECUTOR_MODES.join(", ")} (got: ${normalized || "empty"})`,
+    );
+  }
+  return normalized;
+}
+
+export function normalizeCodexSandboxMode(value, flagName = "--codex-sandbox") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!CODEX_SANDBOX_MODES.includes(normalized)) {
+    throw new Error(
+      `${flagName} must be one of: ${CODEX_SANDBOX_MODES.join(", ")} (got: ${normalized || "empty"})`,
+    );
+  }
+  return normalized;
+}
 
 function sanitizeLaneName(value) {
   const lane = String(value || "")
@@ -78,6 +109,71 @@ function normalizeOptionalStringArray(values, fallback = []) {
   return values
     .map((value) => String(value || "").trim())
     .filter(Boolean);
+}
+
+function normalizeOptionalString(value, fallback = null) {
+  const normalized = String(value ?? "")
+    .trim();
+  return normalized || fallback;
+}
+
+function normalizeOptionalPositiveInt(value, label, fallback = null) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive integer, got: ${value}`);
+  }
+  return parsed;
+}
+
+function normalizeOptionalBoolean(value, fallback = false) {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid boolean value: ${value}`);
+}
+
+function normalizeOptionalStringOrStringArray(value, label) {
+  if (value === undefined || value === null || value === "") {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry, index) => normalizeOptionalString(entry, null))
+      .filter(Boolean)
+      .map((entry, index) => {
+        if (!entry) {
+          throw new Error(`${label}[${index}] is required`);
+        }
+        return entry;
+      });
+  }
+  const normalized = normalizeOptionalString(value, null);
+  return normalized ? [normalized] : [];
+}
+
+function normalizeOptionalJsonObject(value, label) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return JSON.parse(JSON.stringify(value));
+  }
+  throw new Error(`${label} must be a JSON object`);
 }
 
 function normalizeThreshold(value, fallback) {
@@ -158,6 +254,111 @@ function normalizeValidation(rawValidation = {}) {
   };
 }
 
+function normalizeClaudePromptMode(value, label = "executors.claude.appendSystemPromptMode") {
+  const normalized = String(value || "append")
+    .trim()
+    .toLowerCase();
+  if (!["append", "replace"].includes(normalized)) {
+    throw new Error(`${label} must be "append" or "replace"`);
+  }
+  return normalized;
+}
+
+function normalizeClaudeOutputFormat(value, label = "executors.claude.outputFormat") {
+  const normalized = String(value || "text")
+    .trim()
+    .toLowerCase();
+  if (!["text", "json", "stream-json"].includes(normalized)) {
+    throw new Error(`${label} must be one of: text, json, stream-json`);
+  }
+  return normalized;
+}
+
+function normalizeOpenCodeFormat(value, label = "executors.opencode.format") {
+  const normalized = String(value || "default")
+    .trim()
+    .toLowerCase();
+  if (!["default", "json"].includes(normalized)) {
+    throw new Error(`${label} must be one of: default, json`);
+  }
+  return normalized;
+}
+
+function mergeExecutors(baseExecutors = {}, overrideExecutors = {}) {
+  return {
+    ...baseExecutors,
+    ...overrideExecutors,
+    codex: {
+      ...(baseExecutors.codex || {}),
+      ...(overrideExecutors.codex || {}),
+    },
+    claude: {
+      ...(baseExecutors.claude || {}),
+      ...(overrideExecutors.claude || {}),
+    },
+    opencode: {
+      ...(baseExecutors.opencode || {}),
+      ...(overrideExecutors.opencode || {}),
+    },
+  };
+}
+
+function normalizeExecutors(rawExecutors = {}) {
+  const executors = rawExecutors && typeof rawExecutors === "object" ? rawExecutors : {};
+  return {
+    default: normalizeExecutorMode(executors.default || DEFAULT_EXECUTOR_MODE, "executors.default"),
+    codex: {
+      command: normalizeOptionalString(
+        executors.codex?.command,
+        DEFAULT_CODEX_COMMAND,
+      ),
+      sandbox: normalizeCodexSandboxMode(
+        executors.codex?.sandbox || DEFAULT_CODEX_SANDBOX_MODE,
+        "executors.codex.sandbox",
+      ),
+    },
+    claude: {
+      command: normalizeOptionalString(
+        executors.claude?.command,
+        DEFAULT_CLAUDE_COMMAND,
+      ),
+      model: normalizeOptionalString(executors.claude?.model, null),
+      agent: normalizeOptionalString(executors.claude?.agent, null),
+      appendSystemPromptMode: normalizeClaudePromptMode(
+        executors.claude?.appendSystemPromptMode,
+      ),
+      permissionMode: normalizeOptionalString(executors.claude?.permissionMode, null),
+      permissionPromptTool: normalizeOptionalString(
+        executors.claude?.permissionPromptTool,
+        null,
+      ),
+      maxTurns: normalizeOptionalPositiveInt(executors.claude?.maxTurns, "executors.claude.maxTurns"),
+      mcpConfig: normalizeOptionalStringOrStringArray(
+        executors.claude?.mcpConfig,
+        "executors.claude.mcpConfig",
+      ),
+      strictMcpConfig: normalizeOptionalBoolean(executors.claude?.strictMcpConfig, false),
+      settings: normalizeOptionalString(executors.claude?.settings, null),
+      outputFormat: normalizeClaudeOutputFormat(executors.claude?.outputFormat),
+      allowedTools: normalizeOptionalStringArray(executors.claude?.allowedTools, []),
+      disallowedTools: normalizeOptionalStringArray(executors.claude?.disallowedTools, []),
+    },
+    opencode: {
+      command: normalizeOptionalString(
+        executors.opencode?.command,
+        DEFAULT_OPENCODE_COMMAND,
+      ),
+      model: normalizeOptionalString(executors.opencode?.model, null),
+      agent: normalizeOptionalString(executors.opencode?.agent, null),
+      attach: normalizeOptionalString(executors.opencode?.attach, null),
+      format: normalizeOpenCodeFormat(executors.opencode?.format),
+      steps: normalizeOptionalPositiveInt(executors.opencode?.steps, "executors.opencode.steps"),
+      instructions: normalizeOptionalStringArray(executors.opencode?.instructions, []),
+      permission: normalizeOptionalJsonObject(executors.opencode?.permission, "executors.opencode.permission"),
+    },
+  };
+}
+
 export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
   const rawConfig = readJsonOrNull(configPath) || {};
   const repoMode =
@@ -203,6 +404,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     paths,
     roles: normalizeRoles(rawConfig.roles),
     validation: normalizeValidation(rawConfig.validation),
+    executors: normalizeExecutors(rawConfig.executors),
     sharedPlanDocs,
     lanes,
     configPath,
@@ -232,6 +434,9 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     ...config.validation,
     ...(laneConfig.validation || {}),
   });
+  const executors = normalizeExecutors(
+    mergeExecutors(config.executors, laneConfig.executors),
+  );
   return {
     lane,
     docsDir,
@@ -243,6 +448,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
       defaultSharedPlanDocs(plansDir),
     roles,
     validation,
+    executors,
     paths: {
       terminalsPath: normalizeRepoRelativePath(
         laneConfig.terminalsPath || config.paths.terminalsPath,

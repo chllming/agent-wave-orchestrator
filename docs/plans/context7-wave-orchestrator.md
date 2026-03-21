@@ -13,7 +13,7 @@ Context7 is for external library truth. Repository docs and source are for repos
 ## Setup
 
 1. Add `CONTEXT7_API_KEY` to `.env.local` at repo root.
-2. Export it before launching Codex or the wave runner:
+2. Export it before launching the wave runner or any executor directly:
 
 ```bash
 source scripts/context7-export-env.sh
@@ -91,16 +91,26 @@ When a bundle is active, the launcher injects:
 - the allowed library list
 - prefetched third-party snippets when available
 
-The injected block appears before the assigned implementation prompt and is labeled non-canonical.
+The injected block appears before the assigned implementation prompt and is labeled non-canonical. This injection is executor-agnostic.
 
 ## Runtime Behavior
 
 - Prefetch happens in the launcher before the agent session starts.
 - Cache files are written under `.tmp/<lane>-wave-launcher/context7-cache/`.
+- Executor runtime overlays are written under `.tmp/<lane>-wave-launcher/executors/`.
 - The resolved Context7 selection becomes part of the prompt fingerprint, so changing bundle or query invalidates prior success reuse.
 - If `CONTEXT7_API_KEY` is missing, prefetch is disabled with a warning and the wave continues.
 - If the Context7 API errors, the launcher fails open and starts the agent without the injected snippets.
 - Use `--no-context7` when you want to force repository-only context for a run.
+
+## Prompt Layering
+
+- `codex`
+  The generated task prompt already contains the injected Context7 block. It is piped directly into `codex exec`.
+- `claude`
+  The generated task prompt contains the injected Context7 block. The harness also writes a runtime system-prompt overlay and passes it with `--append-system-prompt-file` by default, or `--system-prompt-file` if `executors.claude.appendSystemPromptMode` is set to `replace`.
+- `opencode`
+  The generated task prompt contains the injected Context7 block. The harness writes a temporary `opencode.json` plus an agent prompt file under `.tmp/.../executors/`, points `OPENCODE_CONFIG` at that overlay, and launches `opencode run`.
 
 ## Guidance
 

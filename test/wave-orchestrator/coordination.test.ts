@@ -50,7 +50,7 @@ describe("buildExecutionPrompt", () => {
       messageBoardSnapshot: "# Wave 2 Message Board",
     });
 
-    expect(prompt).toContain("You are Codex running Wave 2 / Agent A3: Provider Contracts.");
+    expect(prompt).toContain("You are the Wave executor running Wave 2 / Agent A3: Provider Contracts.");
     expect(prompt).toContain("node scripts/wave-human-feedback.mjs ask");
     expect(prompt).toContain("--lane main");
     expect(prompt).toContain("/repo/.tmp/main-wave-launcher/messageboards/wave-2.md");

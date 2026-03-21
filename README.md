@@ -15,7 +15,7 @@ It includes:
 - Node.js 22+
 - `pnpm`
 - `tmux` on `PATH` for dashboarded wave runs
-- `codex` on `PATH` if you want real agent execution
+- one or more real executors on `PATH`: `codex`, `claude`, or `opencode`
 - optional: `CONTEXT7_API_KEY` for launcher-side Context7 prefetch
 
 ## Quick Start
@@ -40,6 +40,13 @@ pnpm wave:launch -- --lane main --dry-run --no-dashboard
 
 ```bash
 pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
+```
+
+Alternative real executors:
+
+```bash
+pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor claude
+pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor opencode
 ```
 
 ## Typical Harness Workflow
@@ -89,6 +96,7 @@ Each wave is regular markdown. The harness looks for:
 
 - `## Context7 defaults`
 - `## Agent <id>: <title>`
+- `### Executor`
 - `### Role prompts`
 - `### Context7`
 - `### Exit contract`
@@ -125,6 +133,12 @@ File ownership (only touch these paths):
 
 ## Agent A1: Runtime Work
 
+### Executor
+
+- id: claude
+- model: claude-sonnet-4-6
+- claude.max_turns: 4
+
 ### Context7
 
 - bundle: node-typescript
@@ -147,6 +161,60 @@ File ownership (only touch these paths):
 - test/example.test.ts
 ```
 ````
+
+`### Executor` is optional. Resolution order is:
+
+- per-agent `### Executor`
+- launcher `--executor`
+- `wave.config.json` `executors.default`
+
+Supported keys:
+
+- `id`
+- `model`
+- `codex.sandbox`
+- `claude.agent`
+- `claude.permission_mode`
+- `claude.max_turns`
+- `claude.mcp_config`
+- `opencode.agent`
+- `opencode.attach`
+- `opencode.format`
+- `opencode.steps`
+
+## Executor Behavior
+
+- `codex`
+  The harness sends the generated task prompt through `codex exec` stdin. `--codex-sandbox` and `wave.config.json` `executors.codex.sandbox` control the default sandbox.
+- `claude`
+  The harness launches `claude -p` headlessly. The generated task prompt becomes the run message, and a runtime overlay file is injected with `--append-system-prompt-file` by default. Switch to full replacement in `wave.config.json` with `executors.claude.appendSystemPromptMode: "replace"`.
+- `opencode`
+  The harness launches `opencode run` headlessly. The generated task prompt becomes the run message, and the harness writes an ignored runtime `opencode.json` plus a generated agent prompt under `.tmp/.../executors/`, then points `OPENCODE_CONFIG` at that overlay for the run.
+- `local`
+  Smoke-test only. It creates placeholder deliverables and emits the expected Wave markers, but it is not a real agent runtime.
+
+The run-level default executor comes from `wave.config.json`:
+
+```json
+{
+  "executors": {
+    "default": "codex",
+    "codex": {
+      "command": "codex",
+      "sandbox": "danger-full-access"
+    },
+    "claude": {
+      "command": "claude",
+      "appendSystemPromptMode": "append",
+      "outputFormat": "text"
+    },
+    "opencode": {
+      "command": "opencode",
+      "format": "default"
+    }
+  }
+}
+```
 
 ## Context7 Setup
 
@@ -181,10 +249,17 @@ pnpm context7:api-check
 - If a bundle is active, the launcher prefetches third-party snippets before starting the agent.
 - The generated agent prompt includes a `Context7 scope for this run` block that lists:
   the bundle id, query focus, allowed libraries, and any prefetched non-canonical snippets.
-- Prefetched text is included before the assigned implementation prompt.
+- Prefetched text is included before the assigned implementation prompt, regardless of executor.
 - Cache output is written under `.tmp/<lane>-wave-launcher/context7-cache/`.
+- Executor runtime overlays are written under `.tmp/<lane>-wave-launcher/executors/`.
 - Missing API keys or Context7 API failures do not block the wave; the launcher fails open and starts the agent without the prefetched snippets.
 - You can disable injection for a run with `--no-context7`.
+
+Layering by executor:
+
+- `codex`: repository rules + generated task prompt with injected Context7 block
+- `claude`: repository `CLAUDE.md` / Claude settings + harness append-system-prompt overlay + generated task prompt with injected Context7 block
+- `opencode`: repository `AGENTS.md` / project `opencode.json` + harness runtime `OPENCODE_CONFIG` overlay + generated task prompt with injected Context7 block
 
 ## Useful Commands
 
@@ -192,9 +267,13 @@ pnpm context7:api-check
 pnpm wave:launch -- --lane main --dry-run --no-dashboard
 pnpm wave:launch -- --lane main --reconcile-status
 pnpm wave:launch -- --lane main --start-wave 2 --end-wave 2 --executor codex --codex-sandbox danger-full-access
+pnpm wave:launch -- --lane main --start-wave 2 --end-wave 2 --executor claude
+pnpm wave:launch -- --lane main --start-wave 2 --end-wave 2 --executor opencode
 pnpm wave:launch -- --lane main --auto-next --executor codex --codex-sandbox danger-full-access
 pnpm wave:feedback -- list --lane main --pending
 pnpm wave:autonomous -- --lane main --executor codex --codex-sandbox danger-full-access
+pnpm wave:autonomous -- --lane main --executor claude
+pnpm wave:autonomous -- --lane main --executor opencode
 ```
 
 ## Research Sources

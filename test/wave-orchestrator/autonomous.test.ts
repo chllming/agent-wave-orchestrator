@@ -12,7 +12,7 @@ describe("autonomous parseArgs", () => {
   });
 
   it("rejects the local executor", () => {
-    expect(() => parseArgs(["--executor", "local"])).toThrow(/requires --executor codex/i);
+    expect(() => parseArgs(["--executor", "local"])).toThrow(/does not support --executor local/i);
   });
 
   it("accepts an explicit codex sandbox override", () => {

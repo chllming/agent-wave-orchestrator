@@ -217,6 +217,7 @@ export function buildAgentPromptFingerprintSource(agent) {
   return JSON.stringify({
     prompt: String(agent?.prompt || ""),
     context7SelectionHash: String(agent?.context7Resolved?.selectionHash || ""),
+    executorResolved: agent?.executorResolved || null,
   });
 }
 
@@ -458,4 +459,3 @@ export function describeContext7Libraries(selection) {
     .map((library) => library.libraryName || library.libraryId || "unknown-library")
     .join(", ");
 }
-

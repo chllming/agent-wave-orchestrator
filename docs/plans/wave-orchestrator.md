@@ -10,6 +10,7 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - validates Context7 declarations and exit contracts from configurable wave thresholds
 - writes prompts, logs, dashboards, message boards, and status summaries under `.tmp/`
 - supports launcher-side Context7 prefetch and injection for headless runs
+- supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
 - supports a file-backed human feedback queue
 - performs a closure sweep so evaluator and documentation gates reflect final landed state
 
@@ -17,18 +18,22 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 
 - `pnpm wave:launch -- --lane main --dry-run --no-dashboard`
 - `pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access`
+- `pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor claude`
+- `pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor opencode`
 - `pnpm wave:autonomous -- --lane main --executor codex --codex-sandbox danger-full-access`
+- `pnpm wave:autonomous -- --lane main --executor claude`
+- `pnpm wave:autonomous -- --lane main --executor opencode`
 - `pnpm wave:feedback -- list --lane main --pending`
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 
 ## Setup
 
 1. Install dependencies with `pnpm install`.
-2. Confirm `codex` and `tmux` are available if you want real wave execution.
+2. Confirm `tmux` and at least one real executor (`codex`, `claude`, or `opencode`) are available if you want real wave execution.
 3. Review [wave.config.json](/home/coder/wave-orchestration/wave.config.json).
 4. Review the starter role prompts under [docs/agents](/home/coder/wave-orchestration/docs/agents).
 5. Review or replace the starter wave files under [docs/plans/waves](/home/coder/wave-orchestration/docs/plans/waves).
@@ -69,11 +74,13 @@ pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --c
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
 - Context7 cache: `.tmp/<lane>-wave-launcher/context7-cache/`
+- executor overlays: `.tmp/<lane>-wave-launcher/executors/`
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
 
 ## Authoring Rules
 
 - Every wave must include the configured evaluator agent.
+- Use `### Executor` only when an agent should override the run-level executor default.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
@@ -81,9 +88,13 @@ pnpm wave:launch -- --lane main --start-wave 0 --end-wave 0 --executor codex --c
 
 ## Executor Modes
 
-- `--executor codex` is the real execution path.
+- `--executor codex` uses `codex exec` with the generated task prompt piped through stdin.
+- `--executor claude` uses `claude -p` with the generated task prompt as the message and a harness runtime system-prompt overlay.
+- `--executor opencode` uses `opencode run` with a generated runtime `opencode.json` and agent prompt overlay.
 - `--executor local` exists only for smoke-testing prompt and closure behavior.
 - `--codex-sandbox danger-full-access` is the default because it avoids host bubblewrap assumptions.
+- Per-agent overrides in the wave file beat both the CLI `--executor` and `wave.config.json` `executors.default`.
+- The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 ## Human Feedback Queue
 

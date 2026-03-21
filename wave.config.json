@@ -17,6 +17,22 @@
     "evaluatorRolePromptPath": "docs/agents/wave-evaluator-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
   },
+  "executors": {
+    "default": "codex",
+    "codex": {
+      "command": "codex",
+      "sandbox": "danger-full-access"
+    },
+    "claude": {
+      "command": "claude",
+      "appendSystemPromptMode": "append",
+      "outputFormat": "text"
+    },
+    "opencode": {
+      "command": "opencode",
+      "format": "default"
+    }
+  },
   "sharedPlanDocs": [
     "docs/plans/current-state.md",
     "docs/plans/master-plan.md",

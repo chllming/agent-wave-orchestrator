@@ -250,6 +250,7 @@ export function buildExecutionPrompt({
     "--timeout-seconds 30",
   ].join(" ");
   const context7Selection = context7?.selection || agent?.context7Resolved || null;
+  const executorId = agent?.executorResolved?.id || "default";
   const context7LibrarySummary =
     context7Selection && Array.isArray(context7Selection.libraries) && context7Selection.libraries.length > 0
       ? context7Selection.libraries
@@ -262,7 +263,7 @@ export function buildExecutionPrompt({
           "Context7 scope for this run:",
           "- No Context7 prefetch bundle is declared for this run.",
           "- Repository docs and source remain the only planned authority for system truth.",
-          "- Do not broad-search third-party docs by default. If a direct Context7 tool is available in this Codex session, use it only when an external dependency becomes truly necessary and keep the lookup narrowly scoped to that dependency.",
+          "- Do not broad-search third-party docs by default. If a direct Context7 tool is available in this session, use it only when an external dependency becomes truly necessary and keep the lookup narrowly scoped to that dependency.",
           "",
         ]
       : [
@@ -271,7 +272,7 @@ export function buildExecutionPrompt({
           `- Query focus: ${context7Selection.query || "(derived from assigned prompt)"}`,
           `- Allowed external libraries: ${context7LibrarySummary}`,
           "- Context7 is only for external library truth. It does not override repository architecture, contracts, ownership, or source files.",
-          "- If a direct Context7 tool is available in this Codex session, use it only within the bundle and query scope listed here.",
+          "- If a direct Context7 tool is available in this session, use it only within the bundle and query scope listed here.",
           ...(context7?.promptText
             ? [
                 "",
@@ -302,8 +303,9 @@ export function buildExecutionPrompt({
     "- WAVE Executor role (you): deliver the assigned outcome end-to-end within your scope and coordinate through the wave message board every turn.",
     `- Evaluator agent id: ${evaluatorAgentId}`,
     `- Documentation steward agent id: ${documentationAgentId}`,
+    `- Resolved executor: ${executorId}`,
     "",
-    `You are Codex running Wave ${wave} / Agent ${agent.agentId}: ${agent.title}.`,
+    `You are the Wave executor running Wave ${wave} / Agent ${agent.agentId}: ${agent.title}.`,
     "YOU ARE IN WAVE MODE.",
     `Message board absolute path: ${messageBoardPath}`,
     `Message board repo-relative path: ${relativeBoardPath}`,

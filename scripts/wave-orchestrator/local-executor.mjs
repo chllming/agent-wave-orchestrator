@@ -16,7 +16,7 @@ function extractAssignedPrompt(raw) {
 
 function extractAgentId(rawPrompt) {
   const match = String(rawPrompt || "").match(
-    /You are Codex running Wave \d+ \/ Agent ([A-Za-z0-9.]+):/,
+    /You are the Wave executor running Wave \d+ \/ Agent ([A-Za-z0-9.]+):/,
   );
   return match ? match[1].trim() : "";
 }

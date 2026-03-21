@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_EXECUTOR_MODE, normalizeExecutorMode, SUPPORTED_EXECUTOR_MODES } from "./config.mjs";
 import {
   DEFAULT_AGENT_LAUNCH_STAGGER_MS,
   DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS,
@@ -37,8 +38,8 @@ Options:
                                 Max backoff delay for 429 retries (default: ${DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS})
   --agent-launch-stagger-ms <n> Delay between agent launches (default: ${DEFAULT_AGENT_LAUNCH_STAGGER_MS})
   --orchestrator-id <id>        Orchestrator ID for coordination board
-  --executor <mode>             Executor mode passed to launcher: codex | local (default: codex)
-  --codex-sandbox <mode>        Codex sandbox mode passed to launcher (default: ${DEFAULT_CODEX_SANDBOX_MODE})
+  --executor <mode>             Default executor passed to launcher: ${SUPPORTED_EXECUTOR_MODES.join(" | ")} (default: lane config)
+  --codex-sandbox <mode>        Default Codex sandbox mode passed to launcher (default: ${DEFAULT_CODEX_SANDBOX_MODE})
   --dashboard                   Enable dashboards (default: disabled)
   --keep-sessions               Keep tmux sessions between waves
   --keep-terminals              Keep temporary terminal entries between waves
@@ -56,12 +57,13 @@ export function parseArgs(argv) {
     agentRateLimitMaxDelaySeconds: DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS,
     agentLaunchStaggerMs: DEFAULT_AGENT_LAUNCH_STAGGER_MS,
     orchestratorId: null,
-    executorMode: "codex",
+    executorMode: DEFAULT_EXECUTOR_MODE,
     codexSandboxMode: DEFAULT_CODEX_SANDBOX_MODE,
     noDashboard: true,
     keepSessions: false,
     keepTerminals: false,
   };
+  let executorProvided = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--") {
@@ -95,9 +97,8 @@ export function parseArgs(argv) {
     } else if (arg === "--orchestrator-id") {
       options.orchestratorId = String(argv[++i] || "").trim();
     } else if (arg === "--executor") {
-      options.executorMode = String(argv[++i] || "")
-        .trim()
-        .toLowerCase();
+      options.executorMode = normalizeExecutorMode(argv[++i], "--executor");
+      executorProvided = true;
     } else if (arg === "--codex-sandbox") {
       options.codexSandboxMode = normalizeCodexSandboxMode(argv[++i], "--codex-sandbox");
     } else if (arg === "--dashboard") {
@@ -110,14 +111,12 @@ export function parseArgs(argv) {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  options.orchestratorId ||= `${options.lane}-autonomous`;
-  if (!["codex", "local"].includes(options.executorMode)) {
-    throw new Error(`--executor must be one of: codex, local (got: ${options.executorMode})`);
+  if (!executorProvided) {
+    options.executorMode = buildLanePaths(options.lane).executors.default;
   }
-  if (options.executorMode !== "codex") {
-    throw new Error(
-      "Autonomous mode requires --executor codex. The local executor is for smoke tests only.",
-    );
+  options.orchestratorId ||= `${options.lane}-autonomous`;
+  if (options.executorMode === "local") {
+    throw new Error("Autonomous mode does not support --executor local. Use codex, claude, or opencode.");
   }
   if (options.agentRateLimitMaxDelaySeconds < options.agentRateLimitBaseDelaySeconds) {
     throw new Error(

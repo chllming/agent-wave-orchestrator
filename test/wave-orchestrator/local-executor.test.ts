@@ -43,7 +43,7 @@ describe("runLocalExecutorCli", () => {
 
     fs.writeFileSync(
       promptFile,
-      `You are Codex running Wave 0 / Agent A0: Evaluator.
+      `You are the Wave executor running Wave 0 / Agent A0: Evaluator.
 
 Assigned implementation prompt:
 \`\`\`text

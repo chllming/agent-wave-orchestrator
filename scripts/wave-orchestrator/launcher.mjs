@@ -3,6 +3,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  CODEX_SANDBOX_MODES,
+  DEFAULT_CODEX_SANDBOX_MODE,
+  normalizeCodexSandboxMode,
+  normalizeExecutorMode,
+  SUPPORTED_EXECUTOR_MODES,
+} from "./config.mjs";
+import {
   appendOrchestratorBoardEntry,
   buildExecutionPrompt,
   ensureOrchestratorBoard,
@@ -70,7 +77,13 @@ import {
   removeTerminalEntries,
 } from "./terminals.mjs";
 import {
+  buildCodexExecInvocation,
+  buildExecutorLaunchSpec,
+  preflightExecutorsForWaves,
+} from "./executors.mjs";
+import {
   buildManifest,
+  applyExecutorSelectionsToWave,
   markWaveCompleted,
   parseWaveFiles,
   reconcileRunStateFromStatusFiles,
@@ -87,34 +100,7 @@ import {
   validateImplementationSummary,
   writeAgentExecutionSummary,
 } from "./agent-state.mjs";
-
-export const DEFAULT_CODEX_SANDBOX_MODE = "danger-full-access";
-export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
-
-export function normalizeCodexSandboxMode(value, flagName = "--codex-sandbox") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (!CODEX_SANDBOX_MODES.includes(normalized)) {
-    throw new Error(
-      `${flagName} must be one of: ${CODEX_SANDBOX_MODES.join(", ")} (got: ${normalized || "empty"})`,
-    );
-  }
-  return normalized;
-}
-
-export function buildCodexExecInvocation(promptPath, logPath, codexSandboxMode) {
-  return [
-    "  codex",
-    "--ask-for-approval never",
-    "exec",
-    "--skip-git-repo-check",
-    `--sandbox ${shellQuote(codexSandboxMode)}`,
-    "-",
-    `< ${shellQuote(promptPath)}`,
-    `2>&1 | tee -a ${shellQuote(logPath)}`,
-  ].join(" ");
-}
+export { CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE, normalizeCodexSandboxMode, buildCodexExecInvocation };
 
 function printUsage(lanePaths) {
   console.log(`Usage: node scripts/wave-launcher.mjs [options]
@@ -137,7 +123,7 @@ Options:
                         Max backoff delay for 429 retries (default: ${DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS})
   --agent-launch-stagger-ms <n>
                         Delay between agent launches (default: ${DEFAULT_AGENT_LAUNCH_STAGGER_MS})
-  --executor <mode>      Agent executor mode: codex | local (default: codex)
+  --executor <mode>      Default agent executor mode: ${SUPPORTED_EXECUTOR_MODES.join(" | ")} (default: ${lanePaths.executors.default})
   --codex-sandbox <mode> Codex sandbox mode: ${CODEX_SANDBOX_MODES.join(" | ")} (default: ${DEFAULT_CODEX_SANDBOX_MODE})
   --manifest-out <path>  Write parsed wave manifest JSON (default: ${path.relative(REPO_ROOT, lanePaths.defaultManifestPath)})
   --dry-run              Parse waves and update manifest only
@@ -172,7 +158,7 @@ function parseArgs(argv) {
     agentRateLimitBaseDelaySeconds: DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS,
     agentRateLimitMaxDelaySeconds: DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS,
     agentLaunchStaggerMs: DEFAULT_AGENT_LAUNCH_STAGGER_MS,
-    executorMode: "codex",
+    executorMode: lanePaths.executors.default,
     codexSandboxMode: DEFAULT_CODEX_SANDBOX_MODE,
     manifestOut: lanePaths.defaultManifestPath,
     dryRun: false,
@@ -187,6 +173,7 @@ function parseArgs(argv) {
   let stateFileProvided = false;
   let manifestOutProvided = false;
   let orchestratorBoardProvided = false;
+  let executorProvided = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -251,13 +238,8 @@ function parseArgs(argv) {
     } else if (arg === "--agent-launch-stagger-ms") {
       options.agentLaunchStaggerMs = parseNonNegativeInt(argv[++i], "--agent-launch-stagger-ms");
     } else if (arg === "--executor") {
-      const value = String(argv[++i] || "")
-        .trim()
-        .toLowerCase();
-      if (value !== "codex" && value !== "local") {
-        throw new Error(`--executor must be one of: codex, local (got: ${value || "empty"})`);
-      }
-      options.executorMode = value;
+      options.executorMode = normalizeExecutorMode(argv[++i], "--executor");
+      executorProvided = true;
     } else if (arg === "--codex-sandbox") {
       options.codexSandboxMode = normalizeCodexSandboxMode(argv[++i], "--codex-sandbox");
     } else if (arg === "--manifest-out") {
@@ -279,6 +261,9 @@ function parseArgs(argv) {
   }
   if (!orchestratorBoardProvided) {
     options.orchestratorBoardPath = lanePaths.defaultOrchestratorBoardPath;
+  }
+  if (!executorProvided) {
+    options.executorMode = lanePaths.executors.default;
   }
   options.orchestratorId ||= sanitizeOrchestratorId(`${lanePaths.lane}-orch-${process.pid}`);
   if (options.agentRateLimitMaxDelaySeconds < options.agentRateLimitBaseDelaySeconds) {
@@ -869,8 +854,6 @@ async function launchAgentSession(lanePaths, params) {
     statusPath,
     messageBoardPath,
     orchestratorId,
-    executorMode,
-    codexSandboxMode,
     agentRateLimitRetries,
     agentRateLimitBaseDelaySeconds,
     agentRateLimitMaxDelaySeconds,
@@ -900,14 +883,23 @@ async function launchAgentSession(lanePaths, params) {
   const promptHash = hashAgentPromptFingerprint(agent);
   fs.writeFileSync(promptPath, `${prompt}\n`, "utf8");
   killTmuxSessionIfExists(lanePaths.tmuxSocketName, sessionName);
+  const overlayDir = path.join(lanePaths.executorOverlaysDir, `wave-${wave}`, agent.slug);
+  const launchSpec = buildExecutorLaunchSpec({
+    agent,
+    promptPath,
+    logPath,
+    overlayDir,
+  });
+  const resolvedExecutorMode = launchSpec.executorId || agent.executorResolved?.id || "codex";
 
   const executionLines = [];
-  if (executorMode === "local") {
-    executionLines.push(
-      `node ${shellQuote(path.join(REPO_ROOT, "scripts", "wave-local-executor.mjs"))} --prompt-file ${shellQuote(
-        promptPath,
-      )} 2>&1 | tee ${shellQuote(logPath)}`,
-    );
+  if (launchSpec.env) {
+    for (const [key, value] of Object.entries(launchSpec.env)) {
+      executionLines.push(`export ${key}=${shellQuote(value)}`);
+    }
+  }
+  if (!launchSpec.useRateLimitRetries) {
+    executionLines.push(...launchSpec.invocationLines);
     executionLines.push("status=$?");
   } else {
     executionLines.push(`: > ${shellQuote(logPath)}`);
@@ -923,7 +915,9 @@ async function launchAgentSession(lanePaths, params) {
     executionLines.push("rate_attempt=1");
     executionLines.push("status=1");
     executionLines.push('while [ "$rate_attempt" -le "$max_rate_attempts" ]; do');
-    executionLines.push(buildCodexExecInvocation(promptPath, logPath, codexSandboxMode));
+    for (const line of launchSpec.invocationLines) {
+      executionLines.push(`  ${line}`);
+    }
     executionLines.push("  status=$?");
     executionLines.push('  if [ "$status" -eq 0 ]; then');
     executionLines.push("    break");
@@ -955,7 +949,7 @@ async function launchAgentSession(lanePaths, params) {
     `cd ${shellQuote(REPO_ROOT)}`,
     "set -o pipefail",
     `export WAVE_ORCHESTRATOR_ID=${shellQuote(orchestratorId || "")}`,
-    `export WAVE_EXECUTOR_MODE=${shellQuote(executorMode || "codex")}`,
+    `export WAVE_EXECUTOR_MODE=${shellQuote(resolvedExecutorMode)}`,
     ...executionLines,
     `node -e ${shellQuote(
       "const fs=require('node:fs'); const statusPath=process.argv[1]; const payload={code:Number(process.argv[2]),promptHash:process.argv[3]||null,orchestratorId:process.argv[4]||null,completedAt:new Date().toISOString()}; fs.writeFileSync(statusPath, JSON.stringify(payload, null, 2)+'\\n', 'utf8');",
@@ -969,7 +963,7 @@ async function launchAgentSession(lanePaths, params) {
     ["new-session", "-d", "-s", sessionName, `bash -lc ${shellQuote(command)}`],
     `launch session ${sessionName}`,
   );
-  return { promptHash, context7 };
+  return { promptHash, context7, executorId: resolvedExecutorMode };
 }
 
 async function waitForWaveCompletion(lanePaths, agentRuns, timeoutMinutes, onProgress = null) {
@@ -1151,6 +1145,7 @@ export async function runLauncherCli(argv) {
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.dashboardsDir);
   ensureDirectory(lanePaths.context7CacheDir);
+  ensureDirectory(lanePaths.executorOverlaysDir);
   ensureDirectory(lanePaths.feedbackRequestsDir);
   if (options.orchestratorBoardPath) {
     ensureOrchestratorBoard(options.orchestratorBoardPath);
@@ -1180,6 +1175,13 @@ export async function runLauncherCli(argv) {
     const staleArtifactCleanup = reconcileStaleLauncherArtifacts(lanePaths);
     const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
     const allWaves = parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
+      .map((wave) =>
+        applyExecutorSelectionsToWave(wave, {
+          laneProfile: lanePaths.laneProfile,
+          executorMode: options.executorMode,
+          codexSandboxMode: options.codexSandboxMode,
+        }),
+      )
       .map((wave) =>
         ({
           ...applyContext7SelectionsToWave(wave, {
@@ -1293,6 +1295,8 @@ export async function runLauncherCli(argv) {
       console.log("Dry run enabled, skipping tmux and executor launch.");
       return;
     }
+
+    preflightExecutorsForWaves(filteredWaves);
 
     globalDashboard = buildGlobalDashboardState({
       lane: lanePaths.lane,

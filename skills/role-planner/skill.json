@@ -1,0 +1,21 @@
+{
+  "id": "role-planner",
+  "title": "Planner Role",
+  "description": "Guides the read-only planner through maturity selection, wave splitting, ownership mapping, proof design, runtime pinning, and closure-ready planning output.",
+  "activation": {
+    "when": "Attach when a planner agent is generating future waves or a reviewable roadmap packet from a simple task request.",
+    "roles": [],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the plan, verifier notes, and open questions are explicit enough for review or apply.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": []
+}

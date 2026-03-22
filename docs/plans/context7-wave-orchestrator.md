@@ -4,6 +4,11 @@ See also [concepts/context7-vs-skills.md](../concepts/context7-vs-skills.md) for
 
 Context7 is for external library truth. Repository docs and source are for repository truth.
 
+The one deliberate exception in this repo is the planner corpus under
+`docs/context7/planner-agent/`: it is a tracked export of selected local
+planning research that the operator can publish as a custom Context7 library for
+the agentic planner.
+
 ## Rules
 
 - Prefer a narrow bundle per agent or wave.
@@ -29,6 +34,21 @@ pnpm context7:api-check
 ```
 
 4. Review [docs/context7/bundles.json](../context7/bundles.json) and trim it to the external libraries your repository actually uses.
+
+## Planner Bundle
+
+The shipped bundle index includes `planner-agentic`, which expects a published
+Context7 library named `wave-planner-agentic`.
+
+The source files for that library live under `docs/context7/planner-agent/`.
+Refresh that folder from the ignored agent-context cache with:
+
+```bash
+pnpm research:sync-planner-context7
+```
+
+After you publish the folder to Context7, the agentic planner will prefetch that
+bundle through `planner.agentic.context7Bundle`.
 
 ## Resolution Order
 

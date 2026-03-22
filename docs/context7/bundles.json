@@ -22,6 +22,15 @@
         }
       ]
     },
+    "planner-agentic": {
+      "description": "Repo-curated planning research published as a custom Context7 library for the agentic planner.",
+      "libraries": [
+        {
+          "libraryName": "wave-planner-agentic",
+          "queryHint": "wave planning best practices, maturity alignment, closure gates, proof surfaces, rollout evidence, and coordination failure prevention"
+        }
+      ]
+    },
     "react-web": {
       "description": "React and Next.js docs for frontend work.",
       "libraries": [

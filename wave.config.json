@@ -60,6 +60,20 @@
           "minutes": 20
         }
       },
+      "planning-readonly": {
+        "id": "codex",
+        "model": "gpt-5-codex",
+        "tags": ["planning", "review"],
+        "budget": {
+          "minutes": 30
+        },
+        "codex": {
+          "search": true,
+          "json": true,
+          "sandbox": "read-only",
+          "config": ["model_reasoning_effort=high"]
+        }
+      },
       "security-review": {
         "id": "claude",
         "tags": ["security", "review"],
@@ -123,6 +137,36 @@
       "github-release": ["provider-github-release"],
       "ssh-manual": ["provider-ssh-manual"],
       "custom": ["provider-custom-deploy"]
+    }
+  },
+  "planner": {
+    "agentic": {
+      "executorProfile": "planning-readonly",
+      "defaultMaxWaves": 3,
+      "maxReplanIterations": 1,
+      "context7Bundle": "planner-agentic",
+      "context7Query": "Wave planning best practices, maturity alignment, closure gates, proof surfaces, rollout evidence, and coordination failure prevention",
+      "coreContextPaths": [
+        "AGENTS.md",
+        "wave.config.json",
+        "docs/roadmap.md",
+        "docs/plans/current-state.md",
+        "docs/plans/master-plan.md",
+        "docs/plans/wave-orchestrator.md",
+        "docs/reference/sample-waves.md",
+        "docs/plans/examples/wave-example-live-proof.md",
+        "docs/reference/live-proof-waves.md",
+        "docs/plans/component-cutover-matrix.md",
+        "docs/plans/component-cutover-matrix.json",
+        "docs/reference/wave-planning-lessons.md",
+        "docs/research/coordination-failure-review.md"
+      ],
+      "lessonsPaths": [
+        "docs/reference/wave-planning-lessons.md"
+      ],
+      "researchTopicPaths": [
+        "docs/context7/planner-agent/topics/planning-and-orchestration.md"
+      ]
     }
   },
   "sharedPlanDocs": [

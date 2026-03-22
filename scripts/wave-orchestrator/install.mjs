@@ -5,6 +5,9 @@ import {
   applyContext7SelectionsToWave,
   loadContext7BundleIndex,
 } from "./context7.mjs";
+import {
+  PLANNER_CONTEXT7_TEMPLATE_PATHS,
+} from "./planner-context.mjs";
 import { buildLanePaths, ensureDirectory, PACKAGE_ROOT, readJsonOrNull, REPO_ROOT, writeJsonAtomic } from "./shared.mjs";
 import { fetchLatestPackageVersion } from "./package-update-notice.mjs";
 import {
@@ -29,6 +32,7 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/agents/wave-cont-qa-role.md",
   "docs/agents/wave-cont-eval-role.md",
   "docs/agents/wave-integration-role.md",
+  "docs/agents/wave-planner-role.md",
   "docs/agents/wave-security-role.md",
   "docs/concepts/context7-vs-skills.md",
   "docs/concepts/operating-modes.md",
@@ -36,23 +40,40 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/concepts/what-is-a-wave.md",
   "docs/context7/bundles.json",
   "docs/evals/benchmark-catalog.json",
+  "docs/evals/external-benchmarks.json",
+  "docs/evals/wave-benchmark-program.md",
+  "docs/evals/cases/README.md",
+  "docs/evals/cases/wave-hidden-profile-private-evidence.json",
+  "docs/evals/cases/wave-premature-closure-guard.json",
+  "docs/evals/cases/wave-silo-cross-agent-state.json",
+  "docs/evals/cases/wave-blackboard-inbox-targeting.json",
+  "docs/evals/cases/wave-contradiction-conflict.json",
+  "docs/evals/cases/wave-simultaneous-lockstep.json",
+  "docs/evals/cases/wave-expert-routing-preservation.json",
   "docs/guides/planner.md",
   "docs/guides/terminal-surfaces.md",
   "docs/plans/component-cutover-matrix.json",
   "docs/plans/component-cutover-matrix.md",
   "docs/plans/context7-wave-orchestrator.md",
   "docs/plans/current-state.md",
+  "docs/plans/examples/wave-example-live-proof.md",
   "docs/plans/master-plan.md",
   "docs/plans/migration.md",
   "docs/plans/wave-orchestrator.md",
   "docs/plans/waves/wave-0.md",
+  "docs/reference/live-proof-waves.md",
   "docs/reference/repository-guidance.md",
+  "docs/reference/sample-waves.md",
   "docs/reference/skills.md",
+  "docs/reference/wave-planning-lessons.md",
   "docs/reference/runtime-config/README.md",
   "docs/reference/runtime-config/codex.md",
   "docs/reference/runtime-config/claude.md",
   "docs/reference/runtime-config/opencode.md",
+  "docs/research/coordination-failure-review.md",
   "docs/research/agent-context-sources.md",
+  "docs/plans/examples/wave-benchmark-improvement.md",
+  ...PLANNER_CONTEXT7_TEMPLATE_PATHS,
 ];
 const REQUIRED_GITIGNORE_ENTRIES = [
   ".tmp/",
@@ -233,6 +254,19 @@ function gitignoreWarnings() {
   );
 }
 
+function plannerRequiredPaths() {
+  return Array.from(
+    new Set(
+      [
+        "docs/agents/wave-planner-role.md",
+        "docs/reference/wave-planning-lessons.md",
+        "skills/role-planner/SKILL.md",
+        ...PLANNER_CONTEXT7_TEMPLATE_PATHS,
+      ].filter(Boolean),
+    ),
+  ).sort();
+}
+
 export function runDoctor() {
   const errors = [];
   const warnings = [];
@@ -277,9 +311,21 @@ export function runDoctor() {
           errors.push(`Missing required Wave file: ${relPath}`);
         }
       }
+      const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
+      const plannerPaths = plannerRequiredPaths();
+      for (const relPath of plannerPaths) {
+        if (!fs.existsSync(path.join(REPO_ROOT, relPath))) {
+          errors.push(`Missing planner file: ${relPath}`);
+        }
+      }
+      const plannerBundleId = String(config.planner?.agentic?.context7Bundle || "").trim();
+      if (plannerBundleId && !context7BundleIndex.bundles[plannerBundleId]) {
+        errors.push(
+          `planner.agentic.context7Bundle references unknown bundle "${plannerBundleId}".`,
+        );
+      }
       let parsedWaves = [];
       if (fs.existsSync(lanePaths.wavesDir)) {
-        const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
         parsedWaves = parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
           .map((wave) =>
             applyExecutorSelectionsToWave(wave, {

@@ -413,4 +413,47 @@ describe("runtime configuration normalization", () => {
       "provider-railway",
     ]);
   });
+
+  it("normalizes planner agentic defaults from wave.config.json", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          planner: {
+            agentic: {
+              executorProfile: "planning-readonly",
+              defaultMaxWaves: 4,
+              maxReplanIterations: 2,
+              context7Bundle: "planner-agentic",
+              context7Query: "Planner bundle query",
+              coreContextPaths: ["AGENTS.md", "docs/roadmap.md"],
+              lessonsPaths: ["docs/reference/wave-planning-lessons.md"],
+              researchTopicPaths: ["docs/context7/planner-agent/topics/planning-and-orchestration.md"],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    expect(config.planner).toEqual({
+      agentic: {
+        executorProfile: "planning-readonly",
+        defaultMaxWaves: 4,
+        maxReplanIterations: 2,
+        context7Bundle: "planner-agentic",
+        context7Query: "Planner bundle query",
+        coreContextPaths: ["AGENTS.md", "docs/roadmap.md"],
+        lessonsPaths: ["docs/reference/wave-planning-lessons.md"],
+        researchTopicPaths: ["docs/context7/planner-agent/topics/planning-and-orchestration.md"],
+      },
+    });
+  });
 });

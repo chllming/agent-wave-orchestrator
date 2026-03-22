@@ -2,18 +2,17 @@
 
 ## Default Adoption Path
 
-1. Install from the current GitHub Packages path as described in [github-packages-setup.md](../reference/github-packages-setup.md).
-2. Install the package with `pnpm add -D @chllming/wave-orchestration`.
-3. For a fresh repo, run `pnpm exec wave init`.
-4. For a repo that already has Wave config, docs, or waves you want to preserve, run `pnpm exec wave init --adopt-existing`.
-5. Edit `wave.config.json` for the repo's docs, roles, validation rules, executor defaults, and component-cutover matrix paths.
-6. Replace the starter plan docs, sample waves, and component cutover matrix with repository-specific ones.
-7. Configure Context7 bundles for the external libraries that repo actually uses.
-8. Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` until validation passes.
-9. Inspect seeded coordination and inbox artifacts with `pnpm exec wave coord show --lane main --wave 0 --dry-run --json` and `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`.
-10. Upgrade later with `pnpm up @chllming/wave-orchestration` and `pnpm exec wave upgrade`.
+1. Install the package from npmjs with `pnpm add -D @chllming/wave-orchestration`.
+2. For a fresh repo, run `pnpm exec wave init`.
+3. For a repo that already has Wave config, docs, or waves you want to preserve, run `pnpm exec wave init --adopt-existing`.
+4. Edit `wave.config.json` for the repo's docs, roles, validation rules, executor defaults, and component-cutover matrix paths.
+5. Replace the starter plan docs, sample waves, and component cutover matrix with repository-specific ones.
+6. Configure Context7 bundles for the external libraries that repo actually uses.
+7. Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` until validation passes.
+8. Inspect seeded coordination and inbox artifacts with `pnpm exec wave coord show --lane main --wave 0 --dry-run --json` and `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`.
+9. Upgrade later with `pnpm up @chllming/wave-orchestration` and `pnpm exec wave upgrade`.
 
-`wave-orchestration` also ships an npmjs trusted-publishing workflow for future zero-token installs, but that path is only active after the first npmjs release is published from this repo. Maintainer setup is documented in [npmjs-trusted-publishing.md](../reference/npmjs-trusted-publishing.md).
+GitHub Packages remains available as an authenticated fallback path, and maintainer npm publishing setup is documented in [npmjs-trusted-publishing.md](../reference/npmjs-trusted-publishing.md).
 
 ## Upgrade Contract
 

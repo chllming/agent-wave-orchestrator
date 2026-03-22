@@ -18,11 +18,11 @@ It includes:
 
 Published package:
 - `@chllming/wave-orchestration@0.5.2`
-- Current release registry: `https://registry.npmjs.org`
+- Primary public registry: `https://registry.npmjs.org`
 - Release: [v0.5.2](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.2)
-- npmjs trusted publishing workflow: [publish-npm.yml](./.github/workflows/publish-npm.yml)
+- npmjs publish workflow: [publish-npm.yml](./.github/workflows/publish-npm.yml)
 
-Install directly from npmjs:
+Install from npmjs:
 
 ```bash
 pnpm add -D @chllming/wave-orchestration
@@ -49,6 +49,7 @@ pnpm exec wave init --adopt-existing
 - Phase 4 finalization now correctly stays blocked on unresolved human feedback and escalation items from completed waves.
 - Hermetic trace fixtures now force local executor coverage for seeded control-plane agents, so replay tests cannot accidentally launch real Codex, Claude Code, or OpenCode sessions.
 - npmjs is now the primary public install path.
+- npmjs publishing is wired in parallel with GitHub Packages, with repository-secret auth through `NPM_TOKEN`.
 
 ## New In 0.5.0
 
@@ -67,15 +68,15 @@ pnpm exec wave init --adopt-existing
 
 ## Install Into Another Repo
 
-1. Install from the public npmjs release:
-
-2. Add the package:
+1. Install the package from npmjs:
 
 ```bash
 pnpm add -D @chllming/wave-orchestration
 ```
 
-3. Initialize the repo:
+   If you need GitHub Packages instead, use the authenticated fallback in [github-packages-setup.md](./docs/reference/github-packages-setup.md).
+
+2. Initialize the repo:
 
 Fresh repo:
 
@@ -89,14 +90,14 @@ Existing repo with Wave config/docs/waves you want to preserve:
 pnpm exec wave init --adopt-existing
 ```
 
-4. Run a non-mutating health check:
+3. Run a non-mutating health check:
 
 ```bash
 pnpm exec wave doctor
 pnpm exec wave launch --lane main --dry-run --no-dashboard
 ```
 
-5. Upgrade later without overwriting plans or waves:
+4. Upgrade later without overwriting plans or waves:
 
 ```bash
 pnpm up @chllming/wave-orchestration
@@ -147,8 +148,8 @@ node scripts/wave.mjs launch --lane main --start-wave 0 --end-wave 0 --executor 
 - [docs/plans/current-state.md](./docs/plans/current-state.md): shipped runtime and package capabilities
 - [docs/plans/master-plan.md](./docs/plans/master-plan.md): next priorities after the current shipped runtime
 - [docs/plans/migration.md](./docs/plans/migration.md): adopt this package into another repository
-- [docs/reference/github-packages-setup.md](./docs/reference/github-packages-setup.md): `.npmrc` and GitHub Packages auth details
-- [docs/reference/npmjs-trusted-publishing.md](./docs/reference/npmjs-trusted-publishing.md): maintainer setup for zero-token npmjs publishing from GitHub Actions
+- [docs/reference/github-packages-setup.md](./docs/reference/github-packages-setup.md): optional `.npmrc` and GitHub Packages auth details
+- [docs/reference/npmjs-trusted-publishing.md](./docs/reference/npmjs-trusted-publishing.md): maintainer setup for npmjs publishing through the repo workflow and `NPM_TOKEN`
 - [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): runtime precedence, merge rules, and generated artifact paths
 - [docs/reference/runtime-config/codex.md](./docs/reference/runtime-config/codex.md): full Codex configuration reference
 - [docs/reference/runtime-config/claude.md](./docs/reference/runtime-config/claude.md): full Claude configuration reference

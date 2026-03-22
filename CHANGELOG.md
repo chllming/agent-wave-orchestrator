@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 - 2026-03-22
+
+- Hardened structured closure marker parsing so fenced or prose example `[wave-*]` lines no longer satisfy implementation, integration, documentation, or evaluator gates.
+- Hardened `### Deliverables` so declared outputs must remain repo-relative file paths inside the implementation agent's declared file ownership before the exit contract can pass.
+- Added regression coverage for the fenced-marker false-positive path and for deliverables that escape ownership boundaries.
+
 ## 0.5.1 - 2026-03-22
 
 - Fixed the Phase 4 autonomous finalization barrier so completed lanes still block on unresolved human feedback or escalation tickets from earlier waves.

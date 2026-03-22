@@ -3,6 +3,21 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.5.2",
+      "date": "2026-03-22",
+      "summary": "Closure-marker and deliverable-ownership hardening for wave exit validation.",
+      "features": [
+        "Structured wave markers now only count when emitted as real standalone signals, not when they appear inside fenced examples or prose snippets.",
+        "`### Deliverables` now requires repo-relative file outputs that stay within the agent's declared file ownership before implementation closure can pass.",
+        "Regression coverage now exercises the fenced-marker false-positive path and deliverable ownership violations directly."
+      ],
+      "manualSteps": [
+        "If a wave uses `### Deliverables`, rerun `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading and keep every deliverable inside that agent's `File ownership` block.",
+        "Do not rely on example `[wave-*]` snippets in agent output; only emitted standalone markers now count toward closure."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.5.1",
       "date": "2026-03-22",
       "summary": "Phase 4 fix release plus npmjs trusted-publishing bootstrap support.",

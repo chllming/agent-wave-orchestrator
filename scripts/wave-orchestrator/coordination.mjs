@@ -341,6 +341,14 @@ export function buildExecutionPrompt({
           "",
         ]
       : [];
+  const deliverableLines =
+    Array.isArray(agent.deliverables) && agent.deliverables.length > 0
+      ? [
+          "Deliverables required for this agent:",
+          ...agent.deliverables.map((deliverablePath) => `- ${deliverablePath}`),
+          "",
+        ]
+      : [];
 
   return [
     `Working directory: ${REPO_ROOT}`,
@@ -404,6 +412,7 @@ export function buildExecutionPrompt({
     ...exitContractLines,
     ...promotedComponentLines,
     ...ownedComponentLines,
+    ...deliverableLines,
     ...context7PromptLines,
     "Assigned implementation prompt:",
     "```",

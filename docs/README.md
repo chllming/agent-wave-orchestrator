@@ -1,6 +1,10 @@
 # Wave Documentation
 
-This repository now uses a layered docs structure so operators, maintainers, and adopting repos can find the right level of detail quickly.
+This repository now uses a layered docs structure, but the useful path is journey-first:
+
+- start with one core concept doc
+- then use one end-to-end workflow guide
+- then drop into reference or narrower concept pages only when needed
 
 ## Suggested Structure
 
@@ -18,15 +22,23 @@ This repository now uses a layered docs structure so operators, maintainers, and
 ## Start Here
 
 - New to Wave:
-  Read [concepts/what-is-a-wave.md](./concepts/what-is-a-wave.md), [concepts/runtime-agnostic-orchestration.md](./concepts/runtime-agnostic-orchestration.md), and [concepts/context7-vs-skills.md](./concepts/context7-vs-skills.md).
+  Read [concepts/what-is-a-wave.md](./concepts/what-is-a-wave.md). It now covers the core execution model, runtime posture, closure, and state model in one place.
 - Drafting or revising waves:
-  Read [guides/planner.md](./guides/planner.md) and then the operator runbook in [plans/wave-orchestrator.md](./plans/wave-orchestrator.md).
+  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then use [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) as the operator runbook.
+- Adding a security review pass:
+  Read [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) and the standing reviewer prompt in [agents/wave-security-role.md](./agents/wave-security-role.md).
+- Upgrading an existing repo:
+  Read [plans/migration.md](./plans/migration.md), then review the release notes in [../CHANGELOG.md](../CHANGELOG.md) before running `pnpm exec wave upgrade`.
 - Looking for concrete example waves:
   Read [reference/sample-waves.md](./reference/sample-waves.md) for showcase-first examples that demonstrate the current authored wave surface.
+- Release notes and shipped deltas:
+  Use [../CHANGELOG.md](../CHANGELOG.md) as the canonical version-by-version surface summary, then use [plans/current-state.md](./plans/current-state.md) to see what the starter workspace assumes today.
 - Running live waves:
-  Read [guides/terminal-surfaces.md](./guides/terminal-surfaces.md), [concepts/operating-modes.md](./concepts/operating-modes.md), and [plans/wave-orchestrator.md](./plans/wave-orchestrator.md).
+  Start with [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then use [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) for the live operator flow.
 - Tuning runtime behavior:
   Read [reference/runtime-config/README.md](./reference/runtime-config/README.md) and [reference/skills.md](./reference/skills.md).
+- Looking for supporting concept pages:
+  Use [concepts/runtime-agnostic-orchestration.md](./concepts/runtime-agnostic-orchestration.md), [concepts/operating-modes.md](./concepts/operating-modes.md), and [concepts/context7-vs-skills.md](./concepts/context7-vs-skills.md) after the main concept and workflow docs.
 
 ## Package vs Repo-Owned Material
 

@@ -100,7 +100,7 @@ node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 Canonical source index:
 - [docs/research/agent-context-sources.md](./docs/research/agent-context-sources.md)
 
-Closest matches to the current implementation:
+The implementation is based on the following research:
 
 **Harness and Runtime Surfaces**
 - [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)

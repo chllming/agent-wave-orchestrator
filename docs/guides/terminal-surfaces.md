@@ -1,5 +1,7 @@
 # Terminal Surfaces And Dashboards
 
+If you want the end-to-end drafting and live-run workflow, start with [author-and-run-waves.md](./author-and-run-waves.md). This page stays focused on terminal-surface details.
+
 Wave has separate concepts for execution substrate and operator surface.
 
 The important detail is:

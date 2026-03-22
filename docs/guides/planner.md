@@ -2,6 +2,8 @@
 
 The planner foundation is the first structured authoring layer on top of the existing wave runtime.
 
+If you want the full author-to-launch workflow, start with [author-and-run-waves.md](./author-and-run-waves.md). This page stays focused on planner-specific behavior.
+
 It reduces repeated setup questions, stores project defaults, and generates wave specs plus markdown that already fit the launcher.
 
 ## What Ships Today

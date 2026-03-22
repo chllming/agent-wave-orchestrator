@@ -2,9 +2,46 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-03-22
+
+### Breaking Changes
+
 - Breaking rename: legacy `evaluator` role/config terminology has been removed in favor of `cont-QA`, and config now rejects `roles.evaluator*`, `skills.byRole.evaluator`, and `runtimePolicy.defaultExecutorByRole.evaluator`.
-- Added optional `cont-EVAL` as a first-class closure-stage role for iterative service-output and benchmark tuning, with `## Eval targets`, repo-owned benchmark catalog validation, and dedicated `E0` sequencing before integration closure.
-- Added regression coverage for `cont-EVAL` parsing, validation, closure ordering, adopted-workspace doctor checks, and legacy-role config rejection.
+- Closure authoring, prompts, starter bundles, validation, and gate parsing now distinguish optional `cont-EVAL` (`E0`) from the mandatory `cont-QA` (`A0`) role instead of treating them as one overloaded evaluator surface.
+
+### Added
+
+- Added optional `cont-EVAL` as a first-class closure-stage role for iterative service-output and benchmark tuning, with `## Eval targets`, repo-owned benchmark catalog validation, delegated versus pinned benchmark selection, dedicated `E0` sequencing before integration closure, and a new `scripts/wave-orchestrator/evals.mjs` policy layer.
+- Added `docs/evals/README.md` plus `docs/evals/benchmark-catalog.json` so waves can authorize benchmark families and pinned checks against repo-governed coordination, latency, contradiction-recovery, and quality targets.
+- Added an optional report-only security reviewer role via `docs/agents/wave-security-role.md`, wave parsing support, planner authoring support, a `security-review` executor profile, per-wave security summaries, structured `[wave-security]` markers, and report-path validation that routes fixes back to implementation owners instead of silently folding review into integration.
+- Added transient ad-hoc task flows on top of the launcher substrate with `wave adhoc plan`, `wave adhoc run`, `wave adhoc show`, and `wave adhoc promote`, including stored specs under `.wave/adhoc/runs/`, generated launcher-compatible markdown, and launcher-backed dry-run or live execution.
+- Added dedicated role-helper logic used by planner, launcher, validation, and trace code to reason about `cont-EVAL`, `cont-QA`, and security-review responsibilities.
+- Added dedicated regression suites for eval target parsing and validation, security review validation, ad-hoc run planning and promotion, docs queue behavior, and the expanded research archive topic grouping.
+
+### Changed
+
+- Expanded the authored wave surface and starter docs to match the new closure model: updated role prompts, wave examples, migration guidance, current-state docs, roadmap notes, and package docs so `cont-EVAL`, `cont-QA`, and security review are all first-class authoring concepts.
+- Expanded the skills surface substantially: richer `skill.json` manifests, more complete runtime and provider adapters, recursive `references/` material, updated starter role packs, new `skills/README.md`, and clearer runtime-projection/reference docs for role-, runtime-, and deploy-kind-aware skill activation.
+- Expanded provider and operator guidance across the shipped skill packs, including richer Railway, AWS, Kubernetes, Docker Compose, SSH/manual, GitHub Release, repo-coding-rules, role-security, and wave-core references.
+- Expanded proof-first authoring guidance with new sample waves and reference docs for live-proof work, benchmark-driven closure, sticky executor guidance, and richer example wave surfaces.
+- Expanded the local research bibliography and tooling: updated `docs/research/agent-context-sources.md`, added `docs/research/coordination-failure-review.md`, introduced the combined research manifest under `scripts/research/manifests/agent-context-expanded-2026-03-22.mjs`, and taught the archive indexer about planning, skills, blackboard, repo-context, and security topic slices.
+- Curated the README research section so the public-facing bibliography points at the specific papers and practice articles the implementation is based on, rather than only a generic source list.
+
+### Fixed And Hardened
+
+- Hardened agent-state, launcher, ledger, replay, traces, local-executor, config, and wave-file validation so `cont-EVAL`, `cont-QA`, and security review all use the correct markers, report ownership, gate sequencing, exit expectations, and replay-visible state.
+- Hardened runtime artifact normalization so versioned dashboard payloads always rewrite stale `kind` and `schemaVersion` fields to the canonical `0.6` metadata contract.
+- Hardened closure-sweep validation so waves that override the integration or documentation steward ids are validated against the same role ids that the launcher actually runs.
+- Hardened coordination and clarification handling so new integration-summary, security-review, and human-follow-up surfaces stay visible in the canonical coordination state, generated board projections, inboxes, and trace artifacts.
+- Hardened `wave coord show` into a read-only inspection path again; artifact materialization stays on `wave coord render` and `wave coord inbox`.
+- Hardened skill and runtime overlays so invalid manifests, mismatched selectors, missing adapters or references, and runtime-specific projection mistakes fail loudly instead of degrading silently at launch time.
+- Hardened ad-hoc planning and promotion so `wave adhoc promote` promotes the stored ad-hoc spec instead of re-reading the current project profile, shared-plan deltas still queue the canonical lane docs correctly, and ownership inference ignores external URL-style hints rather than treating them as repo paths.
+- Hardened install and starter-surface updates so newly seeded workspaces pick up the renamed closure roles, eval catalog, security review role, and expanded skill/reference materials consistently.
+
+### Testing And Validation
+
+- Expanded regression coverage across `agent-state`, `config`, `coordination`, `launcher`, `planner`, `skills`, `traces`, `wave-files`, `install`, `local-executor`, and the new `adhoc` and `evals` modules to cover the release's new closure, security, skills, and ad-hoc execution behavior end to end.
+- Added focused regression coverage for dashboard metadata normalization, custom closure-role ids, read-only `wave coord show`, and the per-agent rate-limit retry wrapper.
 
 ## 0.5.4 - 2026-03-22
 

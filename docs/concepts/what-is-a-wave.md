@@ -18,7 +18,7 @@ It is not just a prompt file. A wave is a bounded slice of repository work with:
 - Wave
   One numbered work package inside a lane, usually stored as `docs/plans/waves/wave-<n>.md`.
 - Agent
-  One role inside the wave, such as implementation, `cont-EVAL`, integration, documentation, cont-QA, infra, or deploy.
+  One role inside the wave, such as implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, or deploy.
 - Attempt
   One execution pass of a wave. A wave can have multiple attempts due to retries or fallback.
 - Closure
@@ -76,7 +76,7 @@ Inside each agent block, the important sections are:
 
 ## Standard Roles
 
-The starter runtime expects three standard closure roles and one optional eval-tuning role:
+The starter runtime expects three standard closure roles plus up to two optional review specialists:
 
 - `A8`
   Integration steward
@@ -86,6 +86,8 @@ The starter runtime expects three standard closure roles and one optional eval-t
   cont-QA
 - `E0`
   Optional `cont-EVAL` for iterative benchmark or output tuning; report-only by default, implementation-owning only when explicitly assigned non-report files
+- `A7`
+  Optional security reviewer; report-only by default and used to publish a threat-model-first security review before integration closure
 
 Implementation or specialist agents own the actual work slices. Closure roles do not replace implementation ownership; they decide whether the combined result is closure-ready. `cont-EVAL` is the one hybrid role: most waves keep it report-only, but human-authored waves may assign explicit tuning files to `E0`, in which case it must satisfy both implementation proof and eval proof.
 
@@ -97,12 +99,40 @@ Implementation or specialist agents own the actual work slices. Closure roles do
 4. A live run launches implementation agents first when implementation work remains.
 5. Agents write structured coordination events instead of relying on ad hoc terminal output.
 6. The launcher checks implementation contracts, promoted-component proof, helper assignments, dependencies, and clarification state.
-7. If implementation is ready, closure runs in order: optional `cont-EVAL`, integration, documentation, then cont-QA.
+7. If implementation is ready, closure runs in order: optional `cont-EVAL`, optional security review, integration, documentation, then cont-QA.
 8. The attempt is captured in per-wave traces, ledgers, inboxes, summaries, and copied artifacts.
+
+## Runtime And Operating Posture
+
+Wave is runtime agnostic at the orchestration layer.
+
+Planning, ownership, closure, durable state, and traces do not depend on whether an agent runs on Codex, Claude Code, OpenCode, or the local smoke executor. Runtime-specific behavior is isolated to executor adapters and overlays.
+
+That means a wave should usually be authored in runtime-neutral terms:
+
+- ownership and deliverables
+- proof and validation
+- closure order
+- dependencies and helper flow
+- promoted component expectations
+
+The runtime choice resolves later, from the agent executor block, profile defaults, lane defaults, CLI overrides, and fallback policy.
+
+Wave also has an execution posture:
+
+- `oversight`
+  Human review or intervention is expected for risky or ambiguous work.
+- `dark-factory`
+  The wave is authored for routine execution without normal human intervention.
+
+Today these postures are planning vocabulary and saved project defaults, not two separate execution engines. Human feedback is still an escalation mechanism inside the orchestration loop, not the definition of the operating mode itself.
+
+If you need the narrower supporting pages, see [runtime-agnostic-orchestration.md](./runtime-agnostic-orchestration.md) and [operating-modes.md](./operating-modes.md).
 
 Current live waves are strict about closure artifacts:
 
 - `cont-EVAL` must emit a structured `[wave-eval]` marker whose `target_ids` matches the declared eval targets and whose `benchmark_ids` enumerates the executed benchmark set.
+- Security reviewers must leave a security review report and emit a final `[wave-security]` marker with `state=<clear|concerns|blocked>`, finding count, and approval count.
 - `cont-QA` must emit both a final `Verdict:` line and a final `[wave-gate]` marker.
 - Replay keeps read-only compatibility with older traces and older evaluator-era artifacts, but live waves do not pass on verdict-only or underspecified closure markers.
 
@@ -118,6 +148,7 @@ A wave is not done because an agent said so. It is done only when the runtime su
 - required dependency tickets are resolved
 - clarification follow-ups or escalations are resolved
 - if present, `cont-EVAL` satisfies its declared eval targets
+- if present, the security reviewer publishes a report plus a final `[wave-security]` marker; `blocked` stops closure while `concerns` stays advisory
 - integration recommends closure
 - documentation and cont-QA closure pass
 
@@ -133,6 +164,7 @@ The wave file is only part of the story. The runtime writes durable state under 
 - rendered message boards
 - compiled inboxes
 - ledger and docs queue
+- security summaries
 - integration summaries
 - dependency snapshots
 - executor overlays

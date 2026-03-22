@@ -18,7 +18,14 @@ import {
   writeCoordinationBoardProjection,
   writeJsonArtifact,
 } from "./coordination-store.mjs";
-import { buildLanePaths, ensureDirectory, parseNonNegativeInt } from "./shared.mjs";
+import {
+  buildLanePaths,
+  ensureDirectory,
+  parseNonNegativeInt,
+  readJsonOrNull,
+  REPO_ROOT,
+  sanitizeAdhocRunId,
+} from "./shared.mjs";
 import { parseWaveFiles } from "./wave-files.mjs";
 
 function printUsage() {
@@ -27,6 +34,7 @@ function printUsage() {
   wave coord show --lane <lane> --wave <n> [--dry-run] [--json]
   wave coord render --lane <lane> --wave <n> [--dry-run]
   wave coord inbox --lane <lane> --wave <n> --agent <id> [--dry-run]
+  wave coord <subcommand> --run <id> [--wave 0] ...
 `);
 }
 
@@ -36,6 +44,7 @@ function parseArgs(argv) {
   const options = {
     lane: "main",
     wave: null,
+    runId: "",
     dryRun: false,
     agent: "",
     kind: "",
@@ -52,6 +61,8 @@ function parseArgs(argv) {
     const arg = args[i];
     if (arg === "--lane") {
       options.lane = String(args[++i] || "").trim();
+    } else if (arg === "--run") {
+      options.runId = sanitizeAdhocRunId(args[++i]);
     } else if (arg === "--wave") {
       options.wave = parseNonNegativeInt(args[++i], "--wave");
     } else if (arg === "--agent") {
@@ -84,6 +95,11 @@ function parseArgs(argv) {
     throw new Error("Expected subcommand");
   }
   return { subcommand, options };
+}
+
+function resolveLaneForRun(runId, fallbackLane) {
+  const resultPath = path.join(REPO_ROOT, ".wave", "adhoc", "runs", runId, "result.json");
+  return readJsonOrNull(resultPath)?.lane || fallbackLane;
 }
 
 function loadWave(lanePaths, waveNumber) {
@@ -133,8 +149,12 @@ export async function runCoordinationCli(argv) {
     return;
   }
   const { subcommand, options } = parseArgs(argv);
+  if (options.runId) {
+    options.lane = resolveLaneForRun(options.runId, options.lane);
+  }
   const lanePaths = buildLanePaths(options.lane, {
     runVariant: options.dryRun ? "dry-run" : undefined,
+    adhocRunId: options.runId || null,
   });
   ensureDirectory(lanePaths.coordinationDir);
   ensureDirectory(lanePaths.assignmentsDir);
@@ -144,6 +164,9 @@ export async function runCoordinationCli(argv) {
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
   ensureDirectory(lanePaths.dependencySnapshotsDir);
+  if (options.wave === null && options.runId) {
+    options.wave = 0;
+  }
   if (options.wave === null) {
     throw new Error("--wave is required");
   }

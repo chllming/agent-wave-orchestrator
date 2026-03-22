@@ -900,9 +900,13 @@ export function writeTraceBundle({
   const metadata = {
     traceVersion: TRACE_VERSION,
     replayMode: "hermetic",
+    runKind: lanePaths?.runKind || "roadmap",
+    runId: lanePaths?.runId || null,
     wave: wave.wave,
     lane: lanePaths?.lane || null,
     waveFile: wave.file,
+    requestPath: lanePaths?.adhocRequestPath ? relativePathOrNull(lanePaths.adhocRequestPath, REPO_ROOT) : null,
+    specPath: lanePaths?.adhocSpecPath ? relativePathOrNull(lanePaths.adhocSpecPath, REPO_ROOT) : null,
     waveFileHash: fileHashOrNull(path.resolve(REPO_ROOT, wave.file || "")),
     attempt,
     cumulativeAttemptCount: attempt,

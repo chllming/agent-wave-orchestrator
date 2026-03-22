@@ -381,7 +381,7 @@ function renderEvalTargetsSection(evalTargets) {
   );
 }
 
-function renderWaveMarkdown(spec, lanePaths) {
+export function renderWaveMarkdown(spec, lanePaths) {
   const sections = [];
   sections.push(`# Wave ${spec.wave} - ${spec.title}`);
   sections.push("");

@@ -14,6 +14,7 @@ import {
   parseNonNegativeInt,
   parsePositiveInt,
   readJsonOrNull,
+  sanitizeAdhocRunId,
   sanitizeLaneName,
   sleep,
   toIsoTimestamp,
@@ -36,6 +37,11 @@ function sanitizeToken(value) {
 
 function requestFilePath(feedbackRequestsDir, requestId) {
   return path.join(feedbackRequestsDir, `${requestId}.json`);
+}
+
+function resolveLaneForRun(runId, fallbackLane) {
+  const resultPath = path.join(REPO_ROOT, ".wave", "adhoc", "runs", runId, "result.json");
+  return readJsonOrNull(resultPath)?.lane || fallbackLane;
 }
 
 function buildRequestId({ lane, wave, agentId }) {
@@ -175,6 +181,7 @@ function parseFeedbackArgs(argv) {
     subcommand,
     lane: DEFAULT_WAVE_LANE,
     wave: null,
+    runId: "",
     agent: null,
     question: "",
     context: "",
@@ -196,6 +203,8 @@ function parseFeedbackArgs(argv) {
     }
     if (arg === "--lane") {
       out.lane = sanitizeLaneName(args[++i]);
+    } else if (arg === "--run") {
+      out.runId = sanitizeAdhocRunId(args[++i]);
     } else if (arg === "--wave") {
       out.wave = parseNonNegativeInt(args[++i], "--wave");
     } else if (arg === "--agent") {
@@ -261,7 +270,12 @@ export async function runFeedbackCli(argv) {
     printHelp();
     return;
   }
-  const lanePaths = buildLanePaths(options.lane);
+  if (options.runId) {
+    options.lane = resolveLaneForRun(options.runId, options.lane);
+  }
+  const lanePaths = buildLanePaths(options.lane, {
+    adhocRunId: options.runId || null,
+  });
   const requestsDir = lanePaths.feedbackRequestsDir;
   const stateDir = lanePaths.feedbackStateDir;
 

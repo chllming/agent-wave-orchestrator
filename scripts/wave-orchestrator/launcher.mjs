@@ -71,6 +71,7 @@ import {
   readFileTail,
   readJsonOrNull,
   REPORT_VERDICT_REGEX,
+  sanitizeAdhocRunId,
   sanitizeOrchestratorId,
   shellQuote,
   sleep,
@@ -238,6 +239,7 @@ function parseArgs(argv) {
     orchestratorId: null,
     orchestratorBoardPath: null,
     coordinationNote: "",
+    adhocRunId: null,
   };
   let stateFileProvided = false;
   let manifestOutProvided = false;
@@ -275,7 +277,14 @@ function parseArgs(argv) {
       orchestratorBoardProvided = true;
     } else if (arg === "--lane") {
       options.lane = String(argv[++i] || "").trim();
-      lanePaths = buildLanePaths(options.lane);
+      lanePaths = buildLanePaths(options.lane, {
+        adhocRunId: options.adhocRunId,
+      });
+    } else if (arg === "--adhoc-run") {
+      options.adhocRunId = sanitizeAdhocRunId(argv[++i]);
+      lanePaths = buildLanePaths(options.lane, {
+        adhocRunId: options.adhocRunId,
+      });
     } else if (arg === "--orchestrator-id") {
       options.orchestratorId = sanitizeOrchestratorId(argv[++i]);
     } else if (arg === "--orchestrator-board") {
@@ -323,6 +332,7 @@ function parseArgs(argv) {
 
   lanePaths = buildLanePaths(options.lane, {
     runVariant: options.dryRun ? "dry-run" : undefined,
+    adhocRunId: options.adhocRunId,
   });
   if (!stateFileProvided) {
     options.runStatePath = lanePaths.defaultRunStatePath;
@@ -3441,7 +3451,7 @@ export async function runLauncherCli(argv) {
       event: "launcher_start",
       waves: selectedWavesForCoordination,
       status: options.dryRun ? "dry-run" : "running",
-      details: `pid=${process.pid}; range=${filteredWaves[0]?.wave ?? "?"}..${filteredWaves.at(-1)?.wave ?? "?"}; timeout_minutes=${options.timeoutMinutes}; retries=${options.maxRetriesPerWave}; ${options.coordinationNote ? `note=${options.coordinationNote}` : "note=n/a"}`,
+      details: `pid=${process.pid}; run_kind=${lanePaths.runKind}; run_id=${lanePaths.runId || "none"}; range=${filteredWaves[0]?.wave ?? "?"}..${filteredWaves.at(-1)?.wave ?? "?"}; timeout_minutes=${options.timeoutMinutes}; retries=${options.maxRetriesPerWave}; ${options.coordinationNote ? `note=${options.coordinationNote}` : "note=n/a"}`,
     });
 
     if (options.dryRun) {

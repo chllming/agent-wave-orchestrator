@@ -77,11 +77,40 @@ export function sanitizeOrchestratorId(value) {
   return id.slice(0, 64);
 }
 
+export function sanitizeAdhocRunId(value) {
+  const id = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!id) {
+    throw new Error("Ad-hoc run ID is required");
+  }
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(id)) {
+    throw new Error(`Invalid ad-hoc run ID: ${value}`);
+  }
+  return id;
+}
+
 export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
   const config = options.config || loadWaveConfig();
-  const laneProfile = resolveLaneProfile(config, laneInput || config.defaultLane);
+  const baseLaneProfile = resolveLaneProfile(config, laneInput || config.defaultLane);
+  const adhocRunId = options.adhocRunId ? sanitizeAdhocRunId(options.adhocRunId) : null;
+  const laneProfile = adhocRunId
+    ? {
+        ...baseLaneProfile,
+        sharedPlanDocs: [],
+        validation: {
+          ...baseLaneProfile.validation,
+          requireComponentPromotionsFromWave: null,
+          requireAgentComponentsFromWave: null,
+        },
+      }
+    : baseLaneProfile;
   const lane = laneProfile.lane;
   const laneTmux = lane.replace(/-/g, "_");
+  const runKind = adhocRunId ? "adhoc" : "roadmap";
   const runVariant = String(options.runVariant || "")
     .trim()
     .toLowerCase();
@@ -92,7 +121,11 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
   const plansDir = path.join(REPO_ROOT, laneProfile.plansDir);
   const preferredWavesDir = path.join(REPO_ROOT, laneProfile.wavesDir);
   const legacyWavesDir = path.join(docsDir, "waves");
-  const baseStateDir = path.join(REPO_ROOT, laneProfile.paths.stateRoot, `${lane}-wave-launcher`);
+  const adhocRootDir = path.join(REPO_ROOT, ".wave", "adhoc");
+  const adhocRunDir = adhocRunId ? path.join(adhocRootDir, "runs", adhocRunId) : null;
+  const baseStateDir = adhocRunId
+    ? path.join(REPO_ROOT, laneProfile.paths.stateRoot, `${lane}-wave-launcher`, "adhoc", adhocRunId)
+    : path.join(REPO_ROOT, laneProfile.paths.stateRoot, `${lane}-wave-launcher`);
   const stateDir = runVariant === "dry-run" ? path.join(baseStateDir, "dry-run") : baseStateDir;
   const orchestratorStateDir =
     runVariant === "dry-run"
@@ -103,14 +136,24 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     config,
     laneProfile,
     lane,
+    runKind,
+    runId: adhocRunId,
     runVariant,
     docsDir,
     plansDir,
     wavesDir:
-      fs.existsSync(preferredWavesDir) || !fs.existsSync(legacyWavesDir)
+      adhocRunDir ||
+      (fs.existsSync(preferredWavesDir) || !fs.existsSync(legacyWavesDir)
         ? preferredWavesDir
-        : legacyWavesDir,
+        : legacyWavesDir),
     legacyWavesDir,
+    adhocRootDir,
+    adhocRunDir,
+    adhocIndexPath: path.join(adhocRootDir, "index.json"),
+    adhocRequestPath: adhocRunDir ? path.join(adhocRunDir, "request.json") : null,
+    adhocSpecPath: adhocRunDir ? path.join(adhocRunDir, "spec.json") : null,
+    adhocWavePath: adhocRunDir ? path.join(adhocRunDir, "wave-0.md") : null,
+    adhocResultPath: adhocRunDir ? path.join(adhocRunDir, "result.json") : null,
     promptsDir: path.join(stateDir, "prompts"),
     logsDir: path.join(stateDir, "logs"),
     statusDir: path.join(stateDir, "status"),
@@ -140,7 +183,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
       REPO_ROOT,
       laneProfile.paths.componentCutoverMatrixJsonPath,
     ),
-    sharedPlanDocs: laneProfile.sharedPlanDocs,
+    sharedPlanDocs: laneProfile.sharedPlanDocs || [],
     requiredPromptReferences: laneProfile.validation.requiredPromptReferences,
     rolePromptDir: laneProfile.roles.rolePromptDir,
     contQaAgentId: laneProfile.roles.contQaAgentId,

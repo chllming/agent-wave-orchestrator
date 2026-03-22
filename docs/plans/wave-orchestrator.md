@@ -7,6 +7,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 ## What It Does
 
 - parses wave plans from `docs/plans/waves/`
+- supports transient ad-hoc runs from `.wave/adhoc/runs/` on the same launcher substrate
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
 - seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
@@ -24,6 +25,10 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - `pnpm exec wave project setup`
 - `pnpm exec wave project show --json`
 - `pnpm exec wave draft --wave 1 --template implementation`
+- `pnpm exec wave adhoc plan --task "patch the planner output"`
+- `pnpm exec wave adhoc run --task "patch the planner output" --yes`
+- `pnpm exec wave adhoc show --run <id>`
+- `pnpm exec wave adhoc promote --run <id> --wave 4`
 - `pnpm exec wave init`
 - `pnpm exec wave init --adopt-existing`
 - `pnpm exec wave doctor`
@@ -50,6 +55,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
 - `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
+- `.wave/adhoc/runs/<run-id>/` stores transient ad-hoc request, spec, rendered markdown, and result artifacts.
 
 ## Skill Packs
 
@@ -170,6 +176,8 @@ pnpm exec wave changelog --since-installed
 - cross-lane dependencies: `.tmp/wave-orchestrator/dependencies/`
   Required inbound tickets in this directory block both autonomous wave launch and lane finalization until they resolve.
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
+
+Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`, including dry-run previews at `.tmp/<lane>-wave-launcher/adhoc/<run-id>/dry-run/`.
 
 ## Trace Contract
 

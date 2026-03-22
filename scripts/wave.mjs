@@ -17,6 +17,7 @@ function printHelp() {
   wave project setup [options]
   wave project show [options]
   wave draft [draft options]
+  wave adhoc [adhoc options]
   wave launch [launcher options]
   wave autonomous [autonomous options]
   wave feedback [feedback options]
@@ -47,6 +48,14 @@ if (["init", "upgrade", "changelog", "doctor"].includes(subcommand)) {
   try {
     const { runPlannerCli } = await import("./wave-orchestrator/planner.mjs");
     await runPlannerCli([subcommand, ...rest]);
+  } catch (error) {
+    console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(Number.isInteger(error?.exitCode) ? error.exitCode : 1);
+  }
+} else if (subcommand === "adhoc") {
+  try {
+    const { runAdhocCli } = await import("./wave-orchestrator/adhoc.mjs");
+    await runAdhocCli(rest);
   } catch (error) {
     console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(Number.isInteger(error?.exitCode) ? error.exitCode : 1);

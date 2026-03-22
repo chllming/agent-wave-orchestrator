@@ -8,6 +8,11 @@
   - `.wave/project-profile.json` stores default oversight mode, terminal surface, draft template, lane, and deploy-environment memory
   - `wave project setup|show` manage that profile
   - `wave draft` writes planner JSON specs plus launcher-compatible markdown waves
+- Ad-hoc task runs are now first-class:
+  - `wave adhoc plan|run|list|show|promote` manage transient operator-driven work
+  - requests, generated specs, rendered markdown, and final results live under `.wave/adhoc/runs/<run-id>/`
+  - runtime state stays isolated under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`
+  - ad-hoc runs always keep integration, documentation, and cont-QA closure, while `cont-EVAL` and security review are synthesized only when the request needs them
 - The harness supports `codex`, `claude`, `opencode`, and `local` executors.
 - Cross-runtime skills are now first-class:
   - canonical bundles live under `skills/`

@@ -141,6 +141,8 @@ Clarification flow is orchestrator-first:
 4. Routed clarification follow-up requests remain blocking until they resolve.
 5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
 
+For a full end-to-end explainer of helper assignments, deliverables, integration, and why an agent can be locally done while the wave stays blocked, see [docs/reference/coordination-and-closure.md](../reference/coordination-and-closure.md).
+
 ## Cross-Lane Dependencies
 
 - `wave dep post` appends a typed dependency ticket under `.tmp/wave-orchestrator/dependencies/`.
@@ -335,3 +337,5 @@ Live closure is fail-closed:
 - Security review requires a report artifact plus a structured `[wave-security]` marker. `state=blocked` stops the wave before integration, while `state=concerns` is preserved in summaries and traces without automatically failing closure.
 - `cont-QA` PASS requires both the final verdict and the final `[wave-gate]` marker.
 - Legacy evaluator-era or underspecified closure artifacts are still readable in replay and trace analysis, but they no longer satisfy live completion.
+
+For a detailed worked example of cross-agent follow-up and staged closure, see [docs/reference/coordination-and-closure.md](../reference/coordination-and-closure.md).

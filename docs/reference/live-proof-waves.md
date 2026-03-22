@@ -7,6 +7,8 @@ summary: "How to author proof-first `pilot-live` and higher-maturity waves with 
 
 `pilot-live`, `fleet-ready`, `cutover-ready`, and `deprecation-ready` waves are not normal repo-only implementation waves.
 
+For the general runtime model behind helper requests, integration, and final staged closure, see [docs/reference/coordination-and-closure.md](./coordination-and-closure.md).
+
 For these waves:
 
 - operator-run commands are part of closure

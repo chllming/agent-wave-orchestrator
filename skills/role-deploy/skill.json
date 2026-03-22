@@ -1,0 +1,5 @@
+{
+  "id": "role-deploy",
+  "title": "Deploy Role",
+  "description": "Deploy-agent norms for rollout readiness, health, and rollback posture."
+}

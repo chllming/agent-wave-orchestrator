@@ -38,6 +38,20 @@ Merge behavior:
 - lane executor overrides replace the corresponding global runtime fields before profile and agent resolution
 - a lane profile with the same name as a global profile replaces that profile definition for the lane
 
+Skill settings resolve after executor selection, because runtime and deploy-kind skill attachment depend on the resolved executor id and the wave's default deploy environment kind. The starter layering order is:
+
+1. `skills.base`
+2. `lanes.<lane>.skills.base`
+3. `skills.byRole[resolvedRole]`
+4. `lanes.<lane>.skills.byRole[resolvedRole]`
+5. `skills.byRuntime[resolvedExecutorId]`
+6. `lanes.<lane>.skills.byRuntime[resolvedExecutorId]`
+7. `skills.byDeployKind[defaultDeployEnvironmentKind]`
+8. `lanes.<lane>.skills.byDeployKind[defaultDeployEnvironmentKind]`
+9. agent `### Skills`
+
+When retry-time fallback changes the runtime, Wave recomputes the effective skill set and rewrites the executor overlay before relaunch.
+
 ## Common Fields
 
 These fields are shared across runtimes:
@@ -68,10 +82,15 @@ Wave writes runtime artifacts here:
 Common files:
 
 - `launch-preview.json`: resolved invocation lines, env vars, and retry mode
+- `skills.resolved.md`: canonical merged skill payload for the selected agent and runtime
+- `skills.metadata.json`: resolved skill ids, bundle metadata, hashes, and generated artifact paths
+- `<runtime>-skills.txt`: runtime-projected skill text used by the selected executor
 - `claude-system-prompt.txt`: generated Claude harness prompt overlay
 - `claude-settings.json`: generated Claude settings overlay when inline settings data is present
 - `opencode-agent-prompt.txt`: generated OpenCode harness prompt overlay
 - `opencode.json`: generated OpenCode runtime config overlay
+
+`launch-preview.json` also records the resolved skill metadata so dry-run can verify the exact runtime plus skill combination before any live launch.
 
 ## Recommended Validation Path
 

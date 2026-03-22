@@ -230,6 +230,10 @@ File ownership (only touch these paths):
     expect(codexPreview.executorId).toBe("codex");
     expect(codexPreview.invocationLines.join("\n")).toContain("--profile 'review'");
     expect(codexPreview.invocationLines.join("\n")).toContain("--json");
+    expect(codexPreview.skills.ids).toContain("runtime-codex");
+    expect(
+      fs.existsSync(path.join(dryRunRoot, "executors", "wave-0", "0-a0", "skills.resolved.md")),
+    ).toBe(true);
 
     const claudePreview = JSON.parse(
       fs.readFileSync(
@@ -238,8 +242,12 @@ File ownership (only touch these paths):
       ),
     );
     expect(claudePreview.executorId).toBe("claude");
+    expect(claudePreview.skills.ids).toContain("runtime-claude");
     expect(
       fs.existsSync(path.join(dryRunRoot, "executors", "wave-0", "0-a8", "claude-settings.json")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(dryRunRoot, "executors", "wave-0", "0-a8", "claude-skills.txt")),
     ).toBe(true);
     const claudeSettings = JSON.parse(
       fs.readFileSync(
@@ -264,7 +272,9 @@ File ownership (only touch these paths):
       ),
     );
     expect(opencodePreview.executorId).toBe("opencode");
+    expect(opencodePreview.skills.ids).toContain("runtime-opencode");
     expect(opencodePreview.invocationLines.join("\n")).toContain("--file 'docs/runtime.md'");
+    expect(opencodePreview.invocationLines.join("\n")).toContain("skills/role-documentation/SKILL.md");
     const opencodeConfig = JSON.parse(
       fs.readFileSync(
         path.join(dryRunRoot, "executors", "wave-0", "0-a9", "opencode.json"),

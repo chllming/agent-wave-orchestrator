@@ -1,0 +1,5 @@
+{
+  "id": "runtime-claude",
+  "title": "Claude Runtime",
+  "description": "Claude-specific execution norms inside the Wave harness."
+}

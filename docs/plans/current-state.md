@@ -4,7 +4,16 @@
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - This source repo is itself kept as an adopted Wave workspace, so `node scripts/wave.mjs doctor --json` should pass from the repo root.
 - The default lane is `main`.
+- Planner foundation is now shipped:
+  - `.wave/project-profile.json` stores default oversight mode, terminal surface, draft template, lane, and deploy-environment memory
+  - `wave project setup|show` manage that profile
+  - `wave draft` writes planner JSON specs plus launcher-compatible markdown waves
 - The harness supports `codex`, `claude`, `opencode`, and `local` executors.
+- Cross-runtime skills are now first-class:
+  - canonical bundles live under `skills/`
+  - lane config can attach skills by base, role, runtime, and deploy kind
+  - wave agents can add explicit `### Skills`
+  - runtime projections are generated for Codex, Claude, OpenCode, and local execution
 - The runtime now includes:
   - a canonical coordination JSONL log
   - a generated markdown board projection
@@ -20,6 +29,7 @@
   - Claude settings overlay merging for inline settings and hooks
   - OpenCode merged config overlays plus multi-file attachments
   - dry-run prompt and executor-preview materialization under `.tmp/<lane>-wave-launcher/dry-run/`
+  - operator-selectable terminal surfaces: `vscode`, `tmux`, or `none` for dry-run only
 - Full runtime configuration reference pages now ship under `docs/reference/runtime-config/`.
 - Lane runtime policy is active through `wave.config.json`:
   - role-based default executors

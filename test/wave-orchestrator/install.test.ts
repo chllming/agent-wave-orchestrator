@@ -21,6 +21,23 @@ function makeTempRepo() {
   return dir;
 }
 
+function packagedSkillFiles() {
+  const skillsRoot = path.join(PACKAGE_ROOT, "skills");
+  const files = [];
+  const visit = (targetDir) => {
+    for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      const fullPath = path.join(targetDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+      } else {
+        files.push(path.relative(PACKAGE_ROOT, fullPath).replaceAll(path.sep, "/"));
+      }
+    }
+  };
+  visit(skillsRoot);
+  return files.toSorted();
+}
+
 function runWaveCli(args, options = {}) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd: options.cwd || REPO_ROOT,
@@ -130,6 +147,7 @@ describe("wave init", () => {
       "docs/plans/waves/wave-0.md",
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md",
+      ...packagedSkillFiles(),
     ]) {
       const targetPath = path.join(repoDir, relPath);
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -169,6 +187,7 @@ describe("wave upgrade", () => {
       "docs/plans/migration.md",
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md",
+      ...packagedSkillFiles(),
     ]) {
       const targetPath = path.join(repoDir, relPath);
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -226,5 +245,26 @@ describe("wave doctor", () => {
     const payload = JSON.parse(doctorResult.stdout);
     expect(payload.workspaceRoot).toBe(repoDir);
     expect(payload.ok).toBe(true);
+  });
+
+  it("warns when generated-state ignore entries for .wave and VS Code terminals are missing", () => {
+    const repoDir = makeTempRepo();
+    const initResult = runWaveCli(["init"], { cwd: repoDir });
+    expect(initResult.status).toBe(0);
+    fs.writeFileSync(
+      path.join(repoDir, ".gitignore"),
+      ".tmp/\ndocs/research/cache/\ndocs/research/agent-context-cache/\ndocs/research/papers/\ndocs/research/articles/\n",
+      "utf8",
+    );
+
+    const doctorResult = runWaveCli(["doctor", "--json"], { cwd: repoDir });
+    expect(doctorResult.status).toBe(0);
+    const payload = JSON.parse(doctorResult.stdout);
+    expect(payload.warnings).toEqual(
+      expect.arrayContaining([
+        "Missing recommended .gitignore entry: .wave/",
+        "Missing recommended .gitignore entry: .vscode/terminals.json",
+      ]),
+    );
   });
 });

@@ -43,6 +43,7 @@ import {
   validateIntegrationSummary,
   validateImplementationSummary,
 } from "./agent-state.mjs";
+import { normalizeSkillId, resolveAgentSkills } from "./skills.mjs";
 
 export const WAVE_EVALUATOR_ROLE_PROMPT_PATH = DEFAULT_EVALUATOR_ROLE_PROMPT_PATH;
 export const WAVE_INTEGRATION_ROLE_PROMPT_PATH = DEFAULT_INTEGRATION_ROLE_PROMPT_PATH;
@@ -202,6 +203,76 @@ function parsePathList(blockText, filePath, label) {
   return paths;
 }
 
+function parseSkillsList(blockText, filePath, label) {
+  if (!blockText) {
+    return [];
+  }
+  const skills = [];
+  const seen = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^-\s+(.+?)\s*$/);
+    if (!bulletMatch) {
+      throw new Error(`Malformed skill entry "${trimmed}" in ${label} (${filePath})`);
+    }
+    const skillId = normalizeSkillId(
+      bulletMatch[1].replace(/[`"']/g, "").trim(),
+      `${label} (${filePath})`,
+    );
+    if (seen.has(skillId)) {
+      throw new Error(`Duplicate skill "${skillId}" in ${label} (${filePath})`);
+    }
+    seen.add(skillId);
+    skills.push(skillId);
+  }
+  return skills;
+}
+
+function parseDeployEnvironments(blockText, filePath) {
+  if (!blockText) {
+    return [];
+  }
+  const environments = [];
+  const seen = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const match = trimmed.match(
+      /^-\s+`?([a-z0-9][a-z0-9._-]*)`?\s*:\s*`?([a-z0-9][a-z0-9._-]*)`?\s*(default)?(?:\s+\((.*)\))?$/i,
+    );
+    if (!match) {
+      throw new Error(`Malformed deploy environment "${trimmed}" in ${filePath}`);
+    }
+    const id = String(match[1] || "").trim().toLowerCase();
+    const kind = String(match[2] || "").trim().toLowerCase();
+    if (seen.has(id)) {
+      throw new Error(`Duplicate deploy environment "${id}" in ${filePath}`);
+    }
+    seen.add(id);
+    environments.push({
+      id,
+      kind,
+      isDefault: cleanBooleanToken(match[3]),
+      notes: String(match[4] || "").trim() || null,
+    });
+  }
+  if (!environments.some((environment) => environment.isDefault) && environments.length > 0) {
+    environments[0].isDefault = true;
+  }
+  return environments;
+}
+
+function cleanBooleanToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase() === "default";
+}
+
 function normalizeRepoRelativePath(relPath) {
   return String(relPath || "")
     .replaceAll("\\", "/")
@@ -258,6 +329,13 @@ function extractFencedBlock(blockText, messagePrefix) {
 export function extractPromptFromSection(sectionText, filePath, agentId) {
   const promptBlock = extractSectionBody(sectionText, "Prompt", filePath, agentId);
   return extractFencedBlock(promptBlock, `Agent ${agentId} in ${filePath}`);
+}
+
+function extractAgentSkillsFromSection(sectionText, filePath, agentId) {
+  const skillsBlock = extractSectionBody(sectionText, "Skills", filePath, agentId, {
+    required: false,
+  });
+  return parseSkillsList(skillsBlock, filePath, `agent ${agentId} skills`);
 }
 
 function parseContext7Settings(blockText, filePath, label) {
@@ -1281,6 +1359,7 @@ export function parseWaveContent(content, filePath, options = {}) {
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
     const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
     const capabilities = extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId);
+    const skills = extractAgentSkillsFromSection(sectionText, filePath, current.agentId);
     const deliverables = extractAgentDeliverablesFromSection(
       sectionText,
       filePath,
@@ -1310,6 +1389,7 @@ export function parseWaveContent(content, filePath, options = {}) {
       executorConfig,
       components,
       capabilities,
+      skills,
       deliverables,
       ownedPaths,
     });
@@ -1330,6 +1410,12 @@ export function parseWaveContent(content, filePath, options = {}) {
     wave: waveNumber,
     file: path.relative(REPO_ROOT, filePath),
     commitMessage: commitMessageMatch ? commitMessageMatch[1] : null,
+    deployEnvironments: parseDeployEnvironments(
+      extractTopLevelSectionBody(content, "Deploy environments", filePath, {
+        required: false,
+      }),
+      filePath,
+    ),
     context7Defaults: extractWaveContext7Defaults(content, filePath),
     componentPromotions,
     agents: agentsWithComponentTargets,
@@ -1609,11 +1695,19 @@ export function resolveAgentExecutor(agent, options = {}) {
 }
 
 export function applyExecutorSelectionsToWave(wave, options = {}) {
-  return {
+  const laneProfile = resolveLaneProfileForOptions(options);
+  const withExecutors = {
     ...wave,
     agents: wave.agents.map((agent) => ({
       ...agent,
-      executorResolved: resolveAgentExecutor(agent, options),
+      executorResolved: resolveAgentExecutor(agent, { ...options, laneProfile }),
+    })),
+  };
+  return {
+    ...withExecutors,
+    agents: withExecutors.agents.map((agent) => ({
+      ...agent,
+      skillsResolved: resolveAgentSkills(agent, withExecutors, { laneProfile }),
     })),
   };
 }

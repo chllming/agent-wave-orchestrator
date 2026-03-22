@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4 - 2026-03-22
+
+- Added the planner foundation: project bootstrap memory in `.wave/project-profile.json`, `wave project setup|show`, and interactive `wave draft` generation of structured wave specs plus launcher-compatible markdown.
+- Added the cross-runtime skill system: canonical `skills/` bundles, lane and per-agent attachment, deploy-kind and runtime-aware resolution, and runtime projections for Codex, Claude Code, OpenCode, and local execution.
+- Expanded package docs with a docs index plus concept, guide, and reference pages covering waves, planner workflow, operating modes, Context7 vs skills, terminal surfaces, and runtime-agnostic orchestration.
+- Clarified `--reconcile-status` failures by surfacing why incomplete waves are not reconstructable instead of failing with opaque output.
+
 ## 0.5.3 - 2026-03-22
 
 - Deferred integration, documentation, and evaluator agents until the closure sweep whenever implementation work is still pending, so the runtime now matches the documented closure model.

@@ -416,6 +416,27 @@ describe("trace bundles", () => {
             query: "runtime proof",
             libraries: [{ libraryName: "node", libraryId: "/nodejs/node" }],
           },
+          skillsResolved: {
+            ids: ["wave-core", "runtime-claude"],
+            role: "implementation",
+            runtime: "claude",
+            deployKind: null,
+            promptHash: "skill-prompt-hash",
+            bundles: [
+              {
+                id: "wave-core",
+                bundlePath: "skills/wave-core",
+                manifestPath: "skills/wave-core/skill.json",
+                skillPath: "skills/wave-core/SKILL.md",
+                adapterPath: null,
+                bundleHash: "bundle-wave-core",
+                sourceFiles: [
+                  "skills/wave-core/skill.json",
+                  "skills/wave-core/SKILL.md",
+                ],
+              },
+            ],
+          },
         },
         {
           agentId: "A8",
@@ -731,6 +752,11 @@ describe("trace bundles", () => {
     expect(bundle.metadata.artifacts.agents.A1.prompt.present).toBe(true);
     expect(bundle.metadata.artifacts.agents.A1.log.present).toBe(true);
     expect(bundle.metadata.artifacts.agents.A1.status.present).toBe(true);
+    expect(bundle.metadata.agents.find((agent) => agent.agentId === "A1")?.skills).toMatchObject({
+      ids: ["wave-core", "runtime-claude"],
+      runtime: "claude",
+      promptHash: "skill-prompt-hash",
+    });
 
     const filesBeforeReplay = listFilesRecursively(traceDir);
     const replay = replayTraceBundle(traceDir);

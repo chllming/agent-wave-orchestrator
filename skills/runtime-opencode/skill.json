@@ -1,0 +1,5 @@
+{
+  "id": "runtime-opencode",
+  "title": "OpenCode Runtime",
+  "description": "OpenCode-specific execution norms inside the Wave harness."
+}

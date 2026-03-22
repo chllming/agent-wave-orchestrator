@@ -134,7 +134,7 @@ function buildClaudeSettingsPath(executor, overlayDir) {
   return settingsPath;
 }
 
-function buildOpenCodeConfig({ agent, executor, agentName, promptFileName, overlayDir }) {
+function buildOpenCodeConfig({ agent, executor, agentName, promptFileName, overlayDir, skillProjection }) {
   const promptAgent = {
     description: `Wave agent ${agent.agentId}: ${agent.title}`,
     mode: "primary",
@@ -149,7 +149,11 @@ function buildOpenCodeConfig({ agent, executor, agentName, promptFileName, overl
   const baseAgentConfig = isPlainObject(baseConfig.agent) ? baseConfig.agent : {};
   const config = mergeJsonObjects(baseConfig, {
     $schema: baseConfig.$schema || "https://opencode.ai/config.json",
-    instructions: mergeUniqueStringArrays(baseConfig.instructions, executor.opencode.instructions),
+    instructions: mergeUniqueStringArrays(
+      baseConfig.instructions,
+      executor.opencode.instructions,
+      skillProjection?.opencodeInstructions,
+    ),
     agent: {
       ...baseAgentConfig,
       [agentName]: mergeJsonObjects(baseAgentConfig[agentName], promptAgent),
@@ -201,7 +205,11 @@ export function buildCodexExecInvocation(
 function buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
   const executor = agent.executorResolved;
   const systemPromptPath = path.join(overlayDir, "claude-system-prompt.txt");
-  writeTextAtomic(systemPromptPath, `${renderHarnessSystemPrompt(agent, "claude")}\n`);
+  const skillText = String(agent?.skillsResolved?.promptText || "").trim();
+  writeTextAtomic(
+    systemPromptPath,
+    `${renderHarnessSystemPrompt(agent, "claude")}${skillText ? `\n\n${skillText}` : ""}\n`,
+  );
   const tokens = [executor.claude.command, "-p", "--no-session-persistence"];
   const settingsPath = buildClaudeSettingsPath(executor, overlayDir);
   appendSingleValueFlag(tokens, "--output-format", executor.claude.outputFormat || "text");
@@ -234,7 +242,7 @@ function buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
   };
 }
 
-function buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
+function buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection }) {
   const executor = agent.executorResolved;
   const requestedAgentName = String(executor.opencode.agent || `wave-${agent.agentId}`)
     .trim()
@@ -252,12 +260,17 @@ function buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
     agentName,
     promptFileName,
     overlayDir,
+    skillProjection,
   });
   const tokens = [executor.opencode.command, "run", "--agent", shellQuote(agentName)];
   appendSingleValueFlag(tokens, "--model", executor.opencode.model || executor.model);
   appendSingleValueFlag(tokens, "--format", executor.opencode.format || "default");
   appendSingleValueFlag(tokens, "--attach", executor.opencode.attach);
-  appendRepeatedFlag(tokens, "--file", executor.opencode.files);
+  appendRepeatedFlag(
+    tokens,
+    "--file",
+    mergeUniqueStringArrays(executor.opencode.files, skillProjection?.opencodeFiles),
+  );
   appendSingleValueFlag(tokens, "--title", `wave-${agent.agentId}`);
   return {
     executorId: "opencode",
@@ -286,7 +299,7 @@ function buildLocalLaunchSpec({ promptPath, logPath }) {
   };
 }
 
-function buildCodexLaunchSpec({ agent, promptPath, logPath }) {
+function buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection }) {
   const executor = agent.executorResolved;
   return {
     executorId: "codex",
@@ -304,7 +317,7 @@ function buildCodexLaunchSpec({ agent, promptPath, logPath }) {
           config: executor.codex.config,
           search: executor.codex.search,
           images: executor.codex.images,
-          addDirs: executor.codex.addDirs,
+          addDirs: mergeUniqueStringArrays(executor.codex.addDirs, skillProjection?.codexAddDirs),
           json: executor.codex.json,
           ephemeral: executor.codex.ephemeral,
         },
@@ -313,19 +326,19 @@ function buildCodexLaunchSpec({ agent, promptPath, logPath }) {
   };
 }
 
-export function buildExecutorLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
+export function buildExecutorLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection }) {
   const executorId = normalizeExecutorMode(agent?.executorResolved?.id || DEFAULT_EXECUTOR_MODE);
   ensureDirectory(overlayDir);
   if (executorId === "local") {
     return buildLocalLaunchSpec({ promptPath, logPath });
   }
   if (executorId === "claude") {
-    return buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir });
+    return buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection });
   }
   if (executorId === "opencode") {
-    return buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir });
+    return buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection });
   }
-  return buildCodexLaunchSpec({ agent, promptPath, logPath });
+  return buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection });
 }
 
 export function commandForExecutor(executor, executorId = executor?.id) {

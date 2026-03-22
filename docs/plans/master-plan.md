@@ -9,8 +9,8 @@
 
 ## Near-Term Work
 
-- Keep the starter wave, role prompts, and component cutover matrix aligned with the shipped launcher behavior.
+- Keep the starter wave, role prompts, starter skills, and component cutover matrix aligned with the shipped launcher and planner behavior.
 - Expand `wave doctor` and migration guidance around cross-repo adoption, executor availability, and future breaking config changes.
-- Add richer starter templates for additional repository shapes after the generic single-repo path is stable.
+- Build on the shipped planner foundation with richer starter templates and eventually ad-hoc or forward-replan flows.
 - Extend replay and trace tooling from internal helpers and file-backed artifacts into easier operator workflows, larger historical fixtures, and a public replay surface if it proves stable.
-- Add the remaining roadmap items that are not yet shipped, especially richer capability routing and better operator workflows around cross-lane dependency tickets.
+- Add the remaining roadmap items that are not yet shipped, especially stronger operating-mode enforcement and better operator workflows around cross-lane dependency tickets.

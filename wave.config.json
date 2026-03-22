@@ -71,6 +71,33 @@
       "format": "default"
     }
   },
+  "skills": {
+    "dir": "skills",
+    "base": ["wave-core", "repo-coding-rules"],
+    "byRole": {
+      "implementation": ["role-implementation"],
+      "integration": ["role-integration"],
+      "documentation": ["role-documentation"],
+      "evaluator": ["role-evaluator"],
+      "infra": ["role-infra"],
+      "deploy": ["role-deploy"],
+      "research": ["role-research"]
+    },
+    "byRuntime": {
+      "codex": ["runtime-codex"],
+      "claude": ["runtime-claude"],
+      "opencode": ["runtime-opencode"],
+      "local": ["runtime-local"]
+    },
+    "byDeployKind": {
+      "railway-cli": ["provider-railway"],
+      "railway-mcp": ["provider-railway"],
+      "docker-compose": ["provider-docker-compose"],
+      "kubernetes": ["provider-kubernetes"],
+      "ssh-manual": ["provider-ssh-manual"],
+      "custom": ["provider-custom-deploy"]
+    }
+  },
   "sharedPlanDocs": [
     "docs/plans/current-state.md",
     "docs/plans/master-plan.md",

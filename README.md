@@ -12,11 +12,13 @@ Wave Orchestration is a repository harness for running multi-agent work in bound
 
 ## Features
 
+- Planner foundation with saved project profile memory, draft specs, and rendered wave markdown
 - Implementation-first execution with staged closure and retry support
 - Durable coordination log, rolling message board, compiled inboxes, and per-wave ledger
 - Dry-run prompt and executor preview mode before any real agent launch
 - Context7 bundle selection, caching, and prompt injection
 - Multi-executor support for Codex, Claude Code, OpenCode, and a local smoke executor
+- Cross-runtime skill packs loaded from `skills/` and resolved by lane, role, runtime, deploy kind, and per-agent attachment
 - Human feedback routing, clarification triage, helper assignment, and cross-lane dependencies
 - Replayable trace bundles for regression and release verification
 
@@ -52,9 +54,15 @@ If the repo already has Wave config, plans, or waves you want to keep:
 pnpm exec wave init --adopt-existing
 ```
 
+Fresh init also seeds a starter `skills/` library. The launcher projects those skill bundles into Codex, Claude, OpenCode, and local executor overlays after the final runtime for each agent is resolved.
+
 ## Common Commands
 
 ```bash
+# Save project defaults and draft a new wave
+pnpm exec wave project setup
+pnpm exec wave draft --wave 1 --template implementation
+
 # Run one wave with a real executor
 pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
 
@@ -76,9 +84,15 @@ node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 
 ## Learn More
 
+- [docs/README.md](./docs/README.md): docs map and suggested structure
+- [docs/concepts/what-is-a-wave.md](./docs/concepts/what-is-a-wave.md): wave anatomy, lifecycle, and closure model
+- [docs/guides/planner.md](./docs/guides/planner.md): `wave project` and `wave draft` workflow
+- [docs/concepts/context7-vs-skills.md](./docs/concepts/context7-vs-skills.md): when to use external docs vs repo-owned skills
+- [docs/guides/terminal-surfaces.md](./docs/guides/terminal-surfaces.md): tmux, VS Code terminal registry, and dry-run surfaces
 - [docs/plans/wave-orchestrator.md](./docs/plans/wave-orchestrator.md): operator runbook
 - [docs/plans/context7-wave-orchestrator.md](./docs/plans/context7-wave-orchestrator.md): Context7 setup and bundle authoring
-- [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): executor and runtime configuration
+- [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): executor, runtime, and skill-projection configuration
+- [docs/reference/skills.md](./docs/reference/skills.md): skill bundle format, resolution order, and runtime projection
 - [CHANGELOG.md](./CHANGELOG.md): release history
 
 ## Research Sources

@@ -1,0 +1,5 @@
+{
+  "id": "provider-aws",
+  "title": "AWS",
+  "description": "AWS environment and rollout norms."
+}

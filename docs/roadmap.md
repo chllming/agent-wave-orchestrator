@@ -47,7 +47,7 @@ Generated waves and transient ad-hoc runs should default to these sections when 
 
 ## Phase 1: Planner Foundation
 
-This is the current branch goal.
+Status: shipped in `0.5.4`.
 
 - Add saved project bootstrap memory in `.wave/project-profile.json`.
 - Ask once whether the repo is a new project and keep that answer for future drafts.

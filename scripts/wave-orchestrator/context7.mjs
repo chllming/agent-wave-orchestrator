@@ -221,6 +221,15 @@ export function buildAgentPromptFingerprintSource(agent) {
     components: agent?.components || [],
     componentTargets: agent?.componentTargets || null,
     executorResolved: agent?.executorResolved || null,
+    skillsResolved: agent?.skillsResolved
+      ? {
+          ids: agent.skillsResolved.ids || [],
+          role: agent.skillsResolved.role || null,
+          runtime: agent.skillsResolved.runtime || null,
+          deployKind: agent.skillsResolved.deployKind || null,
+          promptHash: agent.skillsResolved.promptHash || null,
+        }
+      : null,
   });
 }
 

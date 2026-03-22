@@ -3,6 +3,23 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.5.4",
+      "date": "2026-03-22",
+      "summary": "Planner foundation, cross-runtime skills, and clearer docs and reconcile output.",
+      "features": [
+        "The planner foundation now ships with `.wave/project-profile.json`, `wave project setup|show`, and `wave draft`, which writes both structured JSON specs and launcher-compatible wave markdown.",
+        "Canonical repo-owned skill bundles now live under `skills/`, with attachment by base, role, runtime, deploy kind, and explicit per-agent `### Skills`, then projection into Codex, Claude Code, OpenCode, and local executor overlays.",
+        "The docs surface now includes a docs index plus focused concept, guide, and reference pages for waves, planner workflow, operating modes, Context7 vs skills, terminal surfaces, and runtime-agnostic orchestration.",
+        "Reconcile output now explains why incomplete waves cannot be reconstructed, making `wave launch --reconcile-status` failures easier to interpret."
+      ],
+      "manualSteps": [
+        "After upgrading, run `pnpm exec wave project setup` once so the repo has an explicit project profile with default lane, oversight mode, terminal surface, and deploy-environment memory.",
+        "Review `wave.config.json` `skills` mappings and the seeded `skills/` bundles before relying on runtime-specific or deploy-specific skill attachment.",
+        "Dry-run at least one generated or existing wave with `pnpm exec wave launch --lane main --dry-run --no-dashboard` to inspect the new skill overlay artifacts and launch previews."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.5.3",
       "date": "2026-03-22",
       "summary": "Closure-sweep launch ordering fix for implementation-first wave execution.",

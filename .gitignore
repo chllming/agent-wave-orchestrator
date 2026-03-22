@@ -1,5 +1,7 @@
 node_modules/
 .tmp/
+.wave/
+.vscode/terminals.json
 dist/
 coverage/
 docs/research/cache/

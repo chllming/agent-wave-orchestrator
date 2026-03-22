@@ -1,6 +1,6 @@
 {
   "name": "@chllming/wave-orchestration",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "license": "MIT",
   "description": "Generic wave-based multi-agent orchestration for repository work.",
   "packageManager": "pnpm@10.23.0",
@@ -17,6 +17,7 @@
   },
   "files": [
     "scripts",
+    "skills",
     "docs",
     "releases",
     "wave.config.json",

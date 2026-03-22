@@ -671,6 +671,29 @@ function buildAgentMetadata(dir, run, attempt, artifacts) {
         run.lastContext7?.snippetHash ||
         (run.lastContext7?.promptText ? hashText(run.lastContext7.promptText) : ""),
     },
+    skills:
+      run.lastSkillProjection ||
+      (run.agent?.skillsResolved
+        ? {
+            ids: run.agent.skillsResolved.ids || [],
+            role: run.agent.skillsResolved.role || null,
+            runtime: run.agent.skillsResolved.runtime || null,
+            deployKind: run.agent.skillsResolved.deployKind || null,
+            promptHash: run.agent.skillsResolved.promptHash || null,
+            bundles: Array.isArray(run.agent.skillsResolved.bundles)
+              ? run.agent.skillsResolved.bundles.map((bundle) => ({
+                  id: bundle.id,
+                  bundlePath: bundle.bundlePath,
+                  manifestPath: bundle.manifestPath,
+                  skillPath: bundle.skillPath,
+                  adapterPath: bundle.adapterPath || null,
+                  bundleHash: bundle.bundleHash || null,
+                  sourceFiles: Array.isArray(bundle.sourceFiles) ? bundle.sourceFiles.slice() : [],
+                }))
+              : [],
+            artifacts: run.agent.skillsResolved.artifacts || null,
+          }
+        : null),
   };
 }
 

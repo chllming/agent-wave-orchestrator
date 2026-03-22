@@ -1,5 +1,7 @@
 # Context7 and Wave Orchestrator
 
+See also [concepts/context7-vs-skills.md](../concepts/context7-vs-skills.md) for how Context7 differs from the repo-owned skill system.
+
 Context7 is for external library truth. Repository docs and source are for repository truth.
 
 ## Rules

@@ -231,6 +231,30 @@ File ownership (only touch these paths):
     ]);
   });
 
+  it("extracts optional explicit skills from agent sections", () => {
+    const wave = parseWaveContent(
+      `# Wave 8 - Skills
+
+## Agent A1: Worker
+
+### Skills
+
+- provider-github-release
+- provider-aws
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- docs/releases.md
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-8.md"),
+      { lane: "main" },
+    );
+
+    expect(wave.agents[0]?.skills).toEqual(["provider-github-release", "provider-aws"]);
+  });
+
   it("accepts deliverables that exactly match an owned file path", () => {
     const wave = parseWaveContent(
       `# Wave 7 - Sample

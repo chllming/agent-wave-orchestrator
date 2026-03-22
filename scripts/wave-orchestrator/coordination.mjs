@@ -349,6 +349,21 @@ export function buildExecutionPrompt({
           "",
         ]
       : [];
+  const skillLines =
+    Array.isArray(agent.skillsResolved?.ids) && agent.skillsResolved.ids.length > 0
+      ? [
+          "Active skill packs for this run:",
+          ...agent.skillsResolved.ids.map((skillId) => `- ${skillId}`),
+          "- Treat the following skill payload as additive guidance. Repository source, standing role prompts, and ownership boundaries remain authoritative.",
+          "",
+          "## Skill context",
+          "",
+          "```text",
+          agent.skillsResolved.promptText || "",
+          "```",
+          "",
+        ]
+      : [];
 
   return [
     `Working directory: ${REPO_ROOT}`,
@@ -413,6 +428,7 @@ export function buildExecutionPrompt({
     ...promotedComponentLines,
     ...ownedComponentLines,
     ...deliverableLines,
+    ...skillLines,
     ...context7PromptLines,
     "Assigned implementation prompt:",
     "```",

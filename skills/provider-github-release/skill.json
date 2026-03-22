@@ -1,0 +1,5 @@
+{
+  "id": "provider-github-release",
+  "title": "GitHub Release",
+  "description": "GitHub release and tag publication norms."
+}

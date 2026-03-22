@@ -598,6 +598,14 @@ describe("resolveRelaunchRuns", () => {
         agent: {
           agentId: "A1",
           capabilities: ["runtime"],
+          skillsResolved: {
+            ids: ["runtime-codex"],
+            role: "implementation",
+            runtime: "codex",
+            deployKind: null,
+            promptHash: "codex-skill-hash",
+            bundles: [],
+          },
           executorResolved: {
             id: "codex",
             initialExecutorId: "codex",
@@ -659,6 +667,16 @@ describe("resolveRelaunchRuns", () => {
         evaluatorAgentId: "A0",
         integrationAgentId: "A8",
         laneProfile: {
+          skills: {
+            dir: "skills",
+            base: [],
+            byRole: {},
+            byRuntime: {
+              codex: ["runtime-codex"],
+              claude: ["runtime-claude"],
+            },
+            byDeployKind: {},
+          },
           runtimePolicy: {
             runtimeMixTargets: {
               claude: 1,
@@ -666,6 +684,9 @@ describe("resolveRelaunchRuns", () => {
           },
         },
         capabilityRouting: { preferredAgents: {} },
+      },
+      {
+        deployEnvironments: [],
       },
     );
 
@@ -677,6 +698,10 @@ describe("resolveRelaunchRuns", () => {
       fallbackReason: "retry:127",
       initialExecutorId: "codex",
     });
+    expect(agentRuns[0].agent.skillsResolved).toMatchObject({
+      runtime: "claude",
+    });
+    expect(agentRuns[0].agent.skillsResolved.ids).toContain("runtime-claude");
   });
 
   it("blocks retry when a configured fallback would violate runtime mix targets", () => {

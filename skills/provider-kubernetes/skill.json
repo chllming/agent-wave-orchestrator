@@ -1,0 +1,5 @@
+{
+  "id": "provider-kubernetes",
+  "title": "Kubernetes",
+  "description": "Kubernetes cluster, workload, and rollout norms."
+}

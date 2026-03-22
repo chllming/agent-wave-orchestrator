@@ -2,6 +2,8 @@
 
 The Wave Orchestrator coordinates repository work as bounded execution waves.
 
+For the broader docs map, concept pages, and workflow guides, start at [docs/README.md](../README.md).
+
 ## What It Does
 
 - parses wave plans from `docs/plans/waves/`
@@ -19,6 +21,9 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 
 ## Main Commands
 
+- `pnpm exec wave project setup`
+- `pnpm exec wave project show --json`
+- `pnpm exec wave draft --wave 1 --template implementation`
 - `pnpm exec wave init`
 - `pnpm exec wave init --adopt-existing`
 - `pnpm exec wave doctor`
@@ -37,10 +42,25 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
+- `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
+
+## Skill Packs
+
+- Wave skill bundles live under `skills/<skill-id>/`.
+- Each bundle requires `skill.json` and `SKILL.md`.
+- Bundles can also include runtime adapters at `adapters/<runtime>.md` for `codex`, `claude`, `opencode`, or `local`.
+- The starter config resolves skills in this order: global base, lane base, global role map, lane role map, global runtime map, lane runtime map, global deploy-kind map, lane deploy-kind map, then explicit per-agent `### Skills`.
+- The effective skill set is recomputed after final executor resolution, including retry-time runtime fallback, so a fallback from one runtime to another also swaps runtime-specific skill overlays.
+- Starter bundles in this repo cover:
+  - core Wave coordination and repo coding rules
+  - runtime packs for Codex, Claude, OpenCode, and local execution
+  - role packs for implementation, integration, documentation, evaluator, infra, deploy, and research work
+  - deploy and environment packs for Railway, Docker Compose, Kubernetes, SSH/manual rollout, and generic custom deploys
+  - explicit provider packs for GitHub release flow and AWS norms when a wave or lane wants to attach them
 
 ## Setup
 
@@ -48,7 +68,7 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 2. Confirm `tmux` and at least one real executor (`codex`, `claude`, or `opencode`) are available if you want real wave execution.
 3. Run `pnpm exec wave init` for a fresh repo, or `pnpm exec wave init --adopt-existing` for a repo with existing Wave files you want preserved.
 4. Review [wave.config.json](../../wave.config.json).
-5. Review the role prompts and docs you want the repo to own.
+5. Review the role prompts, starter `skills/` bundles, and docs you want the repo to own.
 
 ## Recommended Launch Flow
 
@@ -143,6 +163,7 @@ pnpm exec wave changelog --since-installed
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
 - Context7 cache: `.tmp/<lane>-wave-launcher/context7-cache/`
 - executor overlays: `.tmp/<lane>-wave-launcher/executors/`
+  Each agent overlay can include `skills.resolved.md`, `skills.metadata.json`, and `<runtime>-skills.txt` in addition to the runtime-specific executor files.
 - cross-lane dependencies: `.tmp/wave-orchestrator/dependencies/`
   Required inbound tickets in this directory block both autonomous wave launch and lane finalization until they resolve.
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
@@ -164,7 +185,7 @@ pnpm exec wave changelog --since-installed
   - `structured-signals.json`
   - `quality.json`
   - `run-metadata.json`
-- `run-metadata.json` is the canonical trace index. It records attempt settings, artifact presence, executor history, prompt hashes, Context7 snippet hashes, the gate snapshot, `replayContext`, and the cumulative `historySnapshot` for that attempt.
+- `run-metadata.json` is the canonical trace index. It records attempt settings, artifact presence, executor history, prompt hashes, Context7 snippet hashes, resolved skill ids and bundle metadata, the gate snapshot, `replayContext`, and the cumulative `historySnapshot` for that attempt.
 - `outcome.json` is the stored replay baseline. Replay compares recomputed gates and quality against it instead of trusting only inline metadata.
 - For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
 - `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
@@ -180,7 +201,9 @@ pnpm exec wave changelog --since-installed
 - From the configured thresholds onward, every non-A0/A8/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
 - `### Capabilities` is optional and lets the scheduler route targeted follow-up work by capability.
 - `### Deliverables` is optional and lets a wave declare exact repo-relative file outputs that must exist, and that stay within the agent's declared file ownership, before an implementation agent can satisfy its exit contract.
+- `### Skills` is optional and adds explicit skill ids from `skills/` on top of the lane, role, runtime, and deploy-kind defaults.
 - `### Executor` can declare `profile`, `fallbacks`, `tags`, and runtime budgets in addition to vendor-specific overrides.
+- `## Deploy environments` lets the wave declare named deployment targets. The default deploy environment kind is also used for deploy-kind skill attachment.
 - Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
 - Optional standing roles available in this repo include `docs/agents/wave-infra-role.md` for infra proof and `docs/agents/wave-deploy-verifier-role.md` for rollout verification.
@@ -202,6 +225,7 @@ pnpm exec wave changelog --since-installed
 - `--executor local` exists only for smoke-testing prompt and closure behavior.
 - `--codex-sandbox danger-full-access` is the default because it avoids host bubblewrap assumptions.
 - Resolution order is: per-agent explicit executor id, executor profile id, lane role default, CLI `--executor`, then `executors.default`.
+- Skills resolve only after that executor choice is known. Runtime-specific skill overlays are regenerated whenever retry-time fallback changes the selected executor.
 - Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
 - Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
 - Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set.

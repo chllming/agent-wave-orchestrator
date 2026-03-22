@@ -28,6 +28,19 @@ describe("runtime configuration normalization", () => {
         {
           version: 1,
           defaultLane: "main",
+          skills: {
+            dir: "skills",
+            base: ["wave-core"],
+            byRole: {
+              implementation: ["role-implementation"],
+            },
+            byRuntime: {
+              codex: ["runtime-codex"],
+            },
+            byDeployKind: {
+              "railway-cli": ["provider-railway"],
+            },
+          },
           executors: {
             default: "codex",
             profiles: {
@@ -116,6 +129,12 @@ describe("runtime configuration normalization", () => {
           },
           lanes: {
             main: {
+              skills: {
+                base: ["repo-coding-rules"],
+                byRuntime: {
+                  claude: ["runtime-claude"],
+                },
+              },
               executors: {
                 codex: {
                   config: ["model_reasoning_effort=high"],
@@ -217,6 +236,61 @@ describe("runtime configuration normalization", () => {
         outputFormat: "json",
         allowedTools: ["Read"],
         disallowedTools: ["Edit"],
+      },
+    });
+    expect(lane.skills).toEqual({
+      dir: "skills",
+      base: ["wave-core", "repo-coding-rules"],
+      byRole: {
+        implementation: ["role-implementation"],
+      },
+      byRuntime: {
+        claude: ["runtime-claude"],
+        codex: ["runtime-codex"],
+      },
+      byDeployKind: {
+        "railway-cli": ["provider-railway"],
+      },
+    });
+  });
+
+  it("preserves a global custom skills dir when lane skills omit dir", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          skills: {
+            dir: "repo-skills",
+            base: ["wave-core"],
+          },
+          lanes: {
+            main: {
+              skills: {
+                byRole: {
+                  implementation: ["role-implementation"],
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main");
+
+    expect(lane.skills).toMatchObject({
+      dir: "repo-skills",
+      base: ["wave-core"],
+      byRole: {
+        implementation: ["role-implementation"],
       },
     });
   });

@@ -1,0 +1,5 @@
+{
+  "id": "provider-custom-deploy",
+  "title": "Custom Deploy",
+  "description": "Fallback deploy norms for custom environments."
+}

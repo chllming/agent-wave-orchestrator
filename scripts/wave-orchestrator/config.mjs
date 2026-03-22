@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { WORKSPACE_ROOT } from "./roots.mjs";
+import {
+  emptySkillsConfig,
+  mergeSkillsConfig,
+  normalizeSkillsConfig,
+} from "./skills.mjs";
 
 const REPO_ROOT = WORKSPACE_ROOT;
 
@@ -388,6 +393,10 @@ function normalizeRuntimePolicy(rawRuntimePolicy = {}) {
   };
 }
 
+function normalizeLaneSkills(rawSkills = {}, lane = "skills", options = {}) {
+  return normalizeSkillsConfig(rawSkills, lane, options);
+}
+
 function normalizeClaudePromptMode(value, label = "executors.claude.appendSystemPromptMode") {
   const normalized = String(value || "append")
     .trim()
@@ -751,6 +760,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     roles: normalizeRoles(rawConfig.roles),
     validation: normalizeValidation(rawConfig.validation),
     executors: normalizeExecutors(rawConfig.executors),
+    skills: normalizeLaneSkills(rawConfig.skills, "skills"),
     capabilityRouting: normalizeCapabilityRouting(rawConfig.capabilityRouting),
     runtimePolicy: normalizeRuntimePolicy(rawConfig.runtimePolicy),
     sharedPlanDocs,
@@ -785,6 +795,12 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
   const executors = normalizeExecutors(
     mergeExecutors(config.executors, laneConfig.executors),
   );
+  const skills = mergeSkillsConfig(
+    config.skills || emptySkillsConfig(),
+    normalizeLaneSkills(laneConfig.skills, `${lane}.skills`, {
+      preserveOmittedDir: true,
+    }),
+  );
   const capabilityRouting = normalizeCapabilityRouting({
     ...config.capabilityRouting,
     ...(laneConfig.capabilityRouting || {}),
@@ -812,6 +828,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     roles,
     validation,
     executors,
+    skills,
     capabilityRouting,
     runtimePolicy,
     paths: {

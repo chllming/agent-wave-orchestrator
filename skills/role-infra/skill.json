@@ -1,0 +1,5 @@
+{
+  "id": "role-infra",
+  "title": "Infra Role",
+  "description": "Infra-agent norms for environment, dependency, and identity proof."
+}

@@ -7,6 +7,7 @@ import {
 import { buildLanePaths, ensureDirectory, PACKAGE_ROOT, readJsonOrNull, REPO_ROOT, writeJsonAtomic } from "./shared.mjs";
 import { loadWaveConfig } from "./config.mjs";
 import { applyExecutorSelectionsToWave, parseWaveFiles, validateWaveDefinition } from "./wave-files.mjs";
+import { validateLaneSkillConfiguration } from "./skills.mjs";
 
 export const INSTALL_STATE_SCHEMA_VERSION = 1;
 export const INSTALL_STATE_DIR = ".wave";
@@ -16,10 +17,17 @@ export const CHANGELOG_MANIFEST_PATH = path.join(PACKAGE_ROOT, "releases", "mani
 export const PACKAGE_METADATA_PATH = path.join(PACKAGE_ROOT, "package.json");
 export const STARTER_TEMPLATE_PATHS = [
   "wave.config.json",
+  "docs/README.md",
   "docs/agents/wave-documentation-role.md",
   "docs/agents/wave-evaluator-role.md",
   "docs/agents/wave-integration-role.md",
+  "docs/concepts/context7-vs-skills.md",
+  "docs/concepts/operating-modes.md",
+  "docs/concepts/runtime-agnostic-orchestration.md",
+  "docs/concepts/what-is-a-wave.md",
   "docs/context7/bundles.json",
+  "docs/guides/planner.md",
+  "docs/guides/terminal-surfaces.md",
   "docs/plans/component-cutover-matrix.json",
   "docs/plans/component-cutover-matrix.md",
   "docs/plans/context7-wave-orchestrator.md",
@@ -29,6 +37,7 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/plans/wave-orchestrator.md",
   "docs/plans/waves/wave-0.md",
   "docs/reference/repository-guidance.md",
+  "docs/reference/skills.md",
   "docs/reference/runtime-config/README.md",
   "docs/reference/runtime-config/codex.md",
   "docs/reference/runtime-config/claude.md",
@@ -37,6 +46,8 @@ export const STARTER_TEMPLATE_PATHS = [
 ];
 const REQUIRED_GITIGNORE_ENTRIES = [
   ".tmp/",
+  ".wave/",
+  ".vscode/terminals.json",
   "docs/research/cache/",
   "docs/research/agent-context-cache/",
   "docs/research/papers/",
@@ -69,12 +80,36 @@ function ensureWorkspaceSubdir(relPath) {
 }
 
 function templateStatusList() {
-  return STARTER_TEMPLATE_PATHS.map((relPath) => ({
+  return starterTemplatePaths().map((relPath) => ({
     path: relPath,
     sourcePath: path.join(PACKAGE_ROOT, relPath),
     targetPath: path.join(REPO_ROOT, relPath),
     exists: fs.existsSync(path.join(REPO_ROOT, relPath)),
   }));
+}
+
+function starterSkillTemplatePaths() {
+  const skillsRoot = path.join(PACKAGE_ROOT, "skills");
+  if (!fs.existsSync(skillsRoot)) {
+    return [];
+  }
+  const files = [];
+  const visit = (targetDir) => {
+    for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      const fullPath = path.join(targetDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+      } else {
+        files.push(path.relative(PACKAGE_ROOT, fullPath).replaceAll(path.sep, "/"));
+      }
+    }
+  };
+  visit(skillsRoot);
+  return files.toSorted();
+}
+
+function starterTemplatePaths() {
+  return [...STARTER_TEMPLATE_PATHS, ...starterSkillTemplatePaths()];
 }
 
 function existingBootstrapMarkers() {
@@ -242,6 +277,10 @@ export function runDoctor() {
           errors.push(`Missing required Wave file: ${relPath}`);
         }
       }
+      const skillValidation = validateLaneSkillConfiguration(lanePaths.laneProfile);
+      if (!skillValidation.ok) {
+        errors.push(...skillValidation.errors);
+      }
       if (fs.existsSync(lanePaths.wavesDir)) {
         const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
         parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
@@ -314,7 +353,7 @@ export function initializeWorkspace(options = {}) {
   if (adoptExisting) {
     adoptedFiles.push(...markers);
   } else {
-    for (const relPath of STARTER_TEMPLATE_PATHS) {
+    for (const relPath of starterTemplatePaths()) {
       copyTemplateFile(relPath);
       seededFiles.push(relPath);
     }

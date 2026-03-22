@@ -6,6 +6,7 @@ import { normalizeTerminalSurface } from "./terminals.mjs";
 export const PROJECT_PROFILE_SCHEMA_VERSION = 1;
 export const PROJECT_PROFILE_PATH = path.join(REPO_ROOT, ".wave", "project-profile.json");
 export const PROJECT_OVERSIGHT_MODES = ["oversight", "dark-factory"];
+export const PROJECT_PROFILE_TERMINAL_SURFACES = ["vscode", "tmux"];
 export const DEPLOY_ENVIRONMENT_KINDS = [
   "railway-mcp",
   "railway-cli",
@@ -26,6 +27,11 @@ function normalizePathForProfile(value) {
     return null;
   }
   return path.isAbsolute(normalized) ? path.relative(REPO_ROOT, normalized) : normalized;
+}
+
+function normalizeProjectTerminalSurface(value, label = "defaultTerminalSurface") {
+  const normalized = normalizeTerminalSurface(value, label);
+  return normalized === "none" ? "vscode" : normalized;
 }
 
 export function normalizeOversightMode(value, label = "oversight mode") {
@@ -118,7 +124,7 @@ export function normalizeProjectProfile(rawProfile, options = {}) {
       rawProfile.defaultOversightMode || base.defaultOversightMode,
       "defaultOversightMode",
     ),
-    defaultTerminalSurface: normalizeTerminalSurface(
+    defaultTerminalSurface: normalizeProjectTerminalSurface(
       rawProfile.defaultTerminalSurface || base.defaultTerminalSurface,
       "defaultTerminalSurface",
     ),
@@ -180,6 +186,5 @@ export function updateProjectProfile(mutator, options = {}) {
 }
 
 export function resolveDefaultTerminalSurface(profile) {
-  return normalizeTerminalSurface(profile?.defaultTerminalSurface || "vscode");
+  return normalizeProjectTerminalSurface(profile?.defaultTerminalSurface || "vscode");
 }
-

@@ -14,11 +14,12 @@ import {
   normalizeOversightMode,
   PROJECT_OVERSIGHT_MODES,
   PROJECT_PROFILE_PATH,
+  PROJECT_PROFILE_TERMINAL_SURFACES,
   readProjectProfile,
   updateProjectProfile,
   writeProjectProfile,
 } from "./project-profile.mjs";
-import { normalizeTerminalSurface, TERMINAL_SURFACES } from "./terminals.mjs";
+import { normalizeTerminalSurface } from "./terminals.mjs";
 
 const COMPONENT_ID_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
 const WAVE_SPEC_SCHEMA_VERSION = 1;
@@ -350,6 +351,10 @@ function renderContext7Section(context7) {
   return lines;
 }
 
+function renderSkillsSection(skills) {
+  return Array.isArray(skills) && skills.length > 0 ? renderBulletLines(skills) : [];
+}
+
 function renderWaveMarkdown(spec, lanePaths) {
   const sections = [];
   sections.push(`# Wave ${spec.wave} - ${spec.title}`);
@@ -416,6 +421,12 @@ function renderWaveMarkdown(spec, lanePaths) {
     sections.push("### Context7");
     sections.push("");
     sections.push(...renderContext7Section(agent.context7));
+    if (Array.isArray(agent.skills) && agent.skills.length > 0) {
+      sections.push("");
+      sections.push("### Skills");
+      sections.push("");
+      sections.push(...renderSkillsSection(agent.skills));
+    }
     if (Array.isArray(agent.components) && agent.components.length > 0) {
       sections.push("");
       sections.push("### Components");
@@ -546,6 +557,7 @@ function buildSpecialAgents({ spec, lanePaths, standardRoles }) {
       agentId: lanePaths.evaluatorAgentId,
       title: evaluatorTitle,
       rolePromptPaths: [lanePaths.evaluatorRolePromptPath],
+      skills: [],
       executor: { profile: "deep-review" },
       context7: { bundle: "none", query: "Architecture evaluation only; repository docs remain canonical" },
       components: [],
@@ -572,6 +584,7 @@ function buildSpecialAgents({ spec, lanePaths, standardRoles }) {
       agentId: lanePaths.integrationAgentId,
       title: integrationTitle,
       rolePromptPaths: [lanePaths.integrationRolePromptPath],
+      skills: [],
       executor: { profile: "deep-review" },
       context7: { bundle: "none", query: "Integration synthesis only; repository docs remain canonical" },
       components: [],
@@ -600,6 +613,7 @@ function buildSpecialAgents({ spec, lanePaths, standardRoles }) {
       agentId: lanePaths.documentationAgentId,
       title: documentationTitle,
       rolePromptPaths: [lanePaths.documentationRolePromptPath],
+      skills: [],
       executor: { profile: "docs-pass" },
       context7: { bundle: "none", query: "Shared plan documentation only; repository docs remain canonical" },
       components: [],
@@ -655,6 +669,7 @@ function buildWorkerAgentSpec({
     agentId,
     title,
     rolePromptPaths: [],
+    skills: values.skills || [],
     executor: {
       profile: values.executorProfile,
     },
@@ -784,7 +799,7 @@ async function runProjectSetupFlow(options = {}) {
     const defaultTerminalSurface = normalizeTerminalSurface(
       await prompt.askChoice(
         "Default terminal surface",
-        TERMINAL_SURFACES,
+        PROJECT_PROFILE_TERMINAL_SURFACES,
         base.defaultTerminalSurface,
       ),
     );

@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.6.0` package release surface.
+- The starter workspace in this source repo reflects the `0.6.1` package release surface.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - This source repo is itself kept as an adopted Wave workspace, so `node scripts/wave.mjs doctor --json` should pass from the repo root.

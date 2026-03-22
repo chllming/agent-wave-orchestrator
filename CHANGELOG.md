@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-03-22
+
+- Published the post-merge `main` source as `0.6.1` so the default branch, tagged source, and package docs all agree on the current release.
+- Updated shipped package docs and release metadata to advertise `0.6.1` as the current release surface, including the runtime-config reference that still said `0.5.x` during the `0.6.0` cut.
+- No additional runtime behavior changes beyond the `0.6.0` workspace-scoped tmux isolation fix; this patch release aligns the published package with the merged source tree.
+
 ## 0.6.0 - 2026-03-22
 
 ### Breaking Changes

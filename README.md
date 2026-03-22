@@ -32,17 +32,17 @@ Representative rolling message board output from a real wave run:
 
 Current release:
 
-- `@chllming/wave-orchestration@0.6.0`
-- Release tag: [`v0.6.0`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.0)
+- `@chllming/wave-orchestration@0.6.1`
+- Release tag: [`v0.6.1`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.1)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.6.0`:
+Highlights in `0.6.1`:
 
 - `cont-EVAL` (`E0`) is now a first-class optional eval stage before integration, separate from final `cont-QA` closure.
 - Optional security review now has a dedicated role, report path, and `[wave-security]` closure marker.
 - `wave adhoc plan|run|show|promote` now supports transient operator requests on the same launcher substrate.
-- Starter docs and skills now cover the current `0.6.0` closure, benchmark, security, and provider surfaces.
+- Starter docs and skills now cover the current `0.6.1` closure, benchmark, security, and provider surfaces.
 
 Requirements:
 

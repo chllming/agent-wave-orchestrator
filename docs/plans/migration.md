@@ -22,9 +22,9 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
-## Upgrading From 0.5.4 To 0.6.0
+## Upgrading From 0.5.4 To 0.6.1
 
-Read `CHANGELOG.md` first, then treat the rest of this page as the manual repo-owned migration checklist for the `0.6.0` release. `wave upgrade` will update package-owned runtime code only; it will not rewrite the docs, prompts, config, or wave files that your repo already owns.
+Read `CHANGELOG.md` first, then treat the rest of this page as the manual repo-owned migration checklist for the `0.6.1` release. `wave upgrade` will update package-owned runtime code only; it will not rewrite the docs, prompts, config, or wave files that your repo already owns.
 
 ### Required Repo Changes
 
@@ -32,7 +32,7 @@ Read `CHANGELOG.md` first, then treat the rest of this page as the manual repo-o
 2. Keep `A0` as the final closure owner that emits both the final verdict and `[wave-gate]`.
 3. Add `E0` only when the wave needs benchmark-driven tuning or service-output evaluation.
 4. Add wave-level `## Eval targets` whenever `cont-EVAL` is present.
-5. Update any starter docs or examples that still describe the pre-`0.6.0` evaluator model.
+5. Update any starter docs or examples that still describe the pre-`0.6.1` evaluator model.
 
 In practice that means checking:
 
@@ -47,7 +47,7 @@ In practice that means checking:
 
 ### Closure And Marker Changes
 
-Live `0.6.0` closure is stricter than `0.5.4`.
+Live `0.6.1` closure is stricter than `0.5.4`.
 
 - `cont-EVAL` must leave a report plus a final `[wave-eval]` marker whose `target_ids` exactly matches the wave contract and whose `benchmark_ids` stays within the benchmark catalog.
 - Security review, when present, must leave a report plus a final `[wave-security]` marker.

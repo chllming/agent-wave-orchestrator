@@ -33,6 +33,7 @@ function makeLaneProfile() {
       contQaRolePromptPath: "docs/agents/wave-cont-qa-role.md",
       integrationRolePromptPath: "docs/agents/wave-integration-role.md",
       documentationRolePromptPath: "docs/agents/wave-documentation-role.md",
+      securityRolePromptPath: "docs/agents/wave-security-role.md",
     },
     validation: {
       requiredPromptReferences: [],
@@ -166,6 +167,8 @@ File ownership (only touch these paths):
       fallbacks: [],
       tags: [],
       budget: null,
+      retryPolicy: null,
+      allowFallbackOnRetry: null,
       codex: null,
       claude: {
         agent: "reviewer",

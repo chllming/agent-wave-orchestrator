@@ -1,5 +1,36 @@
 {
   "id": "role-implementation",
   "title": "Implementation Role",
-  "description": "Implementation-agent norms for landing code and proving owned results."
+  "description": "Guides implementation agents through ownership-based coding, proof production, exit contract verification, and early coordination when work affects integration or closure.",
+  "activation": {
+    "when": "Attach when the agent owns implementation work and must turn requirements into repo changes plus proof.",
+    "roles": [
+      "implementation"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when owned code changes, validation, and explicit handoff markers are complete.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "implementation-codex",
+      "role": "implementation",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-codex",
+      "role": "documentation",
+      "runtime": "codex",
+      "expectActive": false
+    }
+  ]
 }

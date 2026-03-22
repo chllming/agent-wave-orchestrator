@@ -146,7 +146,7 @@ function normalizeOptionalPositiveInt(value, label, fallback = null) {
 }
 
 function normalizeOptionalBoolean(value, fallback = false) {
-  if (value === undefined) {
+  if (value === undefined || value === null || value === "") {
     return fallback;
   }
   if (typeof value === "boolean") {
@@ -293,6 +293,10 @@ function normalizeRoles(rawRoles = {}) {
     documentationRolePromptPath: normalizeRepoRelativePath(
       rawRoles.documentationRolePromptPath || DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
       "roles.documentationRolePromptPath",
+    ),
+    securityRolePromptPath: normalizeRepoRelativePath(
+      rawRoles.securityRolePromptPath || DEFAULT_SECURITY_ROLE_PROMPT_PATH,
+      "roles.securityRolePromptPath",
     ),
   };
 }

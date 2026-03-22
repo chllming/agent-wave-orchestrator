@@ -50,6 +50,8 @@ Skill settings resolve after executor selection, because runtime and deploy-kind
 8. `lanes.<lane>.skills.byDeployKind[defaultDeployEnvironmentKind]`
 9. agent `### Skills`
 
+Then Wave filters configured skills through each bundle's activation metadata. Explicit per-agent `### Skills` still force attachment even when activation metadata would not auto-match.
+
 When retry-time fallback changes the runtime, Wave recomputes the effective skill set and rewrites the executor overlay before relaunch.
 
 ## Common Fields
@@ -82,13 +84,21 @@ Wave writes runtime artifacts here:
 Common files:
 
 - `launch-preview.json`: resolved invocation lines, env vars, and retry mode
-- `skills.resolved.md`: canonical merged skill payload for the selected agent and runtime
-- `skills.metadata.json`: resolved skill ids, bundle metadata, hashes, and generated artifact paths
-- `<runtime>-skills.txt`: runtime-projected skill text used by the selected executor
+- `skills.resolved.md`: compact metadata-first skill catalog for the selected agent and runtime
+- `skills.expanded.md`: full canonical/debug skill payload with `SKILL.md` bodies and adapters
+- `skills.metadata.json`: resolved skill ids, activation metadata, permissions, hashes, and generated artifact paths
+- `<runtime>-skills.txt`: runtime-projected compact skill text used by the selected executor
 - `claude-system-prompt.txt`: generated Claude harness prompt overlay
 - `claude-settings.json`: generated Claude settings overlay when inline settings data is present
 - `opencode-agent-prompt.txt`: generated OpenCode harness prompt overlay
 - `opencode.json`: generated OpenCode runtime config overlay
+
+Runtime-specific delivery:
+
+- Codex uses the compact catalog in the compiled prompt and attaches bundle directories through `--add-dir`.
+- Claude appends the compact catalog to the generated system-prompt overlay.
+- OpenCode injects the compact catalog into `opencode.json` and attaches `skill.json`, `SKILL.md`, the selected adapter, and recursive `references/**` files through `--file`.
+- Local keeps skills prompt-only.
 
 `launch-preview.json` also records the resolved skill metadata so dry-run can verify the exact runtime plus skill combination before any live launch.
 

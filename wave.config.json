@@ -22,7 +22,8 @@
     "contQaRolePromptPath": "docs/agents/wave-cont-qa-role.md",
     "contEvalRolePromptPath": "docs/agents/wave-cont-eval-role.md",
     "integrationRolePromptPath": "docs/agents/wave-integration-role.md",
-    "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
+    "documentationRolePromptPath": "docs/agents/wave-documentation-role.md",
+    "securityRolePromptPath": "docs/agents/wave-security-role.md"
   },
   "executors": {
     "default": "codex",
@@ -65,6 +66,9 @@
         "budget": {
           "turns": 8,
           "minutes": 20
+        },
+        "claude": {
+          "allowedTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"]
         }
       },
       "ops-triage": {
@@ -99,6 +103,7 @@
       "documentation": ["role-documentation"],
       "cont-qa": ["role-cont-qa"],
       "cont-eval": ["role-cont-eval"],
+      "security": ["role-security"],
       "infra": ["role-infra"],
       "deploy": ["role-deploy"],
       "research": ["role-research"]
@@ -114,6 +119,8 @@
       "railway-mcp": ["provider-railway"],
       "docker-compose": ["provider-docker-compose"],
       "kubernetes": ["provider-kubernetes"],
+      "aws": ["provider-aws"],
+      "github-release": ["provider-github-release"],
       "ssh-manual": ["provider-ssh-manual"],
       "custom": ["provider-custom-deploy"]
     }

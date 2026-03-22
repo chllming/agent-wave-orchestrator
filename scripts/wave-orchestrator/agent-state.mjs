@@ -652,6 +652,17 @@ export function validateSecuritySummary(agent, summary) {
       detail: `Missing security review report at ${summary.reportPath}.`,
     };
   }
+  if (
+    summary.security.state === "clear" &&
+    ((summary.security.findings || 0) > 0 || (summary.security.approvals || 0) > 0)
+  ) {
+    return {
+      ok: false,
+      statusCode: "invalid-security-clear-state",
+      detail:
+        "Security review cannot report clear while findings or approvals remain open.",
+    };
+  }
   if (summary.security.state === "blocked") {
     return {
       ok: false,

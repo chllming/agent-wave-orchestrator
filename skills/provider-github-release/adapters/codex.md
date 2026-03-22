@@ -1,0 +1,1 @@
+Use the `gh` CLI with `--json` for release verification. If `gh` is not available in the sandbox, use `git tag -l` for tag verification and record the release verification gap. Keep all release operations deterministic and non-interactive.

@@ -151,6 +151,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     contEvalRolePromptPath: laneProfile.roles.contEvalRolePromptPath,
     integrationRolePromptPath: laneProfile.roles.integrationRolePromptPath,
     documentationRolePromptPath: laneProfile.roles.documentationRolePromptPath,
+    securityRolePromptPath: laneProfile.roles.securityRolePromptPath,
     requireDocumentationStewardFromWave:
       laneProfile.validation.requireDocumentationStewardFromWave,
     requireContext7DeclarationsFromWave:

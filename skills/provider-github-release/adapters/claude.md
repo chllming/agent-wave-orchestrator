@@ -1,0 +1,1 @@
+Prefer the `gh` CLI for release operations: `gh release view`, `gh release create`, `gh release upload`. Use `--json` flag for machine-readable output. Verify tag existence with `git tag -l` before creating releases. Use MCP GitHub tools when available for issue and PR cross-references.

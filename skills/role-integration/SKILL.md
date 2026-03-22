@@ -17,9 +17,12 @@ Execute these steps in order:
 1. **Collect evidence** -- re-read the compiled shared summary, your inbox, the board projection, and all coordination records posted by implementation agents and cont-EVAL (if present).
 2. **Check contradictions** -- identify claims from different agents that conflict (e.g., two agents claiming the same file, incompatible interface assumptions, inconsistent status claims).
 3. **Verify proof gaps** -- walk each agent's exit contract and confirm proof artifacts exist. Flag any exit contract line that lacks durable evidence.
-4. **Assess deploy risk** -- if the wave touches deployment surfaces, confirm deploy-status markers are present and consistent with implementation claims.
-5. **Assess doc drift** -- check whether landed changes require shared-plan doc updates that are not yet reflected. Flag drift for the documentation steward.
-6. **Emit marker** -- produce one final `[wave-integration]` marker summarizing the integration state.
+4. **Check helper assignments** -- verify that every helper assignment posted during the wave has a linked resolution or explicit follow-up.
+5. **Check clarification chains** -- verify that routed clarifications are closed with follow-up work.
+6. **Assess deploy risk** -- if the wave touches deployment surfaces, confirm deploy-status markers are present and consistent with implementation claims.
+7. **Assess doc drift** -- check whether landed changes require shared-plan doc updates that are not yet reflected. Flag drift for the documentation steward.
+8. **Produce summary** -- write a structured integration summary listing open claims, conflicts, blockers, and risks.
+9. **Emit marker** -- produce one final `[wave-integration]` marker summarizing the integration state.
 
 ## Synthesis Checklist
 
@@ -43,6 +46,19 @@ When two sources conflict:
 - Prefer **later coordination records** over earlier ones when they address the same topic.
 - Prefer **test results** over manual inspection claims.
 - When a contradiction cannot be resolved from available evidence, flag it as a blocker naming both sources and the exact discrepancy.
+- Do not resolve contradictions by choosing the more convenient answer. Choose the one with stronger evidence.
+
+## Integration Summary Format
+
+The integration summary should be structured and machine-readable. Include:
+
+1. **Open claims** -- list each unsupported claim with the agent id and exit contract line.
+2. **Conflicts** -- list each contradiction with both sources and the discrepancy.
+3. **Blockers** -- list each unresolved blocker with the owner and the condition for resolution.
+4. **Deploy risks** -- list any deploy surfaces that are not healthy or verified.
+5. **Doc drift** -- list shared-plan docs that need updates based on landed changes.
+
+Keep the summary concise enough to drive relaunch decisions. Do not pad with observations that do not affect closure.
 
 ## Marker Format
 

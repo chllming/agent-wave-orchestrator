@@ -1,5 +1,36 @@
 {
   "id": "role-research",
   "title": "Research Role",
-  "description": "Research-agent norms for focused evidence gathering."
+  "description": "Guides the research agent through scoped evidence gathering, source classification, finding conversion to wave implications, and escalation triggers.",
+  "activation": {
+    "when": "Attach when the agent is gathering scoped evidence and converting findings into wave implications.",
+    "roles": [
+      "research"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when findings are source-grounded, scoped, and translated into actionable implications.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "research-opencode",
+      "role": "research",
+      "runtime": "opencode",
+      "expectActive": true
+    },
+    {
+      "id": "implementation-opencode",
+      "role": "implementation",
+      "runtime": "opencode",
+      "expectActive": false
+    }
+  ]
 }

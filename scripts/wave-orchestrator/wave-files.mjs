@@ -57,6 +57,7 @@ import {
   isContEvalReportOnlyAgent,
   isContEvalReportPath,
   isContQaReportPath,
+  isSecurityRolePromptPath,
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
@@ -96,6 +97,26 @@ function resolveLaneProfileForOptions(options = {}) {
   }
   const config = options.config || loadWaveConfig();
   return resolveLaneProfile(config, options.lane || config.defaultLane || DEFAULT_WAVE_LANE);
+}
+
+function resolveSecurityRolePromptPath(laneProfile) {
+  return laneProfile?.roles?.securityRolePromptPath || DEFAULT_SECURITY_ROLE_PROMPT_PATH;
+}
+
+function normalizeSecurityCapabilities(capabilities, rolePromptPaths, securityRolePromptPath) {
+  const normalized = Array.isArray(capabilities) ? [...capabilities] : [];
+  const hasSecurityRolePrompt = Array.isArray(rolePromptPaths)
+    ? rolePromptPaths.some((rolePromptPath) =>
+        isSecurityRolePromptPath(rolePromptPath, securityRolePromptPath),
+      )
+    : false;
+  if (
+    hasSecurityRolePrompt &&
+    !normalized.some((capability) => String(capability || "").trim().toLowerCase() === "security-review")
+  ) {
+    normalized.push("security-review");
+  }
+  return normalized;
 }
 
 export function waveNumberFromFileName(fileName) {
@@ -1129,12 +1150,13 @@ function isImplementationOwningWaveAgent(
     contEvalAgentId,
     integrationAgentId,
     documentationAgentId,
+    securityRolePromptPath,
   },
 ) {
   return (
     ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
     !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
-    !isSecurityReviewAgent(agent)
+    !isSecurityReviewAgent(agent, { securityRolePromptPath })
   );
 }
 
@@ -1335,6 +1357,7 @@ export function validateWaveDefinition(wave, options = {}) {
     laneProfile.roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     laneProfile.roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
   const documentationThreshold = laneProfile.validation.requireDocumentationStewardFromWave;
   const context7Threshold = laneProfile.validation.requireContext7DeclarationsFromWave;
   const exitContractThreshold = laneProfile.validation.requireExitContractsFromWave;
@@ -1385,6 +1408,7 @@ export function validateWaveDefinition(wave, options = {}) {
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      securityRolePromptPath,
     }),
   );
   if (!wave.agents.some((agent) => agent.agentId === contQaAgentId)) {
@@ -1503,7 +1527,7 @@ export function validateWaveDefinition(wave, options = {}) {
     if (
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
       isContEvalReportOnlyAgent(agent, { contEvalAgentId }) ||
-      isSecurityReviewAgent(agent)
+      isSecurityReviewAgent(agent, { securityRolePromptPath })
     ) {
       if (Array.isArray(agent.components) && agent.components.length > 0) {
         errors.push(`Agent ${agent.agentId} must not declare a ### Components section`);
@@ -1534,7 +1558,7 @@ export function validateWaveDefinition(wave, options = {}) {
       if (
         ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
         !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
-        !isSecurityReviewAgent(agent)
+        !isSecurityReviewAgent(agent, { securityRolePromptPath })
       ) {
         if (!agent.exitContract) {
           errors.push(
@@ -1555,7 +1579,7 @@ export function validateWaveDefinition(wave, options = {}) {
       (!Array.isArray(agent.proofArtifacts) || agent.proofArtifacts.length === 0) &&
       ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
       !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
-      !isSecurityReviewAgent(agent)
+      !isSecurityReviewAgent(agent, { securityRolePromptPath })
     ) {
       errors.push(
         `Agent ${agent.agentId} must declare a ### Proof artifacts section when it targets ${PROOF_CENTRIC_COMPONENT_LEVEL} or above`,
@@ -1608,6 +1632,19 @@ export function validateWaveDefinition(wave, options = {}) {
     }
   } else if (Array.isArray(wave.evalTargets) && wave.evalTargets.length > 0) {
     errors.push(`Wave ${wave.wave} declares ## Eval targets but does not include Agent ${contEvalAgentId}`);
+  }
+  const securityReviewers = wave.agents.filter((agent) =>
+    isSecurityReviewAgent(agent, { securityRolePromptPath }),
+  );
+  for (const securityReviewer of securityReviewers) {
+    if (!securityReviewer.rolePromptPaths?.includes(securityRolePromptPath)) {
+      errors.push(
+        `Security reviewer ${securityReviewer.agentId} must import ${securityRolePromptPath}`,
+      );
+    }
+    if (!resolveSecurityReviewReportPath(securityReviewer)) {
+      errors.push(`Security reviewer ${securityReviewer.agentId} must own a security review report path`);
+    }
   }
   if (integrationRuleActive) {
     const integrationStewards = wave.agents.filter((agent) =>
@@ -1682,6 +1719,7 @@ export function validateWaveDefinition(wave, options = {}) {
 
 export function parseWaveContent(content, filePath, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
+  const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
   const fileName = path.basename(filePath);
   const waveNumber = waveNumberFromFileName(fileName);
   const commitMessageMatch = content.match(/\*\*Commit message\*\*:\s*`([^`]+)`/);
@@ -1710,7 +1748,11 @@ export function parseWaveContent(content, filePath, options = {}) {
     const exitContract = extractExitContractFromSection(sectionText, filePath, current.agentId);
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
     const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
-    const capabilities = extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId);
+    const capabilities = normalizeSecurityCapabilities(
+      extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId),
+      rolePromptPaths,
+      securityRolePromptPath,
+    );
     const skills = extractAgentSkillsFromSection(sectionText, filePath, current.agentId);
     const deliverables = extractAgentDeliverablesFromSection(
       sectionText,
@@ -2166,12 +2208,14 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
   const integrationAgentId = roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
   const implementationOwningAgents = (wave.agents || []).filter((agent) =>
     isImplementationOwningWaveAgent(agent, {
       contQaAgentId,
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      securityRolePromptPath,
     }),
   );
   if (promotions.length === 0) {
@@ -2193,6 +2237,7 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      securityRolePromptPath,
     })) {
       continue;
     }
@@ -2237,12 +2282,14 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
   const contEvalAgentId = roles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
   const integrationAgentId = roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId = roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
   const implementationOwningAgents = (wave.agents || []).filter((agent) =>
     isImplementationOwningWaveAgent(agent, {
       contQaAgentId,
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      securityRolePromptPath,
     }),
   );
   if (

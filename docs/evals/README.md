@@ -14,6 +14,8 @@ It has two jobs:
 
 The catalog is reference metadata, not a run-history database. It tells the wave author and `cont-EVAL` what kinds of checks are allowed and what external benchmark or paper baseline those checks map to.
 
+For full authored wave examples that use these patterns, see [docs/reference/sample-waves.md](../reference/sample-waves.md), especially the `cont-EVAL` sample wave.
+
 ## When To Use Delegated Vs Pinned Targets
 
 Use `selection: delegated` when the wave should authorize a benchmark family and let `cont-EVAL` choose the exact benchmark set inside that family.

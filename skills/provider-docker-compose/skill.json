@@ -1,5 +1,53 @@
 {
   "id": "provider-docker-compose",
   "title": "Docker Compose",
-  "description": "Docker Compose environment and rollout norms."
+  "description": "Guides deploy verification against Docker Compose services: container health, local vs production readiness distinction, and dependency ordering.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is Docker Compose and the agent must reason about service/container health ordering.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "docker-compose"
+    ]
+  },
+  "termination": "Stop when container health evidence and dependency ordering are explicit.",
+  "permissions": {
+    "network": [],
+    "shell": [
+      "docker",
+      "docker-compose"
+    ],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-docker-compose",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "docker-compose",
+      "expectActive": true
+    },
+    {
+      "id": "cont-qa-docker-compose",
+      "role": "cont-qa",
+      "runtime": "claude",
+      "deployKind": "docker-compose",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-docker-compose",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "docker-compose",
+      "expectActive": false
+    }
+  ]
 }

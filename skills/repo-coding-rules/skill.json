@@ -1,5 +1,34 @@
 {
   "id": "repo-coding-rules",
   "title": "Repo Coding Rules",
-  "description": "Repository-local coding and validation rules."
+  "description": "Guides agents through pre-edit checks, change hygiene, test expectations, doc alignment, and commit conventions for this repository.",
+  "activation": {
+    "when": "Attach to every agent so repository change hygiene, validation, and documentation alignment remain consistent.",
+    "roles": [],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the touched scope has coherent edits, validation, and documentation follow-through.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "implementation-codex",
+      "role": "implementation",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "research-opencode",
+      "role": "research",
+      "runtime": "opencode",
+      "expectActive": true
+    }
+  ]
 }

@@ -1,5 +1,35 @@
 {
   "id": "wave-core",
   "title": "Wave Core",
-  "description": "Core Wave execution rules for coordination, ownership, proof, and closure."
+  "description": "Ensures every agent follows coordination protocol, respects ownership boundaries, produces durable proof, and meets closure requirements before claiming done.",
+  "activation": {
+    "when": "Attach to every agent to enforce Wave coordination, proof, and closure protocol.",
+    "roles": [],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when ownership boundaries, proof obligations, and required Wave markers are satisfied or explicitly handed off.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "implementation-codex",
+      "role": "implementation",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-opencode",
+      "role": "documentation",
+      "runtime": "opencode",
+      "deployKind": "railway-cli",
+      "expectActive": true
+    }
+  ]
 }

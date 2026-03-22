@@ -1,5 +1,36 @@
 {
   "id": "role-deploy",
   "title": "Deploy Role",
-  "description": "Deploy-agent norms for rollout readiness, health, and rollback posture."
+  "description": "Guides the deploy agent through rollout verification, health proof, failure classification, rollback posture, and deploy status marker emission.",
+  "activation": {
+    "when": "Attach when the agent owns rollout verification, status publication, and rollback posture.",
+    "roles": [
+      "deploy"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when deploy evidence is captured and the release state is clearly classified.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-opencode",
+      "role": "deploy",
+      "runtime": "opencode",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-opencode",
+      "role": "documentation",
+      "runtime": "opencode",
+      "expectActive": false
+    }
+  ]
 }

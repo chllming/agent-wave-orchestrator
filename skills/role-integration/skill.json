@@ -1,5 +1,36 @@
 {
   "id": "role-integration",
   "title": "Integration Role",
-  "description": "Integration-steward norms for reconciling cross-agent state."
+  "description": "Guides the integration steward through cross-agent synthesis, contradiction resolution, proof gap verification, and closure-readiness judgment.",
+  "activation": {
+    "when": "Attach when the agent is responsible for cross-agent synthesis, contradiction handling, and closure readiness.",
+    "roles": [
+      "integration"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when cross-agent contradictions are resolved or escalated with concrete next actions.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "integration-claude",
+      "role": "integration",
+      "runtime": "claude",
+      "expectActive": true
+    },
+    {
+      "id": "implementation-claude",
+      "role": "implementation",
+      "runtime": "claude",
+      "expectActive": false
+    }
+  ]
 }

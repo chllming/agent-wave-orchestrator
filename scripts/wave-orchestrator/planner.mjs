@@ -3,7 +3,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin, stderr } from "node:process";
 import { EXIT_CONTRACT_COMPLETION_VALUES, EXIT_CONTRACT_DOC_IMPACT_VALUES, EXIT_CONTRACT_DURABILITY_VALUES, EXIT_CONTRACT_PROOF_VALUES } from "./agent-state.mjs";
-import { DEFAULT_SECURITY_ROLE_PROMPT_PATH, loadWaveConfig } from "./config.mjs";
+import { loadWaveConfig } from "./config.mjs";
 import { loadComponentCutoverMatrix, parseWaveFile, requiredDocumentationStewardPathsForWave, SHARED_PLAN_DOC_PATHS, validateWaveDefinition, applyExecutorSelectionsToWave } from "./wave-files.mjs";
 import { buildLanePaths, ensureDirectory, REPO_ROOT, writeJsonAtomic, writeTextAtomic } from "./shared.mjs";
 import {
@@ -735,7 +735,8 @@ function buildWorkerAgentSpec({
   return {
     agentId,
     title,
-    rolePromptPaths: roleKind === "security" ? [DEFAULT_SECURITY_ROLE_PROMPT_PATH] : [],
+    rolePromptPaths:
+      roleKind === "security" ? [lanePaths.securityRolePromptPath] : [],
     skills: values.skills || [],
     executor: {
       profile: values.executorProfile,

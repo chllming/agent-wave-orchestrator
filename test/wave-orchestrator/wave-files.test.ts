@@ -947,6 +947,191 @@ describe("validateWaveDefinition", () => {
     ).toMatchObject({ wave: 0 });
   });
 
+  it("requires security reviewers to import the standing security role prompt", () => {
+    expect(() =>
+      validateWaveDefinition(
+        {
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
+          agents: [
+            {
+              agentId: "A0",
+              prompt: leapClawPrompt.replace(
+                "go/example/file.go",
+                "docs/plans/waves/reviews/wave-0-cont-qa.md",
+              ),
+              rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-cont-qa.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+            },
+            {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
+              agentId: "A7",
+              title: "Security Engineer",
+              prompt: [
+                "Read docs/reference/repository-guidance.md.",
+                "Read docs/research/agent-context-sources.md.",
+                "",
+                "File ownership (only touch these paths):",
+                "- .tmp/main-wave-launcher/security/wave-0-review.md",
+              ].join("\n"),
+              rolePromptPaths: [],
+              ownedPaths: [".tmp/main-wave-launcher/security/wave-0-review.md"],
+              capabilities: ["security-review"],
+            },
+            {
+              agentId: "A1",
+              prompt: leapClawPrompt,
+              ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
+              exitContract: {
+                completion: "integrated",
+                durability: "none",
+                proof: "integration",
+                docImpact: "owned",
+              },
+            },
+          ],
+        },
+        { lane: "leap-claw" },
+      ),
+    ).toThrow(new RegExp(`must import ${WAVE_SECURITY_ROLE_PROMPT_PATH}`));
+  });
+
+  it("requires security reviewers to own a security review report path", () => {
+    expect(() =>
+      validateWaveDefinition(
+        {
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
+          agents: [
+            {
+              agentId: "A0",
+              prompt: leapClawPrompt.replace(
+                "go/example/file.go",
+                "docs/plans/waves/reviews/wave-0-cont-qa.md",
+              ),
+              rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-cont-qa.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+            },
+            {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
+              agentId: "A7",
+              title: "Security Engineer",
+              prompt: [
+                "Read docs/reference/repository-guidance.md.",
+                "Read docs/research/agent-context-sources.md.",
+                "",
+                "File ownership (only touch these paths):",
+                "- docs/reviews/wave-0.md",
+              ].join("\n"),
+              rolePromptPaths: [WAVE_SECURITY_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/reviews/wave-0.md"],
+              capabilities: ["security-review"],
+            },
+            {
+              agentId: "A1",
+              prompt: leapClawPrompt,
+              ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
+              exitContract: {
+                completion: "integrated",
+                durability: "none",
+                proof: "integration",
+                docImpact: "owned",
+              },
+            },
+          ],
+        },
+        { lane: "leap-claw" },
+      ),
+    ).toThrow(/must own a security review report path/);
+  });
+
+  it("does not classify implementation agents by title alone as security reviewers", () => {
+    expect(
+      validateWaveDefinition(
+        {
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
+          agents: [
+            {
+              agentId: "A0",
+              prompt: leapClawPrompt.replace(
+                "go/example/file.go",
+                "docs/plans/waves/reviews/wave-0-cont-qa.md",
+              ),
+              rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-cont-qa.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+            },
+            {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
+              agentId: "A1",
+              title: "Security Hardening Engineer",
+              prompt: leapClawPrompt,
+              ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
+              exitContract: {
+                completion: "integrated",
+                durability: "none",
+                proof: "integration",
+                docImpact: "owned",
+              },
+            },
+          ],
+        },
+        { lane: "leap-claw" },
+      ),
+    ).toMatchObject({ wave: 0 });
+  });
+
   it("rejects leap-claw waves without a cont-QA role", () => {
     expect(() =>
       validateWaveDefinition(

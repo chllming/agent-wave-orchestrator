@@ -17,9 +17,14 @@ export function isContEvalReportPath(relPath) {
   return /(?:^|\/)(?:reviews?|.*cont[-_]?eval|.*eval).*\.(?:md|txt)$/i.test(cleanPath(relPath));
 }
 
-export function isSecurityRolePromptPath(relPath) {
+export function isSecurityRolePromptPath(
+  relPath,
+  securityRolePromptPath = DEFAULT_SECURITY_ROLE_PROMPT_PATH,
+) {
   const normalized = cleanPath(relPath);
+  const configured = cleanPath(securityRolePromptPath);
   return (
+    normalized === configured ||
     normalized === DEFAULT_SECURITY_ROLE_PROMPT_PATH ||
     normalized.endsWith("/wave-security-role.md")
   );
@@ -52,25 +57,28 @@ export function isContEvalReportOnlyAgent(
   });
 }
 
-export function isSecurityReviewAgent(agent) {
+export function isSecurityReviewAgent(
+  agent,
+  { securityRolePromptPath = DEFAULT_SECURITY_ROLE_PROMPT_PATH } = {},
+) {
   if (!agent || typeof agent !== "object") {
     return false;
   }
   const rolePromptPaths = Array.isArray(agent.rolePromptPaths) ? agent.rolePromptPaths : [];
-  if (rolePromptPaths.some((rolePromptPath) => isSecurityRolePromptPath(rolePromptPath))) {
+  if (
+    rolePromptPaths.some((rolePromptPath) =>
+      isSecurityRolePromptPath(rolePromptPath, securityRolePromptPath),
+    )
+  ) {
     return true;
   }
   const capabilities = Array.isArray(agent.capabilities)
     ? agent.capabilities.map((entry) => String(entry || "").trim().toLowerCase())
     : [];
-  if (capabilities.some((capability) => capability.startsWith("security"))) {
-    return true;
-  }
-  const title = String(agent.title || "").trim().toLowerCase();
-  return /\bsecurity\b/.test(title);
+  return capabilities.includes("security-review");
 }
 
 export function resolveSecurityReviewReportPath(agent) {
   const ownedPaths = Array.isArray(agent?.ownedPaths) ? agent.ownedPaths.map(cleanPath).filter(Boolean) : [];
-  return ownedPaths.find((ownedPath) => isSecurityReportPath(ownedPath)) || ownedPaths[0] || null;
+  return ownedPaths.find((ownedPath) => isSecurityReportPath(ownedPath)) || null;
 }

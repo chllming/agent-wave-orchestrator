@@ -1,5 +1,54 @@
 {
   "id": "provider-ssh-manual",
   "title": "SSH Manual",
-  "description": "Manual host and SSH-based environment norms."
+  "description": "Guides manual host verification with fail-closed posture: exact evidence recording, approved operation boundaries, and SSH verification protocol.",
+  "activation": {
+    "when": "Attach when the wave deploy surface requires manual SSH verification and the agent must operate fail-closed within approved bounds.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "ssh-manual"
+    ]
+  },
+  "termination": "Stop when manual-host evidence is recorded and any unapproved operation is explicitly escalated.",
+  "permissions": {
+    "network": [
+      "approved-hosts"
+    ],
+    "shell": [
+      "ssh"
+    ],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-ssh-manual",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "ssh-manual",
+      "expectActive": true
+    },
+    {
+      "id": "cont-qa-ssh-manual",
+      "role": "cont-qa",
+      "runtime": "claude",
+      "deployKind": "ssh-manual",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-ssh-manual",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "ssh-manual",
+      "expectActive": false
+    }
+  ]
 }

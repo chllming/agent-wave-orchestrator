@@ -1,5 +1,55 @@
 {
   "id": "provider-github-release",
   "title": "GitHub Release",
-  "description": "GitHub release and tag publication norms."
+  "description": "Guides GitHub release verification: release state model, asset management, tag and publication proof, and cross-system dependency tracking.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is a GitHub Release and the agent must verify publication state, tags, and assets.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "github-release"
+    ]
+  },
+  "termination": "Stop when release publication evidence is captured and cross-system dependencies are explicit.",
+  "permissions": {
+    "network": [
+      "github.com"
+    ],
+    "shell": [
+      "gh",
+      "git"
+    ],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-github-release",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "github-release",
+      "expectActive": true
+    },
+    {
+      "id": "integration-github-release",
+      "role": "integration",
+      "runtime": "claude",
+      "deployKind": "github-release",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-github-release",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "github-release",
+      "expectActive": false
+    }
+  ]
 }

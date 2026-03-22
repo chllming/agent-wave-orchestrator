@@ -1,6 +1,6 @@
 # Skills Reference
 
-Skills are repo-owned reusable instruction bundles that can be attached by lane, role, runtime, deploy kind, or explicit per-agent declaration.
+Skills are repo-owned reusable instruction bundles. Wave resolves them by config layer, then filters them through each bundle's activation metadata before projecting them into the selected runtime.
 
 ## Canonical Bundle Layout
 
@@ -9,12 +9,13 @@ Each bundle lives under `skills/<skill-id>/` and requires:
 - `skill.json`
 - `SKILL.md`
 
-Optional runtime adapters live under:
+Optional files:
 
 - `adapters/codex.md`
 - `adapters/claude.md`
 - `adapters/opencode.md`
 - `adapters/local.md`
+- `references/**` for on-demand reference material
 
 Minimal example:
 
@@ -26,30 +27,76 @@ skills/provider-railway/
     codex.md
     claude.md
     opencode.md
-    local.md
+  references/
+    verification-commands.md
 ```
 
 ## `skill.json`
 
-Required fields in practice:
+Required fields:
 
 - `id`
 - `title`
 - `description`
+- `activation.when`
+
+Optional fields:
+
+- `version`
+- `tags`
+- `activation.roles`
+- `activation.runtimes`
+- `activation.deployKinds`
+- `termination.when`
+- `permissions.network`
+- `permissions.shell`
+- `permissions.mcpServers`
+- `trust.tier`
+- `evalCases[]`
+
+Example:
+
+```json
+{
+  "id": "provider-railway",
+  "title": "Railway",
+  "description": "Provider-aware Railway verification and rollback guidance.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is Railway and the agent is acting in deploy, infra, integration, or cont-qa scope.",
+    "roles": ["deploy", "infra", "integration", "cont-qa"],
+    "runtimes": [],
+    "deployKinds": ["railway-cli", "railway-mcp"]
+  },
+  "termination": "Stop when Railway evidence is recorded or the blocking surface is explicit.",
+  "permissions": {
+    "network": ["railway.app"],
+    "shell": ["railway"],
+    "mcpServers": ["railway"]
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-railway-cli",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "railway-cli",
+      "expectActive": true
+    }
+  ]
+}
+```
 
 The bundle directory name and manifest `id` must match the normalized skill id.
 
 ## `SKILL.md`
 
-This is the canonical human-authored instruction body for the skill.
+`SKILL.md` is the canonical instruction body. Keep it reusable and procedural:
 
-Keep it focused on reusable guidance that should survive across:
-
-- many waves
-- multiple roles
-- multiple runtimes
-
-Do not duplicate volatile assignment-specific details that belong in the wave prompt instead.
+- reusable across many waves
+- free of assignment-specific details that belong in the wave prompt
+- compact enough that long catalogs and command references can move into `references/`
 
 ## `wave.config.json` Surface
 
@@ -59,12 +106,12 @@ Top-level and lane-local skill attachment use the same shape:
 {
   "skills": {
     "dir": "skills",
-    "base": ["wave-core"],
+    "base": ["wave-core", "repo-coding-rules"],
     "byRole": {
-      "implementation": ["role-implementation"]
+      "deploy": ["role-deploy"]
     },
     "byRuntime": {
-      "codex": ["runtime-codex"]
+      "claude": ["runtime-claude"]
     },
     "byDeployKind": {
       "railway-mcp": ["provider-railway"]
@@ -77,7 +124,7 @@ Lane-local `lanes.<lane>.skills` extends the global config instead of replacing 
 
 ## Resolution Order
 
-Resolved skills attach in this order:
+Resolved skills are gathered in this order:
 
 1. global `skills.base`
 2. lane `skills.base`
@@ -89,20 +136,12 @@ Resolved skills attach in this order:
 8. lane `skills.byDeployKind[defaultDeployEnvironmentKind]`
 9. agent `### Skills`
 
+Then Wave applies manifest activation filtering:
+
+- configured skills only stay active if their `activation.roles`, `activation.runtimes`, and `activation.deployKinds` match the agent context
+- explicit agent `### Skills` still attach even if activation metadata would not auto-match
+
 Duplicates are removed while preserving first-seen order.
-
-## Per-Agent Attachment
-
-Wave markdown can add explicit skills:
-
-````md
-### Skills
-
-- provider-github-release
-- provider-aws
-````
-
-These are additive. They do not replace the base, role, runtime, or deploy-kind skill layers.
 
 ## Deploy-Kind Attachment
 
@@ -116,41 +155,70 @@ If the wave declares:
 - `prod`: `railway-mcp` default
 ````
 
-then `byDeployKind.railway-mcp` skills become eligible for agents in that wave.
+then `byDeployKind.railway-mcp` skills become eligible for that wave. Whether they actually attach still depends on each bundle's activation metadata.
+
+Config-time validation rules:
+
+- `skills.byRole` keys must be supported Wave roles
+- `skills.byRuntime` keys must be supported runtimes
+- `skills.byDeployKind` keys are validated by `wave doctor` against built-in kinds plus kinds declared in wave files
+
+Built-in deploy kinds shipped by the starter profile are:
+
+- `railway-cli`
+- `railway-mcp`
+- `docker-compose`
+- `kubernetes`
+- `ssh-manual`
+- `custom`
+- `aws`
+- `github-release`
 
 ## Runtime Projection
 
-The canonical bundle is shared, but projection is runtime specific:
+Wave now projects skills metadata-first:
+
+- `skills.resolved.md` is a compact catalog with bundle summaries, activation scope, permissions, manifest paths, adapter paths, and available references
+- `skills.expanded.md` contains the full canonical `SKILL.md` bodies plus runtime adapters for debugging and audit
+
+Runtime delivery:
 
 - Codex
-  Skill bundle directories become `--add-dir` inputs, and the merged skill text is included in the compiled prompt.
+  Bundle directories become `--add-dir` inputs. The compact catalog stays in the compiled prompt, and the agent can read bundle files directly from disk.
 - Claude
-  The merged skill payload is appended to the generated system-prompt overlay.
+  The compact catalog is appended to the generated system-prompt overlay.
 - OpenCode
-  Skill instructions flow into `opencode.json`, and relevant files are attached through `--file`.
+  The compact catalog is injected into `opencode.json`, and `skill.json`, `SKILL.md`, the selected adapter, and every recursive `references/**` file are attached through `--file`.
 - Local
-  Skill text stays prompt-only.
+  The compact catalog stays prompt-only.
 
 ## Generated Artifacts
 
 Executor overlay directories can contain:
 
 - `skills.resolved.md`
+- `skills.expanded.md`
 - `skills.metadata.json`
 - `<runtime>-skills.txt`
 
-Dry-run `launch-preview.json` and live trace metadata also record the resolved skill ids and bundle metadata.
+Dry-run `launch-preview.json` and live trace metadata also record the resolved skill ids, bundle metadata, hashes, activation metadata, and artifact paths.
 
 ## Validation
 
-`wave doctor` validates that all configured skill bundles referenced by lane skill config exist and can be loaded.
+`wave doctor` validates the skill surface end to end:
 
-Missing or malformed bundles are treated as configuration errors, not silent no-ops.
+- referenced bundles exist and load
+- every bundle under the skills directory has a valid manifest and `SKILL.md`
+- `skills.byRole`, `skills.byRuntime`, and `skills.byDeployKind` selectors are valid
+- config mapping does not contradict manifest activation metadata
+- every shipped `evalCases[]` route resolves to the expected active or inactive outcome
+
+Missing or malformed bundles are configuration errors, not silent no-ops.
 
 ## Best Practices
 
-- Put repo-specific norms into skills, not repeated wave prompts.
-- Keep skills short and reusable.
-- Use runtime adapters only for runtime-specific instructions.
-- Prefer deploy-kind mapping for environment conventions and explicit `### Skills` only for special cases.
-- Keep bundle ids stable so traces and prompt fingerprints stay intelligible across runs.
+- Keep `SKILL.md` procedural and move long catalogs into `references/`.
+- Put routing intent into `activation.*`, not only prose.
+- Use explicit per-agent `### Skills` for true exceptions, not as a substitute for missing activation metadata.
+- Keep provider skills role-scoped unless every role genuinely needs the provider context.
+- Keep bundle ids stable so traces and prompt fingerprints remain intelligible across runs.

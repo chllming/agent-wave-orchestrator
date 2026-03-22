@@ -21,6 +21,8 @@ This repository now uses a layered docs structure so operators, maintainers, and
   Read [concepts/what-is-a-wave.md](./concepts/what-is-a-wave.md), [concepts/runtime-agnostic-orchestration.md](./concepts/runtime-agnostic-orchestration.md), and [concepts/context7-vs-skills.md](./concepts/context7-vs-skills.md).
 - Drafting or revising waves:
   Read [guides/planner.md](./guides/planner.md) and then the operator runbook in [plans/wave-orchestrator.md](./plans/wave-orchestrator.md).
+- Looking for concrete example waves:
+  Read [reference/sample-waves.md](./reference/sample-waves.md) for showcase-first examples that demonstrate the current authored wave surface.
 - Running live waves:
   Read [guides/terminal-surfaces.md](./guides/terminal-surfaces.md), [concepts/operating-modes.md](./concepts/operating-modes.md), and [plans/wave-orchestrator.md](./plans/wave-orchestrator.md).
 - Tuning runtime behavior:

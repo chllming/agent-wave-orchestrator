@@ -57,6 +57,8 @@ Inside each agent block, the important sections are:
 - `## Eval targets`
   Optional wave-level contract for `cont-EVAL`, including benchmark family or pinned benchmarks, objective, and stop condition.
   See [docs/evals/README.md](../evals/README.md) for guidance on delegated versus pinned targets and the coordination benchmark families.
+- `### Proof artifacts`
+  Optional machine-visible local evidence required for proof-centric waves, especially `pilot-live` and above.
 - `### Context7`
   External library truth to prefetch and inject.
 - `### Skills`
@@ -110,6 +112,7 @@ A wave is not done because an agent said so. It is done only when the runtime su
 
 - implementation exit contracts pass
 - required deliverables exist and stay within ownership boundaries
+- required proof artifacts exist when the wave declares proof-first live evidence
 - required component proof and promotions pass
 - helper assignments are resolved
 - required dependency tickets are resolved
@@ -117,6 +120,8 @@ A wave is not done because an agent said so. It is done only when the runtime su
 - if present, `cont-EVAL` satisfies its declared eval targets
 - integration recommends closure
 - documentation and cont-QA closure pass
+
+For proof-first live-wave examples, see [docs/reference/live-proof-waves.md](../reference/live-proof-waves.md).
 
 ## Where The State Lives
 

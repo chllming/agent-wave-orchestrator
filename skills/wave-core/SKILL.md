@@ -21,9 +21,12 @@
    - a decision changes scope, ownership, or interface
    - a handoff to another agent is needed
    - a helper assignment is opened or resolved
+   - a clarification is routed or answered
 3. Each coordination record must include: agent id, timestamp context, topic, and actionable detail.
 4. Do not batch coordination. Post records as events occur so downstream agents see them promptly.
 5. When a record references another agent, name that agent explicitly.
+6. Coordination records are append-only. Do not edit or delete previous records; post corrections as new records.
+7. When you receive an inbox message that requires action, acknowledge it with a coordination record before proceeding.
 
 ## Ownership & Boundaries
 
@@ -32,6 +35,8 @@
 - Shared-plan docs (current-state.md, component matrix, roadmap) are owned by the documentation steward, not implementation agents.
 - Implementation-specific docs (inline comments, subsystem READMEs) stay with the implementation owner.
 - When ownership is ambiguous, post a coordination record requesting clarification before editing.
+- Helper assignments create temporary cross-boundary access. They remain blocking until the linked follow-up resolves.
+- Cross-lane dependencies require explicit dependency tickets. Do not assume another lane's state without a resolved ticket.
 
 ## Proof Requirements
 
@@ -39,6 +44,8 @@
 - Generic claims ("tests pass", "works correctly") are not proof. Name the exact test file, command, or artifact.
 - Component promotions require evidence that the component actually reached the declared level, not just that adjacent code landed.
 - Runtime-facing proof must be real evidence (logs, health checks, build output), not future-work notes.
+- Proof must be durable. Transient output (terminal scrollback, ephemeral logs) is not proof unless captured into a file.
+- When proof cannot be produced within the wave, record the gap explicitly with the reason and the follow-up owner.
 
 ## Closure Checklist
 
@@ -56,6 +63,15 @@ A wave is closable only when all nine conditions are satisfied:
 
 If any condition is not met, the wave remains open. Do not approximate closure.
 
+Closure runs in staged order:
+1. Implementation and proof (all implementation agents).
+2. cont-EVAL (if present) -- must report `satisfied` before integration runs.
+3. Integration -- must report `ready-for-doc-closure` before documentation and cont-QA run.
+4. Documentation -- must report `closed` or `no-change`.
+5. cont-QA -- final verdict. Only PASS allows the wave to close.
+
+Do not skip stages. Each stage depends on the prior stage completing.
+
 ## Structured Markers Reference
 
 Emit markers exactly as shown. Parsers depend on the format.
@@ -72,6 +88,19 @@ Emit markers exactly as shown. Parsers depend on the format.
 - Every marker must appear on a single line.
 - The `detail` field is free text but should be concise (under 120 characters).
 - Only the role that owns the marker type should emit it. Do not emit markers for other roles.
+
+Marker ownership:
+
+| Marker | Emitted by |
+|---|---|
+| `[wave-gate]` | cont-QA role |
+| `[wave-eval]` | cont-EVAL role |
+| `[wave-integration]` | Integration role |
+| `[wave-doc-closure]` | Documentation role |
+| `[infra-status]` | Infra role |
+| `[deploy-status]` | Deploy role |
+
+When you encounter a marker in the coordination log, treat it as the authoritative state from that role. If a role emits multiple markers during a wave, the last one supersedes earlier ones.
 
 <!-- CUSTOMIZE: Add project-specific marker types or extend existing formats here. -->
 

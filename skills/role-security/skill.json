@@ -1,0 +1,36 @@
+{
+  "id": "role-security",
+  "title": "Security Review Role",
+  "description": "Guides the wave security reviewer through threat-model-first review, exact finding routing, approval tracking, and fail-closed disposition rules.",
+  "activation": {
+    "when": "Attach when the agent is responsible for wave-level security review before integration closure.",
+    "roles": [
+      "security"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the security disposition is clear, blocked, or explicitly downgraded to advisory concerns with named follow-up.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "security-claude",
+      "role": "security",
+      "runtime": "claude",
+      "expectActive": true
+    },
+    {
+      "id": "integration-claude",
+      "role": "integration",
+      "runtime": "claude",
+      "expectActive": false
+    }
+  ]
+}

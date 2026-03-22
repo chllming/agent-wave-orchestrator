@@ -1,0 +1,1 @@
+Use kubectl with `-o json` for all verification. Keep kubectl commands deterministic and non-interactive. If kubeconfig is not available in the sandbox, record the access gap as deploy risk. Capture full command output for evidence.

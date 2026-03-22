@@ -1,5 +1,54 @@
 {
   "id": "provider-aws",
   "title": "AWS",
-  "description": "AWS environment and rollout norms."
+  "description": "Guides deploy verification against AWS services: resource identification, per-service health checks, IAM vs workload issue separation, and evidence recording.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is AWS and the agent must reason about AWS-specific rollout or closure state.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "aws"
+    ]
+  },
+  "termination": "Stop when AWS service evidence is captured or the blocking surface is isolated.",
+  "permissions": {
+    "network": [
+      "amazonaws.com"
+    ],
+    "shell": [
+      "aws"
+    ],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-aws",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "aws",
+      "expectActive": true
+    },
+    {
+      "id": "infra-aws",
+      "role": "infra",
+      "runtime": "claude",
+      "deployKind": "aws",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-aws",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "aws",
+      "expectActive": false
+    }
+  ]
 }

@@ -1,5 +1,36 @@
 {
   "id": "role-infra",
   "title": "Infra Role",
-  "description": "Infra-agent norms for environment, dependency, and identity proof."
+  "description": "Guides the infra agent through environment verification across machine state, dependencies, identity, admission, and configuration surfaces.",
+  "activation": {
+    "when": "Attach when the agent is validating environment state, dependencies, identity, and configuration surfaces.",
+    "roles": [
+      "infra"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when environment evidence is recorded or the blocking surface is isolated.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "infra-opencode",
+      "role": "infra",
+      "runtime": "opencode",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-opencode",
+      "role": "documentation",
+      "runtime": "opencode",
+      "expectActive": false
+    }
+  ]
 }

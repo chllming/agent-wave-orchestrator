@@ -1,5 +1,36 @@
 {
   "id": "runtime-codex",
   "title": "Codex Runtime",
-  "description": "Codex-specific execution norms inside the Wave harness."
+  "description": "Configures Codex runtime behavior: terminal-only execution, compiled prompt contract, sandbox constraints, and deterministic output norms.",
+  "activation": {
+    "when": "Attach when the selected runtime is Codex so the agent follows terminal-first Codex execution constraints.",
+    "roles": [],
+    "runtimes": [
+      "codex"
+    ],
+    "deployKinds": []
+  },
+  "termination": "Stop when Codex-specific execution and output constraints have been applied for the current attempt.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "implementation-codex",
+      "role": "implementation",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "implementation-claude",
+      "role": "implementation",
+      "runtime": "claude",
+      "expectActive": false
+    }
+  ]
 }

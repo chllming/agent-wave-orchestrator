@@ -1,0 +1,1 @@
+Prefer AWS CLI commands with `--output json` for machine-readable evidence. Use MCP tools for AWS operations when available. Record exact CLI commands and JSON output excerpts as deployment proof. Separate IAM verification from workload health checks — run both but report independently.

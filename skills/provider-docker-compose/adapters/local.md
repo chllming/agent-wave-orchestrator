@@ -1,0 +1,1 @@
+The local runtime may have Docker access for compose verification. Use `docker compose ps` and `docker compose logs` when available. If Docker is not running, limit output to compose file validation and service definition review. Do not claim container health from file inspection alone.

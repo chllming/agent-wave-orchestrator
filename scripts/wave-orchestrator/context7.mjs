@@ -218,6 +218,8 @@ export function buildAgentPromptFingerprintSource(agent) {
     prompt: String(agent?.prompt || ""),
     context7SelectionHash: String(agent?.context7Resolved?.selectionHash || ""),
     exitContract: agent?.exitContract || null,
+    deliverables: agent?.deliverables || [],
+    proofArtifacts: agent?.proofArtifacts || [],
     components: agent?.components || [],
     componentTargets: agent?.componentTargets || null,
     executorResolved: agent?.executorResolved || null,

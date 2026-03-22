@@ -45,6 +45,8 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/evals/README.md` explains how to author delegated versus pinned `## Eval targets`, including the coordination-oriented benchmark families.
+- `docs/reference/live-proof-waves.md` explains how to author proof-first `pilot-live` and higher-maturity waves with `### Proof artifacts`, sticky executors, and operator command capture.
+- `docs/reference/sample-waves.md` points to showcase-first sample waves that combine the modern authored wave surface in concrete examples.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
 - `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
@@ -204,6 +206,7 @@ pnpm exec wave changelog --since-installed
 - `### Deliverables` is optional and lets a wave declare exact repo-relative file outputs that must exist, and that stay within the agent's declared file ownership, before an implementation agent can satisfy its exit contract.
 - `### Skills` is optional and adds explicit skill ids from `skills/` on top of the lane, role, runtime, and deploy-kind defaults.
 - `### Executor` can declare `profile`, `fallbacks`, `tags`, and runtime budgets in addition to vendor-specific overrides.
+- `### Proof artifacts` is optional for repo-only waves and recommended for `pilot-live` and above; use it to declare machine-visible local evidence required for closure.
 - `## Deploy environments` lets the wave declare named deployment targets. The default deploy environment kind is also used for deploy-kind skill attachment.
 - Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
@@ -211,6 +214,7 @@ pnpm exec wave changelog --since-installed
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
 - For benchmark-family guidance and delegated-versus-pinned eval examples, see [docs/evals/README.md](../evals/README.md).
+- For proof-first live-wave patterns, sticky retry guidance, and `### Proof artifacts` examples, see [docs/reference/live-proof-waves.md](../reference/live-proof-waves.md).
 - Agents should use `wave coord post` for durable blockers, handoffs, evidence, and requests instead of relying on ad hoc board edits.
 - Keep shared plan docs and the component cutover matrix owned by the configured documentation steward once that rule becomes active.
 - Use the runtime reference pages for the full executor surface instead of relying on this runbook to enumerate every key:

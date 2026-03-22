@@ -1,5 +1,36 @@
 {
   "id": "runtime-claude",
   "title": "Claude Runtime",
-  "description": "Claude-specific execution norms inside the Wave harness."
+  "description": "Configures Claude runtime behavior: tool profile, combined prompt contract, marker syntax preservation, and context management norms.",
+  "activation": {
+    "when": "Attach when the selected runtime is Claude so the agent follows Claude tool and system-prompt conventions.",
+    "roles": [],
+    "runtimes": [
+      "claude"
+    ],
+    "deployKinds": []
+  },
+  "termination": "Stop when Claude-specific prompt and tool-mode constraints have been applied for the current attempt.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "integration-claude",
+      "role": "integration",
+      "runtime": "claude",
+      "expectActive": true
+    },
+    {
+      "id": "integration-codex",
+      "role": "integration",
+      "runtime": "codex",
+      "expectActive": false
+    }
+  ]
 }

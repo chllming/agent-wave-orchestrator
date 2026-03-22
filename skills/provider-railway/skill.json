@@ -1,5 +1,71 @@
 {
   "id": "provider-railway",
   "title": "Railway",
-  "description": "Railway-specific deploy and environment norms."
+  "description": "Guides deploy verification against Railway MCP and CLI state: service health, domain binding, variable proof, failure classification, and rollback posture.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is Railway and the agent is responsible for provider-aware rollout, infra, integration, or closure checks.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "railway-cli",
+      "railway-mcp"
+    ]
+  },
+  "termination": "Stop when Railway evidence is recorded or the failure and rollback posture is explicit.",
+  "permissions": {
+    "network": [
+      "railway.app"
+    ],
+    "shell": [
+      "railway"
+    ],
+    "mcpServers": [
+      "railway"
+    ]
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-railway-cli",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "railway-cli",
+      "expectActive": true
+    },
+    {
+      "id": "integration-railway-mcp",
+      "role": "integration",
+      "runtime": "claude",
+      "deployKind": "railway-mcp",
+      "expectActive": true
+    },
+    {
+      "id": "cont-qa-railway-cli",
+      "role": "cont-qa",
+      "runtime": "claude",
+      "deployKind": "railway-cli",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-railway-cli",
+      "role": "documentation",
+      "runtime": "opencode",
+      "deployKind": "railway-cli",
+      "expectActive": false
+    },
+    {
+      "id": "implementation-railway-cli",
+      "role": "implementation",
+      "runtime": "codex",
+      "deployKind": "railway-cli",
+      "expectActive": false
+    }
+  ]
 }

@@ -1,5 +1,52 @@
 {
   "id": "provider-kubernetes",
   "title": "Kubernetes",
-  "description": "Kubernetes cluster, workload, and rollout norms."
+  "description": "Guides deploy verification against Kubernetes clusters: workload health, failure classification across manifest, admission, image, and readiness surfaces.",
+  "activation": {
+    "when": "Attach when the wave deploy surface is Kubernetes and the agent must classify workload, admission, image, or readiness failures.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "kubernetes"
+    ]
+  },
+  "termination": "Stop when Kubernetes workload evidence is captured and the failure surface is classified.",
+  "permissions": {
+    "network": [],
+    "shell": [
+      "kubectl"
+    ],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-kubernetes",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "kubernetes",
+      "expectActive": true
+    },
+    {
+      "id": "infra-kubernetes",
+      "role": "infra",
+      "runtime": "claude",
+      "deployKind": "kubernetes",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-kubernetes",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "kubernetes",
+      "expectActive": false
+    }
+  ]
 }

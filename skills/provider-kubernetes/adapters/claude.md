@@ -1,0 +1,1 @@
+Use kubectl with `-o json` or `-o wide` for machine-readable verification output. For complex diagnostics, use the Agent tool to run parallel kubectl commands across namespaces. Prefer `kubectl rollout status` with `--timeout` over polling pod status manually.

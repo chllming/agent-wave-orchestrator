@@ -1,5 +1,36 @@
 {
   "id": "role-cont-qa",
   "title": "cont-QA Role",
-  "description": "Fail-closed closure guidance for final cont-QA verdicts, gate consistency, and blocker reporting."
+  "description": "Guides the cont-QA agent through evidence-based closure judgment: comparing landed proof against exit contracts, component promotions, and integration and doc state.",
+  "activation": {
+    "when": "Attach when the agent is the cont-QA gate and must judge closure against landed proof.",
+    "roles": [
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when closure is accepted, rejected, or escalated with explicit proof gaps.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "cont-qa-claude",
+      "role": "cont-qa",
+      "runtime": "claude",
+      "expectActive": true
+    },
+    {
+      "id": "cont-eval-claude",
+      "role": "cont-eval",
+      "runtime": "claude",
+      "expectActive": false
+    }
+  ]
 }

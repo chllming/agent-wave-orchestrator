@@ -1,5 +1,36 @@
 {
   "id": "role-cont-eval",
   "title": "cont-EVAL Role",
-  "description": "Contract-driven eval tuning guidance for benchmark selection, rerun discipline, and regression accounting."
+  "description": "Guides the cont-EVAL agent through benchmark-driven eval loops, regression detection, scoped tuning, and eval target satisfaction judgment.",
+  "activation": {
+    "when": "Attach when the agent is running benchmark-driven evaluation and regression checks.",
+    "roles": [
+      "cont-eval"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when eval targets are rechecked and remaining regressions are localized or escalated.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "cont-eval-codex",
+      "role": "cont-eval",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "cont-qa-codex",
+      "role": "cont-qa",
+      "runtime": "codex",
+      "expectActive": false
+    }
+  ]
 }

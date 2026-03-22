@@ -17,6 +17,7 @@ import {
   writeJsonAtomic,
   writeTextAtomic,
 } from "./shared.mjs";
+import { summarizeResolvedSkills } from "./skills.mjs";
 
 export const TRACE_VERSION = 2;
 const LEGACY_TRACE_VERSION = 1;
@@ -701,27 +702,7 @@ function buildAgentMetadata(dir, run, attempt, artifacts) {
     },
     skills:
       run.lastSkillProjection ||
-      (run.agent?.skillsResolved
-        ? {
-            ids: run.agent.skillsResolved.ids || [],
-            role: run.agent.skillsResolved.role || null,
-            runtime: run.agent.skillsResolved.runtime || null,
-            deployKind: run.agent.skillsResolved.deployKind || null,
-            promptHash: run.agent.skillsResolved.promptHash || null,
-            bundles: Array.isArray(run.agent.skillsResolved.bundles)
-              ? run.agent.skillsResolved.bundles.map((bundle) => ({
-                  id: bundle.id,
-                  bundlePath: bundle.bundlePath,
-                  manifestPath: bundle.manifestPath,
-                  skillPath: bundle.skillPath,
-                  adapterPath: bundle.adapterPath || null,
-                  bundleHash: bundle.bundleHash || null,
-                  sourceFiles: Array.isArray(bundle.sourceFiles) ? bundle.sourceFiles.slice() : [],
-                }))
-              : [],
-            artifacts: run.agent.skillsResolved.artifacts || null,
-          }
-        : null),
+      (run.agent?.skillsResolved ? summarizeResolvedSkills(run.agent.skillsResolved) : null),
   };
 }
 

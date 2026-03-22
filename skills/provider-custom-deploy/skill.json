@@ -1,5 +1,50 @@
 {
   "id": "provider-custom-deploy",
   "title": "Custom Deploy",
-  "description": "Fallback deploy norms for custom environments."
+  "description": "Guides custom environment verification: contract definition, verification surface identification, and deploy risk recording when standard paths are unavailable.",
+  "activation": {
+    "when": "Attach when the wave uses a custom deploy contract and the agent must make the verification surface explicit.",
+    "roles": [
+      "deploy",
+      "infra",
+      "integration",
+      "cont-qa"
+    ],
+    "runtimes": [],
+    "deployKinds": [
+      "custom"
+    ]
+  },
+  "termination": "Stop when the custom deploy contract, evidence, and residual risk are explicitly recorded.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-custom",
+      "role": "deploy",
+      "runtime": "opencode",
+      "deployKind": "custom",
+      "expectActive": true
+    },
+    {
+      "id": "integration-custom",
+      "role": "integration",
+      "runtime": "claude",
+      "deployKind": "custom",
+      "expectActive": true
+    },
+    {
+      "id": "documentation-custom",
+      "role": "documentation",
+      "runtime": "claude",
+      "deployKind": "custom",
+      "expectActive": false
+    }
+  ]
 }

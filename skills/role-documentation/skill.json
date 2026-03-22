@@ -1,5 +1,36 @@
 {
   "id": "role-documentation",
   "title": "Documentation Role",
-  "description": "Documentation-steward norms for shared plan reconciliation."
+  "description": "Guides the documentation steward through shared-plan reconciliation, delta application, no-change protocol, and doc closure marker emission.",
+  "activation": {
+    "when": "Attach when the agent owns documentation reconciliation, closure notes, and operator-facing deltas.",
+    "roles": [
+      "documentation"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the shared-plan delta is applied or a no-change decision is justified with evidence.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "documentation-opencode",
+      "role": "documentation",
+      "runtime": "opencode",
+      "expectActive": true
+    },
+    {
+      "id": "deploy-opencode",
+      "role": "deploy",
+      "runtime": "opencode",
+      "expectActive": false
+    }
+  ]
 }

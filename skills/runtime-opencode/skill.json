@@ -1,5 +1,36 @@
 {
   "id": "runtime-opencode",
   "title": "OpenCode Runtime",
-  "description": "OpenCode-specific execution norms inside the Wave harness."
+  "description": "Configures OpenCode runtime behavior: injected instructions, file attachment contract, edit-focused workflow, and marker preservation norms.",
+  "activation": {
+    "when": "Attach when the selected runtime is OpenCode so the agent follows file-attachment and edit-focused OpenCode conventions.",
+    "roles": [],
+    "runtimes": [
+      "opencode"
+    ],
+    "deployKinds": []
+  },
+  "termination": "Stop when OpenCode-specific attachment and editing rules have been applied for the current attempt.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "deploy-opencode",
+      "role": "deploy",
+      "runtime": "opencode",
+      "expectActive": true
+    },
+    {
+      "id": "deploy-codex",
+      "role": "deploy",
+      "runtime": "codex",
+      "expectActive": false
+    }
+  ]
 }

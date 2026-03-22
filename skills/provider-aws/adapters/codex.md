@@ -1,0 +1,1 @@
+Use AWS CLI commands with `--output json` for all verification. Network access may be restricted in sandbox — if AWS APIs are unreachable, record the access gap as deploy risk rather than inferring state. Keep CLI invocations deterministic and capture stdout for evidence.

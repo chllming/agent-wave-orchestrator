@@ -57,6 +57,17 @@ const REQUIRED_GITIGNORE_ENTRIES = [
   "docs/research/articles/",
 ];
 
+function collectDeclaredDeployKinds(waves = []) {
+  return Array.from(
+    new Set(
+      (Array.isArray(waves) ? waves : [])
+        .flatMap((wave) => wave?.deployEnvironments || [])
+        .map((environment) => String(environment?.kind || "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ).sort();
+}
+
 function packageMetadata() {
   const payload = readJsonOrNull(PACKAGE_METADATA_PATH);
   if (!payload?.name || !payload?.version) {
@@ -282,13 +293,10 @@ export function runDoctor() {
           errors.push(`Missing required Wave file: ${relPath}`);
         }
       }
-      const skillValidation = validateLaneSkillConfiguration(lanePaths.laneProfile);
-      if (!skillValidation.ok) {
-        errors.push(...skillValidation.errors);
-      }
+      let parsedWaves = [];
       if (fs.existsSync(lanePaths.wavesDir)) {
         const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
-        parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
+        parsedWaves = parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
           .map((wave) =>
             applyExecutorSelectionsToWave(wave, {
               laneProfile: lanePaths.laneProfile,
@@ -301,9 +309,19 @@ export function runDoctor() {
               lane: lanePaths.lane,
               bundleIndex: context7BundleIndex,
             }),
-          )
-          .forEach((wave) => validateWaveDefinition(wave, { laneProfile: lanePaths.laneProfile }));
+          );
+        const skillValidation = validateLaneSkillConfiguration(lanePaths.laneProfile, {
+          allowedDeployKinds: collectDeclaredDeployKinds(parsedWaves),
+        });
+        if (!skillValidation.ok) {
+          errors.push(...skillValidation.errors);
+        }
+        parsedWaves.forEach((wave) => validateWaveDefinition(wave, { laneProfile: lanePaths.laneProfile }));
       } else {
+        const skillValidation = validateLaneSkillConfiguration(lanePaths.laneProfile);
+        if (!skillValidation.ok) {
+          errors.push(...skillValidation.errors);
+        }
         warnings.push(`No waves directory found at ${path.relative(REPO_ROOT, lanePaths.wavesDir)}.`);
       }
     } catch (error) {

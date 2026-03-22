@@ -33,6 +33,7 @@ describe("runtime configuration normalization", () => {
             base: ["wave-core"],
             byRole: {
               implementation: ["role-implementation"],
+              security: ["role-security"],
             },
             byRuntime: {
               codex: ["runtime-codex"],
@@ -243,6 +244,7 @@ describe("runtime configuration normalization", () => {
       base: ["wave-core", "repo-coding-rules"],
       byRole: {
         implementation: ["role-implementation"],
+        security: ["role-security"],
       },
       byRuntime: {
         claude: ["runtime-claude"],
@@ -252,6 +254,7 @@ describe("runtime configuration normalization", () => {
         "railway-cli": ["provider-railway"],
       },
     });
+    expect(lane.roles.securityRolePromptPath).toBe("docs/agents/wave-security-role.md");
   });
 
   it("preserves a global custom skills dir when lane skills omit dir", () => {
@@ -350,5 +353,59 @@ describe("runtime configuration normalization", () => {
     );
 
     expect(() => loadWaveConfig(configPath)).toThrow(/byRole\.evaluator was renamed to .*cont-qa/);
+  });
+
+  it("rejects unsupported role and runtime selector keys", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          skills: {
+            byRole: {
+              implemntation: ["role-implementation"],
+            },
+            byRuntime: {
+              cluade: ["runtime-claude"],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    expect(() => loadWaveConfig(configPath)).toThrow(/skills\.byRole\.implemntation/);
+  });
+
+  it("preserves deploy-kind selectors for doctor-time validation", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          skills: {
+            byDeployKind: {
+              railawy: ["provider-railway"],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    expect(resolveLaneProfile(config, "main").skills.byDeployKind.railawy).toEqual([
+      "provider-railway",
+    ]);
   });
 });

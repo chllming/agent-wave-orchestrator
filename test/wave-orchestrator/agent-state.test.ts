@@ -506,6 +506,32 @@ describe("validateSecuritySummary", () => {
       statusCode: "security-blocked",
     });
   });
+
+  it("rejects clear security output when findings remain open", () => {
+    const reportDir = makeRepoTempDir();
+    const reportPath = path.join(reportDir, "wave-0-security-review.md");
+    fs.writeFileSync(reportPath, "# Security Review\n", "utf8");
+
+    expect(
+      validateSecuritySummary(
+        {
+          agentId: "A7",
+        },
+        {
+          reportPath: path.relative(REPO_ROOT, reportPath),
+          security: {
+            state: "clear",
+            findings: 1,
+            approvals: 0,
+            detail: "incorrectly-cleared",
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "invalid-security-clear-state",
+    });
+  });
 });
 
 describe("validateDocumentationClosureSummary", () => {

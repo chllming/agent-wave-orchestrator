@@ -19,6 +19,8 @@ Before editing any file, confirm:
 3. You understand the existing patterns in the file (indentation, naming, exports).
 4. Your change is the smallest diff that achieves the goal.
 5. If the file has a corresponding test file, you will update or extend tests to cover your change.
+6. You have checked for other files that import or depend on the symbols you are changing.
+7. If the file is a config file (JSON, YAML), you have validated the resulting structure is well-formed.
 
 ## Change Hygiene
 
@@ -42,6 +44,8 @@ Follow these conventions unless the repo's own `AGENTS.md` or linter config over
 - When fixing a bug, add a **regression test** that fails without the fix and passes with it.
 - If a test file does not exist for the module you changed, create one following the repo's test directory structure.
 - Name test files to match their source: `scripts/wave-orchestrator/foo.mjs` maps to `test/wave-orchestrator/foo.test.ts`.
+- Do not disable or skip existing tests to make your change pass. If an existing test conflicts with your change, understand why before modifying it.
+- Test assertions should be specific. Avoid broad `toBeTruthy()` when an exact value comparison is possible.
 
 ## Doc Alignment
 
@@ -73,6 +77,8 @@ If you are not the documentation steward, post a coordination record requesting 
   - `Release:` -- version bump or release artifact
 - Keep the subject line under 72 characters.
 - Add a body paragraph when the "why" is not obvious from the diff.
+- Reference the wave id or issue number in the body when applicable.
+- Do not combine unrelated changes in a single commit. Each commit should be a coherent unit.
 
 ## Customization
 

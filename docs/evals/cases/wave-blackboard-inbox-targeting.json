@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "id": "wave-blackboard-inbox-targeting",
+  "title": "Inbox Targeting Fidelity",
+  "summary": "Critical doc and runtime facts should survive projection into the right owner inboxes instead of staying buried in raw coordination.",
+  "familyId": "blackboard-fidelity",
+  "benchmarkId": "inbox-targeting-fidelity",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "projection-fidelity",
+    "primaryMetric": "targeted-inbox-recall",
+    "thresholds": {
+      "targeted-inbox-recall": 100,
+      "projection-consistency-rate": 100
+    },
+    "practicalWinThreshold": 20
+  },
+  "expectations": {
+    "summaryFacts": ["docs must note the new queue retry ceiling"],
+    "targetedInboxes": {
+      "a9": ["docs must note the new queue retry ceiling"],
+      "a1": ["runtime must enforce retry ceiling 3 before enqueue"]
+    }
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "Runtime Owner",
+        "ownedPaths": ["src/queue/retries.ts"],
+        "capabilities": ["runtime"]
+      },
+      {
+        "agentId": "a9",
+        "title": "Documentation Steward",
+        "ownedPaths": ["docs/plans/current-state.md"],
+        "capabilities": ["documentation"]
+      }
+    ],
+    "records": [
+      {
+        "id": "req-runtime-retry-cap",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["agent:a1"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/queue/retries.ts"],
+        "summary": "runtime must enforce retry ceiling 3 before enqueue",
+        "detail": "This runtime-facing fact must stay visible to the implementation owner."
+      },
+      {
+        "id": "req-doc-retry-cap",
+        "kind": "blocker",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["agent:a9"],
+        "status": "open",
+        "priority": "normal",
+        "artifactRefs": ["docs/plans/current-state.md"],
+        "summary": "docs must note the new queue retry ceiling",
+        "detail": "The documentation steward needs the same coordination fact in a docs-owned surface."
+      }
+    ]
+  }
+}

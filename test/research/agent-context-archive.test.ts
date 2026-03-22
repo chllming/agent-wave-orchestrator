@@ -143,6 +143,21 @@ describe("topic inference and grouping", () => {
     expect(topics).toContain("long-running-agents-and-compaction");
   });
 
+  it("adds cooperation as an override topic without removing existing categories", () => {
+    const topics = inferTopics({
+      slug: "cooperbench-why-coding-agents-cannot-be-your-teammates-yet",
+      title: "CooperBench: Why Coding Agents Cannot be Your Teammates Yet",
+      mapsTo:
+        "Collaborative coding benchmark for inter-agent cooperation, communication quality, commitment tracking, and coordination failures.",
+      fit: "Direct benchmark for whether coding agents behave like usable teammates instead of isolated solo solvers.",
+      kind: "paper",
+      topics: ["planning-and-orchestration"],
+    });
+
+    expect(topics).toContain("planning-and-orchestration");
+    expect(topics).toContain("agent-cooperation-and-coordination");
+  });
+
   it("loads entries from the archive tree and groups them by section and topic", async () => {
     const archiveRoot = makeTempDir();
     fs.mkdirSync(path.join(archiveRoot, "papers"), { recursive: true });

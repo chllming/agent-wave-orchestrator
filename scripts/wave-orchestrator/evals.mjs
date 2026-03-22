@@ -351,6 +351,12 @@ export function loadBenchmarkCatalog(options = {}) {
         id: benchmarkId,
         title: cleanText(benchmark.title) || benchmarkId,
         summary: cleanText(benchmark.summary) || null,
+        localCases: normalizeStringArray(
+          benchmark.localCases,
+          `families.${familyId}.benchmarks.${benchmarkId}.localCases`,
+        ).map((entry, index) =>
+          normalizeEvalTargetId(entry, `families.${familyId}.benchmarks.${benchmarkId}.localCases[${index}]`),
+        ),
         goal: cleanText(benchmark.goal) || null,
         failureModes: normalizeStringArray(
           benchmark.failureModes,
@@ -380,6 +386,12 @@ export function loadBenchmarkCatalog(options = {}) {
       id: familyId,
       title: cleanText(rawFamily.title) || familyId,
       summary: cleanText(rawFamily.summary) || null,
+      localCases: normalizeStringArray(
+        rawFamily.localCases,
+        `families.${familyId}.localCases`,
+      ).map((entry, index) =>
+        normalizeEvalTargetId(entry, `families.${familyId}.localCases[${index}]`),
+      ),
       category: cleanText(rawFamily.category) || null,
       coordinationModel: cleanText(rawFamily.coordinationModel) || null,
       primaryMetric: familyPrimaryMetric,
@@ -395,6 +407,17 @@ export function loadBenchmarkCatalog(options = {}) {
     absolutePath,
     families,
     benchmarkIndex,
+    localCaseIndex: Object.fromEntries(
+      Object.values(families).flatMap((family) => [
+        ...(family.localCases || []).map((caseId) => [caseId, { familyId: family.id, benchmarkId: null }]),
+        ...Object.values(family.benchmarks).flatMap((benchmark) =>
+          (benchmark.localCases || []).map((caseId) => [
+            caseId,
+            { familyId: family.id, benchmarkId: benchmark.id },
+          ]),
+        ),
+      ]),
+    ),
   };
 }
 

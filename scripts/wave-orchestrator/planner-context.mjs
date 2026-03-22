@@ -48,6 +48,12 @@ export const PLANNER_CONTEXT7_SOURCE_FILES = [
   },
   {
     sourcePath:
+      "docs/research/agent-context-cache/papers/cooperbench-why-coding-agents-cannot-be-your-teammates-yet.md",
+    targetPath: `${PLANNER_CONTEXT7_SOURCE_DIR}/papers/cooperbench-why-coding-agents-cannot-be-your-teammates-yet.md`,
+    kind: "paper",
+  },
+  {
+    sourcePath:
       "docs/research/agent-context-cache/papers/incremental-planning-to-control-a-blackboard-based-problem-solver.md",
     targetPath: `${PLANNER_CONTEXT7_SOURCE_DIR}/papers/incremental-planning-to-control-a-blackboard-based-problem-solver.md`,
     kind: "paper",

@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "id": "wave-contradiction-conflict",
+  "title": "Claim Conflict Detection",
+  "summary": "Conflicting claims should be surfaced to the integration steward and converted into explicit repair work.",
+  "familyId": "contradiction-recovery",
+  "benchmarkId": "claim-conflict-detection",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "contradiction-recovery",
+    "primaryMetric": "contradiction-detection-rate",
+    "thresholds": {
+      "contradiction-detection-rate": 100,
+      "repair-closure-rate": 100
+    },
+    "practicalWinThreshold": 25
+  },
+  "expectations": {
+    "targetedInboxes": {
+      "a8": [
+        "claim one: config flag enable_fast_path is safe in prod",
+        "claim two: config flag enable_fast_path leaks stale auth data"
+      ]
+    },
+    "requiredAssignments": [
+      {
+        "requestId": "repair-fast-path",
+        "assignedAgentId": "a8"
+      }
+    ]
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "capabilityRouting": {
+      "preferredAgents": {
+        "integration": ["a8"]
+      }
+    },
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "Runtime Owner",
+        "ownedPaths": ["src/auth/fast-path.ts"],
+        "capabilities": ["runtime"]
+      },
+      {
+        "agentId": "a2",
+        "title": "Security Reviewer",
+        "ownedPaths": ["src/auth/session.ts"],
+        "capabilities": ["security"]
+      },
+      {
+        "agentId": "a8",
+        "title": "Integration Steward",
+        "ownedPaths": [".tmp/main-wave-launcher/integration/wave-0.md"],
+        "capabilities": ["integration"]
+      }
+    ],
+    "records": [
+      {
+        "id": "claim-fast-safe",
+        "kind": "claim",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a1",
+        "targets": ["agent:a8"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/auth/fast-path.ts"],
+        "summary": "claim one: config flag enable_fast_path is safe in prod",
+        "detail": "The runtime owner believes the fast path is safe."
+      },
+      {
+        "id": "claim-fast-leak",
+        "kind": "claim",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a2",
+        "targets": ["agent:a8"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/auth/session.ts", "src/auth/fast-path.ts"],
+        "summary": "claim two: config flag enable_fast_path leaks stale auth data",
+        "detail": "The security reviewer believes the same flag is unsafe."
+      },
+      {
+        "id": "repair-fast-path",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["capability:integration"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/auth/fast-path.ts"],
+        "summary": "Turn the contradiction into explicit repair work before closure",
+        "detail": "Integration must own the conflict repair loop."
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "adapters": {
+    "swe-bench-pro": {
+      "single-agent": "external-harness run --benchmark swe-bench-pro --task {task_id} --arm {arm} --model {model_id} --executor {executor_command}",
+      "full-wave": "external-harness run --benchmark swe-bench-pro --task {task_id} --arm {arm} --model {model_id} --executor {executor_command}",
+      "verify": "external-harness verify --benchmark swe-bench-pro --task {task_id} --arm {arm}"
+    }
+  }
+}

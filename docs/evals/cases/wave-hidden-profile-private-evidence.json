@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "id": "wave-hidden-profile-private-evidence",
+  "title": "Private Evidence Integration",
+  "summary": "Critical facts are split across two specialists and only the full Wave arm should surface both through targeted inboxes.",
+  "familyId": "hidden-profile-pooling",
+  "benchmarkId": "private-evidence-integration",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "distributed-info",
+    "primaryMetric": "distributed-info-accuracy",
+    "thresholds": {
+      "distributed-info-accuracy": 100
+    },
+    "practicalWinThreshold": 20
+  },
+  "expectations": {
+    "globalFacts": [
+      "customer-facing outage is isolated to shard blue",
+      "the rollback must preserve migration 20260321_add_backfill_guard"
+    ],
+    "targetedInboxes": {
+      "a1": ["customer-facing outage is isolated to shard blue"],
+      "a2": ["the rollback must preserve migration 20260321_add_backfill_guard"]
+    }
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "API Specialist",
+        "ownedPaths": ["src/api/server.ts"],
+        "capabilities": ["api"]
+      },
+      {
+        "agentId": "a2",
+        "title": "Migration Specialist",
+        "ownedPaths": ["db/migrations/20260321_add_backfill_guard.sql"],
+        "capabilities": ["database"]
+      },
+      {
+        "agentId": "a8",
+        "title": "Integration Steward",
+        "ownedPaths": [".tmp/main-wave-launcher/integration/wave-0.md"],
+        "capabilities": ["integration"]
+      }
+    ],
+    "records": [
+      {
+        "id": "req-blue-shard",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["agent:a1"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/api/server.ts"],
+        "summary": "Need API confirmation: customer-facing outage is isolated to shard blue",
+        "detail": "Integration cannot close until the API owner confirms shard blue is the only failing shard."
+      },
+      {
+        "id": "req-backfill-guard",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["agent:a2"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["db/migrations/20260321_add_backfill_guard.sql"],
+        "summary": "Need migration confirmation: the rollback must preserve migration 20260321_add_backfill_guard",
+        "detail": "The database owner holds the rollback-safe migration constraint."
+      }
+    ]
+  }
+}

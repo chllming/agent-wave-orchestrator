@@ -15,6 +15,12 @@ export const TOPIC_DEFINITIONS = [
       "Planning topology, verifier and replanner loops, protocol-driven coordination, and blackboard-aware orchestration patterns for multi-agent systems.",
   },
   {
+    id: "agent-cooperation-and-coordination",
+    title: "Agent Cooperation and Coordination",
+    description:
+      "Benchmarks and failure analyses for inter-agent cooperation, commitment tracking, communication quality, negotiation, and teammate-style coordination.",
+  },
+  {
     id: "long-running-agents-and-compaction",
     title: "Long-Running Agents and Compaction",
     description:
@@ -101,6 +107,15 @@ const PLANNING_TOPIC_OVERRIDE_SLUGS = new Set([
 const SKILLS_TOPIC_OVERRIDE_SLUGS = new Set([
   "memory-for-autonomous-llm-agents-mechanisms-evaluation-and-emerging-frontiers",
   "meta-context-engineering-via-agentic-skill-evolution",
+]);
+
+const COOPERATION_TOPIC_OVERRIDE_SLUGS = new Set([
+  "cooperbench-why-coding-agents-cannot-be-your-teammates-yet",
+  "why-do-multi-agent-llm-systems-fail",
+  "systematic-failures-in-collective-reasoning-under-distributed-information-in-multi-agent-llms",
+  "silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems",
+  "dpbench-large-language-models-struggle-with-simultaneous-coordination",
+  "multi-agent-teams-hold-experts-back",
 ]);
 
 function escapeInlinePipes(value) {
@@ -251,6 +266,9 @@ export function inferTopics(entry, section = null) {
   }
   if (SKILLS_TOPIC_OVERRIDE_SLUGS.has(entry.slug)) {
     topics.push("skills-and-procedural-memory");
+  }
+  if (COOPERATION_TOPIC_OVERRIDE_SLUGS.has(entry.slug)) {
+    topics.push("agent-cooperation-and-coordination");
   }
 
   if (hasDeclaredTopics) {

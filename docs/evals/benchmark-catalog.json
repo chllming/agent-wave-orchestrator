@@ -120,6 +120,7 @@
         "private-evidence-integration": {
           "title": "Private Evidence Integration",
           "summary": "Checks whether separately observed facts are integrated into the final answer rather than merely repeated in conversation.",
+          "localCases": ["wave-hidden-profile-private-evidence"],
           "goal": "Measure end-to-end integration of distributed evidence into a coherent outcome.",
           "failureModes": [
             "communication-without-integration",
@@ -149,6 +150,7 @@
         "premature-consensus-guard": {
           "title": "Premature Consensus Guard",
           "summary": "Checks whether the system delays closure when important evidence is still siloed.",
+          "localCases": ["wave-premature-closure-guard"],
           "goal": "Measure resistance to converging early on shared but incomplete evidence.",
           "failureModes": [
             "premature-consensus",
@@ -205,6 +207,7 @@
         "cross-agent-state-reconstruction": {
           "title": "Cross-Agent State Reconstruction",
           "summary": "Checks whether the final shared state reflects facts that no single agent started with alone.",
+          "localCases": ["wave-silo-cross-agent-state"],
           "goal": "Measure whether the blackboard can reconstruct a correct global state from distributed local views.",
           "failureModes": [
             "information-silo",
@@ -363,6 +366,7 @@
         "lockstep-resolution": {
           "title": "Lockstep Resolution",
           "summary": "Checks whether the framework resolves many-way concurrent dependencies without circular waiting.",
+          "localCases": ["wave-simultaneous-lockstep"],
           "goal": "Measure coordination quality when several blocking tickets must resolve together.",
           "failureModes": [
             "circular-wait",
@@ -429,6 +433,7 @@
         "expert-routing-preservation": {
           "title": "Expert Routing Preservation",
           "summary": "Checks whether capability-targeted work is routed to the best available owner and stays there through closure.",
+          "localCases": ["wave-expert-routing-preservation"],
           "goal": "Measure whether the harness protects expert ownership instead of diluting it.",
           "failureModes": [
             "expert-underuse",
@@ -541,6 +546,7 @@
         "inbox-targeting-fidelity": {
           "title": "Inbox Targeting Fidelity",
           "summary": "Checks whether relevant facts reach the agents that own the impacted paths, components, or requests.",
+          "localCases": ["wave-blackboard-inbox-targeting"],
           "goal": "Measure whether inbox targeting reduces silos instead of creating them.",
           "failureModes": [
             "mis-targeted-context",
@@ -606,6 +612,7 @@
         "claim-conflict-detection": {
           "title": "Claim Conflict Detection",
           "summary": "Checks whether incompatible claims are surfaced in coordination or integration instead of passing through silently.",
+          "localCases": ["wave-contradiction-conflict"],
           "goal": "Measure whether the framework sees contradictory evidence before final closure.",
           "failureModes": [
             "false-consensus",

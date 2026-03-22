@@ -1,0 +1,15 @@
+{
+  "armId": "full-wave",
+  "title": "Full Wave Orchestration",
+  "roles": ["implementation", "cont-eval", "integration", "documentation", "cont-qa"],
+  "includeContEval": true,
+  "includeIntegrationSteward": true,
+  "includeDocumentationSteward": true,
+  "tracesRequired": true,
+  "notes": [
+    "Includes E0, A8, A9, and A0 in addition to implementation owners.",
+    "Compiled summaries and targeted inboxes are part of the arm behavior.",
+    "Proof-bounded closure and trace capture are required.",
+    "Must use the same model, executor, and benchmark verifier assumptions as the single-agent baseline."
+  ]
+}

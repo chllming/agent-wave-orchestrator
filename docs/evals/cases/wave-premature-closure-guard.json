@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "id": "wave-premature-closure-guard",
+  "title": "Premature Closure Guard",
+  "summary": "A clarification-linked repair request remains open, so the full Wave arm should preserve a blocking guard instead of converging early.",
+  "familyId": "hidden-profile-pooling",
+  "benchmarkId": "premature-consensus-guard",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "closure-guard",
+    "primaryMetric": "premature-convergence-rate",
+    "thresholds": {
+      "premature-convergence-rate": 0
+    },
+    "practicalWinThreshold": 50
+  },
+  "expectations": {
+    "clarificationRequestIds": ["clarify-missing-evidence"],
+    "requireBlockingGuard": true
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "Implementation Owner",
+        "ownedPaths": ["src/runtime.ts"],
+        "capabilities": ["runtime"]
+      },
+      {
+        "agentId": "a8",
+        "title": "Integration Steward",
+        "ownedPaths": [".tmp/main-wave-launcher/integration/wave-0.md"],
+        "capabilities": ["integration"]
+      }
+    ],
+    "records": [
+      {
+        "id": "clarify-missing-evidence",
+        "kind": "clarification-request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a1",
+        "targets": ["launcher"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/runtime.ts"],
+        "summary": "Missing evidence for restart durability",
+        "detail": "The implementation owner still needs proof for restart durability."
+      },
+      {
+        "id": "repair-missing-evidence",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["agent:a1"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/runtime.ts"],
+        "dependsOn": ["clarify-missing-evidence"],
+        "closureCondition": "clarification:clarify-missing-evidence",
+        "summary": "Repair request is still open while clarification remains unresolved",
+        "detail": "This request must remain blocking until the clarification chain is closed."
+      }
+    ]
+  }
+}

@@ -20,4 +20,5 @@ It intentionally references only the copied files that ship under
 - [Why Do Multi-Agent LLM Systems Fail?](../papers/why-do-multi-agent-llm-systems-fail.md)
 - [Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems](../papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md)
 - [DPBench: Large Language Models Struggle with Simultaneous Coordination](../papers/dpbench-large-language-models-struggle-with-simultaneous-coordination.md)
+- [CooperBench: Why Coding Agents Cannot be Your Teammates Yet](../papers/cooperbench-why-coding-agents-cannot-be-your-teammates-yet.md)
 - [Incremental Planning to Control a Blackboard-Based Problem Solver](../papers/incremental-planning-to-control-a-blackboard-based-problem-solver.md)

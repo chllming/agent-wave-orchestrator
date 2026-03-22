@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "adapters": [
+    {
+      "id": "swe-bench-pro",
+      "title": "SWE-bench Pro",
+      "mode": "direct",
+      "sourceBenchmark": "SWE-bench Pro",
+      "split": "public",
+      "pilotManifestPath": "docs/evals/pilots/swe-bench-pro-public-pilot.json",
+      "officialDocsUrl": "https://scaleapi.github.io/SWE-bench_Pro-os/",
+      "officialCodeUrl": "https://github.com/scaleapi/SWE-bench_Pro-os",
+      "summary": "Contamination-resistant long-horizon software engineering benchmark for public, held-out, and commercial repositories.",
+      "commandTemplate": "",
+      "metrics": ["task-success-rate", "cost-per-solved-task", "wall-clock-per-solved-task"],
+      "notes": [
+        "Use the public split for the first direct external benchmark run and rely on the official verifier for pass or fail.",
+        "Keep the base model, executor, and budget identical across the `single-agent` and `full-wave` arms.",
+        "The second direct benchmark slot is intentionally deferred until the later CooperBench pass."
+      ]
+    },
+    {
+      "id": "skillsbench-style-ablation",
+      "title": "SkillsBench-style Ablation",
+      "mode": "adapted",
+      "sourceBenchmark": "SkillsBench",
+      "summary": "Adapt the SkillsBench methodology to Wave skill bundles by comparing no skills, curated skills, and overbroad skills.",
+      "commandTemplate": "wave benchmark run --arm single-agent --arm multi-agent-minimal --arm full-wave",
+      "metrics": ["pass-rate-delta", "negative-skill-regression-rate", "runtime-cost"],
+      "notes": [
+        "This is a local adaptation rather than a direct external suite.",
+        "The initial repo benchmark runner ships the local corpus and registry, not the full external execution harness."
+      ]
+    },
+    {
+      "id": "evoclaw-style-sequence",
+      "title": "EvoClaw-style Sequence",
+      "mode": "adapted",
+      "sourceBenchmark": "EvoClaw",
+      "summary": "Sequence multiple dependent waves to measure long-horizon maintenance and error accumulation.",
+      "commandTemplate": "wave benchmark run --arm single-agent --arm full-wave --family silo-escape",
+      "metrics": ["milestone-pass-decay", "reopen-rate", "regression-carryover"],
+      "notes": [
+        "Use the local benchmark harness to define milestone DAGs or ordered wave sequences.",
+        "Best used after the deterministic coordination corpus is stable."
+      ]
+    },
+    {
+      "id": "silo-bench-style-coordination",
+      "title": "Silo-Bench-style Coordination",
+      "mode": "adapted",
+      "sourceBenchmark": "Silo-Bench",
+      "summary": "Distributed-information and communication-reasoning-gap evaluations adapted into Wave-native coordination fixtures.",
+      "commandTemplate": "wave benchmark run --family hidden-profile-pooling --family silo-escape",
+      "metrics": ["distributed-info-accuracy", "global-state-reconstruction-rate", "communication-reasoning-gap"],
+      "notes": [
+        "The shipped local cases in docs/evals/cases/ are the first adaptation layer for this family."
+      ]
+    },
+    {
+      "id": "hiddenbench-style-pooling",
+      "title": "HiddenBench-style Pooling",
+      "mode": "adapted",
+      "sourceBenchmark": "HiddenBench",
+      "summary": "Asymmetric-information tasks that focus specifically on whether decision-changing private evidence reaches shared state before closure.",
+      "commandTemplate": "wave benchmark run --family hidden-profile-pooling",
+      "metrics": ["distributed-info-accuracy", "premature-convergence-rate"],
+      "notes": [
+        "This is the recommended next coordination benchmark after the first SWE-bench Pro pilot."
+      ]
+    },
+    {
+      "id": "dpbench-style-contention",
+      "title": "DPBench-style Contention",
+      "mode": "adapted",
+      "sourceBenchmark": "DPBench",
+      "summary": "Simultaneous coordination and contention cases adapted into capability-routing and helper-assignment fixtures.",
+      "commandTemplate": "wave benchmark run --family simultaneous-coordination",
+      "metrics": ["deadlock-rate", "contention-resolution-rate", "symmetry-breaking-rate"],
+      "notes": [
+        "The initial local corpus measures the routing and blocking substrate before live concurrent execution is added."
+      ]
+    }
+  ]
+}

@@ -49,7 +49,7 @@
       "title": "Closure sweep and role gates",
       "canonicalDocs": [
         "docs/plans/wave-orchestrator.md",
-        "docs/agents/wave-evaluator-role.md",
+        "docs/agents/wave-cont-qa-role.md",
         "docs/agents/wave-documentation-role.md"
       ],
       "currentLevel": "repo-landed",

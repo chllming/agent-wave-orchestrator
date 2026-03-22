@@ -1,0 +1,663 @@
+{
+  "version": 2,
+  "families": {
+    "service-output": {
+      "title": "Service Output Quality",
+      "summary": "Benchmarks for reviewing runtime output quality, behavior, and correctness.",
+      "benchmarks": {
+        "golden-response-smoke": {
+          "title": "Golden Response Smoke",
+          "summary": "Compare representative outputs to known-good expectations."
+        },
+        "manual-session-review": {
+          "title": "Manual Session Review",
+          "summary": "Run the service manually and document output gaps from representative user flows."
+        }
+      }
+    },
+    "latency": {
+      "title": "Latency",
+      "summary": "Benchmarks for startup and request latency.",
+      "benchmarks": {
+        "http-latency-smoke": {
+          "title": "HTTP Latency Smoke",
+          "summary": "Quick latency pass over the service's core request path."
+        },
+        "cold-start-smoke": {
+          "title": "Cold Start Smoke",
+          "summary": "Track cold start behavior for the primary runtime surface."
+        }
+      }
+    },
+    "quality-regression": {
+      "title": "Quality Regression",
+      "summary": "Benchmarks for guarding against regressions during output tuning.",
+      "benchmarks": {
+        "baseline-diff-review": {
+          "title": "Baseline Diff Review",
+          "summary": "Compare current outputs to a previous accepted baseline."
+        },
+        "operator-checklist-review": {
+          "title": "Operator Checklist Review",
+          "summary": "Run a documented checklist over the tuned output surface."
+        }
+      }
+    },
+    "hidden-profile-pooling": {
+      "title": "Hidden Profile Pooling",
+      "summary": "Benchmarks for whether distributed private evidence is surfaced, pooled, and integrated before the team converges.",
+      "category": "coordination",
+      "coordinationModel": "blackboard-distributed-information",
+      "primaryMetric": {
+        "id": "distributed-info-accuracy",
+        "title": "Distributed Information Accuracy",
+        "unit": "percent",
+        "direction": "higher-is-better",
+        "summary": "Accuracy when key evidence begins distributed across agents."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "latent-asymmetry-surfacing-rate",
+          "title": "Latent Asymmetry Surfacing Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        },
+        {
+          "id": "premature-convergence-rate",
+          "title": "Premature Convergence Rate",
+          "unit": "percent",
+          "direction": "lower-is-better"
+        }
+      ],
+      "paperReferences": [
+        {
+          "id": "hiddenbench-2025",
+          "title": "Systematic Failures in Collective Reasoning under Distributed Information in Multi-Agent LLMs",
+          "year": 2025,
+          "url": "https://arxiv.org/abs/2505.11556",
+          "summary": "HiddenBench benchmark for collective reasoning under distributed information."
+        }
+      ],
+      "sotaBaseline": {
+        "source": "paper-static",
+        "paper": "HiddenBench",
+        "year": 2025,
+        "metric": "distributed-info-accuracy",
+        "value": 30.1,
+        "notes": "Reported multi-agent accuracy under distributed information in the paper abstract.",
+        "url": "https://arxiv.org/abs/2505.11556"
+      },
+      "benchmarks": {
+        "latent-asymmetry-surfacing": {
+          "title": "Latent Asymmetry Surfacing",
+          "summary": "Checks whether agents explicitly seek or expose facts they suspect other agents may hold.",
+          "goal": "Measure whether the framework notices unshared evidence before converging.",
+          "failureModes": [
+            "latent-information-asymmetry",
+            "premature-consensus",
+            "shared-evidence-overweighting"
+          ],
+          "signals": [
+            "requests-for-missing-evidence",
+            "inbox-to-summary-fact-escalation",
+            "late-discovered-decision-changing-fact"
+          ],
+          "scoring": {
+            "primaryMetric": "latent-asymmetry-surfacing-rate",
+            "successCriterion": "Critical unshared evidence is surfaced before final recommendation.",
+            "rubric": "Score higher when agents explicitly search for missing facts instead of relying on already-shared evidence."
+          },
+          "paperReferences": [
+            {
+              "id": "hiddenbench-2025",
+              "title": "Systematic Failures in Collective Reasoning under Distributed Information in Multi-Agent LLMs",
+              "year": 2025,
+              "url": "https://arxiv.org/abs/2505.11556"
+            }
+          ],
+          "tuningNotes": "Use when adjusting inbox compilation, clarification prompting, or board-to-summary compression."
+        },
+        "private-evidence-integration": {
+          "title": "Private Evidence Integration",
+          "summary": "Checks whether separately observed facts are integrated into the final answer rather than merely repeated in conversation.",
+          "goal": "Measure end-to-end integration of distributed evidence into a coherent outcome.",
+          "failureModes": [
+            "communication-without-integration",
+            "evidence-drop",
+            "incorrect-global-reconstruction"
+          ],
+          "signals": [
+            "final-answer-uses-private-facts",
+            "integration-summary-cites-distributed-evidence",
+            "correct-global-state-reconstruction"
+          ],
+          "scoring": {
+            "primaryMetric": "distributed-info-accuracy",
+            "successCriterion": "The final answer requires and reflects the distributed facts.",
+            "rubric": "Score higher only when the final recommendation depends on the pooled evidence."
+          },
+          "sotaBaseline": {
+            "source": "paper-static",
+            "paper": "HiddenBench",
+            "year": 2025,
+            "metric": "distributed-info-accuracy",
+            "value": 30.1,
+            "notes": "Paper baseline for multi-agent distributed-information accuracy.",
+            "url": "https://arxiv.org/abs/2505.11556"
+          }
+        },
+        "premature-consensus-guard": {
+          "title": "Premature Consensus Guard",
+          "summary": "Checks whether the system delays closure when important evidence is still siloed.",
+          "goal": "Measure resistance to converging early on shared but incomplete evidence.",
+          "failureModes": [
+            "premature-consensus",
+            "closure-before-evidence-pooling"
+          ],
+          "signals": [
+            "clarification-raised-before-close",
+            "integration-barrier-trips",
+            "documentation-or-cont-qa-blocks"
+          ],
+          "scoring": {
+            "primaryMetric": "premature-convergence-rate",
+            "successCriterion": "Final closure is blocked when a decision-relevant fact remains siloed."
+          }
+        }
+      }
+    },
+    "silo-escape": {
+      "title": "Silo Escape",
+      "summary": "Benchmarks for whether agents can move from locally sufficient views to globally correct coordinated state.",
+      "category": "coordination",
+      "coordinationModel": "shared-workspace-integration",
+      "primaryMetric": {
+        "id": "global-state-reconstruction-rate",
+        "title": "Global State Reconstruction Rate",
+        "unit": "percent",
+        "direction": "higher-is-better",
+        "summary": "Rate at which the team reconstructs the correct distributed state."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "communication-reasoning-gap",
+          "title": "Communication-Reasoning Gap",
+          "unit": "rubric",
+          "direction": "lower-is-better"
+        },
+        {
+          "id": "summary-fact-retention-rate",
+          "title": "Summary Fact Retention Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        }
+      ],
+      "paperReferences": [
+        {
+          "id": "silo-bench-2026",
+          "title": "Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems",
+          "year": 2026,
+          "url": "https://arxiv.org/abs/2603.01045",
+          "summary": "Shows agents often exchange information but fail to integrate it."
+        }
+      ],
+      "benchmarks": {
+        "cross-agent-state-reconstruction": {
+          "title": "Cross-Agent State Reconstruction",
+          "summary": "Checks whether the final shared state reflects facts that no single agent started with alone.",
+          "goal": "Measure whether the blackboard can reconstruct a correct global state from distributed local views.",
+          "failureModes": [
+            "information-silo",
+            "global-state-loss",
+            "integration-failure"
+          ],
+          "signals": [
+            "integration-summary-mentions-cross-agent-facts",
+            "ledger-reflects-distributed-blockers",
+            "final-answer-requires-pooled-state"
+          ],
+          "scoring": {
+            "primaryMetric": "global-state-reconstruction-rate",
+            "successCriterion": "The correct global state is reconstructed and used in the decision."
+          },
+          "tuningNotes": "Use when adjusting shared summary size, inbox targeting, or integration evidence aggregation."
+        },
+        "shared-summary-fact-retention": {
+          "title": "Shared Summary Fact Retention",
+          "summary": "Checks whether compiled summaries preserve critical facts from the raw coordination log.",
+          "goal": "Measure information loss introduced by summary compression.",
+          "failureModes": [
+            "summary-compression-loss",
+            "critical-fact-drop"
+          ],
+          "signals": [
+            "raw-log-fact-present-in-summary",
+            "summary-fact-present-in-inbox",
+            "decision-uses-retained-facts"
+          ],
+          "scoring": {
+            "primaryMetric": "summary-fact-retention-rate",
+            "successCriterion": "Decision-changing facts survive from raw log into the shared summary and targeted inboxes."
+          }
+        },
+        "communication-reasoning-gap-review": {
+          "title": "Communication-Reasoning Gap Review",
+          "summary": "Checks whether active communication actually improves the final integrated answer.",
+          "goal": "Measure the gap between information exchange and correct synthesis.",
+          "failureModes": [
+            "communication-without-synthesis",
+            "false-confidence-after-sharing"
+          ],
+          "signals": [
+            "messages-exchanged",
+            "facts-shared",
+            "incorrect-integrated-answer"
+          ],
+          "scoring": {
+            "primaryMetric": "communication-reasoning-gap",
+            "successCriterion": "Additional communication materially improves the final integrated answer."
+          },
+          "sotaBaseline": {
+            "source": "paper-static",
+            "paper": "Silo-Bench",
+            "year": 2026,
+            "metric": "communication-reasoning-gap",
+            "value": "present",
+            "notes": "Silo-Bench reports a persistent communication-reasoning gap rather than a single abstracted scalar baseline.",
+            "url": "https://arxiv.org/abs/2603.01045"
+          }
+        }
+      }
+    },
+    "simultaneous-coordination": {
+      "title": "Simultaneous Coordination",
+      "summary": "Benchmarks for contention, deadlock, and convergent-reasoning failures when decisions must be made concurrently.",
+      "category": "coordination",
+      "coordinationModel": "simultaneous-resource-contention",
+      "primaryMetric": {
+        "id": "deadlock-rate",
+        "title": "Deadlock Rate",
+        "unit": "percent",
+        "direction": "lower-is-better",
+        "summary": "Frequency of deadlock or coordination collapse under simultaneous decisions."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "contention-resolution-rate",
+          "title": "Contention Resolution Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        },
+        {
+          "id": "symmetry-breaking-rate",
+          "title": "Symmetry Breaking Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        }
+      ],
+      "paperReferences": [
+        {
+          "id": "dpbench-2026",
+          "title": "DPBench: Large Language Models Struggle with Simultaneous Coordination",
+          "year": 2026,
+          "url": "https://arxiv.org/abs/2602.13255",
+          "summary": "Shows severe failures under simultaneous coordination and convergent reasoning."
+        }
+      ],
+      "sotaBaseline": {
+        "source": "paper-static",
+        "paper": "DPBench",
+        "year": 2026,
+        "metric": "deadlock-rate",
+        "value": 95,
+        "notes": "Paper abstract reports deadlock rates exceeding 95 percent under some simultaneous settings.",
+        "url": "https://arxiv.org/abs/2602.13255"
+      },
+      "benchmarks": {
+        "contention-deadlock-avoidance": {
+          "title": "Contention Deadlock Avoidance",
+          "summary": "Checks whether the framework avoids deadlock under simultaneous resource contention.",
+          "goal": "Measure whether external coordination surfaces reduce deadlock-like failure.",
+          "failureModes": [
+            "deadlock",
+            "convergent-reasoning",
+            "resource-contention-collapse"
+          ],
+          "signals": [
+            "deadlock-observed",
+            "dependency-barrier-resolution",
+            "assignment-reroute-success"
+          ],
+          "scoring": {
+            "primaryMetric": "deadlock-rate",
+            "successCriterion": "The team avoids deadlock and reaches a valid allocation or resolution."
+          },
+          "sotaBaseline": {
+            "source": "paper-static",
+            "paper": "DPBench",
+            "year": 2026,
+            "metric": "deadlock-rate",
+            "value": 95,
+            "notes": "Reference point from the abstract's reported worst-case deadlock rate.",
+            "url": "https://arxiv.org/abs/2602.13255"
+          }
+        },
+        "symmetric-action-divergence": {
+          "title": "Symmetric Action Divergence",
+          "summary": "Checks whether agents can avoid choosing the same locally sensible but globally conflicting action.",
+          "goal": "Measure symmetry breaking under pressure.",
+          "failureModes": [
+            "same-plan-collapse",
+            "convergent-reasoning"
+          ],
+          "signals": [
+            "distinct-action-selection",
+            "lock-or-ticket-usage",
+            "retry-breaks-symmetry"
+          ],
+          "scoring": {
+            "primaryMetric": "symmetry-breaking-rate",
+            "successCriterion": "At least one agent changes strategy in time to avoid global conflict."
+          }
+        },
+        "lockstep-resolution": {
+          "title": "Lockstep Resolution",
+          "summary": "Checks whether the framework resolves many-way concurrent dependencies without circular waiting.",
+          "goal": "Measure coordination quality when several blocking tickets must resolve together.",
+          "failureModes": [
+            "circular-wait",
+            "helper-assignment-stall",
+            "dependency-stall"
+          ],
+          "signals": [
+            "required-dependencies-close",
+            "clarification-chain-completes",
+            "no-indefinite-retry-loop"
+          ],
+          "scoring": {
+            "primaryMetric": "contention-resolution-rate",
+            "successCriterion": "Concurrent blockers close without repeated deadlock-like relaunch cycles."
+          }
+        }
+      }
+    },
+    "expertise-leverage": {
+      "title": "Expertise Leverage",
+      "summary": "Benchmarks for whether the framework routes work toward experts and preserves expert signals instead of averaging them away.",
+      "category": "coordination",
+      "coordinationModel": "role-and-capability-routing",
+      "primaryMetric": {
+        "id": "expert-preservation-rate",
+        "title": "Expert Preservation Rate",
+        "unit": "percent",
+        "direction": "higher-is-better",
+        "summary": "Rate at which expert-advantaged decisions survive to the final recommendation."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "expert-performance-gap",
+          "title": "Expert Performance Gap",
+          "unit": "percent",
+          "direction": "lower-is-better"
+        },
+        {
+          "id": "capability-routing-precision",
+          "title": "Capability Routing Precision",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        }
+      ],
+      "paperReferences": [
+        {
+          "id": "experts-back-2026",
+          "title": "Multi-Agent Teams Hold Experts Back",
+          "year": 2026,
+          "url": "https://arxiv.org/abs/2602.01011",
+          "summary": "Shows unconstrained teams often underuse their best expert."
+        }
+      ],
+      "sotaBaseline": {
+        "source": "paper-static",
+        "paper": "Multi-Agent Teams Hold Experts Back",
+        "year": 2026,
+        "metric": "expert-performance-gap",
+        "value": 37.6,
+        "notes": "Paper abstract reports performance losses of up to 37.6 percent relative to the best expert agent.",
+        "url": "https://arxiv.org/abs/2602.01011"
+      },
+      "benchmarks": {
+        "expert-routing-preservation": {
+          "title": "Expert Routing Preservation",
+          "summary": "Checks whether capability-targeted work is routed to the best available owner and stays there through closure.",
+          "goal": "Measure whether the harness protects expert ownership instead of diluting it.",
+          "failureModes": [
+            "expert-underuse",
+            "misrouting",
+            "owner-dilution"
+          ],
+          "signals": [
+            "preferred-agent-selected",
+            "assigned-owner-resolves-task",
+            "few-non-expert-overrides"
+          ],
+          "scoring": {
+            "primaryMetric": "capability-routing-precision",
+            "successCriterion": "Capability-targeted requests land on the intended owner or a justified fallback."
+          }
+        },
+        "expert-signal-weighting": {
+          "title": "Expert Signal Weighting",
+          "summary": "Checks whether the final recommendation preserves a stronger expert signal when expert and non-expert views conflict.",
+          "goal": "Measure resistance to integrative compromise.",
+          "failureModes": [
+            "integrative-compromise",
+            "expert-signal-dilution"
+          ],
+          "signals": [
+            "expert-evidence-cited-integration",
+            "cont-qa-honors-expert-proof",
+            "non-expert-opinion-does-not-override-proof"
+          ],
+          "scoring": {
+            "primaryMetric": "expert-preservation-rate",
+            "successCriterion": "The final result tracks the best-supported expert view rather than the average view."
+          }
+        },
+        "anti-compromise-decision-review": {
+          "title": "Anti-Compromise Decision Review",
+          "summary": "Checks whether the framework avoids averaging incompatible recommendations into a low-quality compromise.",
+          "goal": "Measure whether closure authority and proof gates prevent compromise collapse.",
+          "failureModes": [
+            "consensus-over-correctness",
+            "expert-performance-gap"
+          ],
+          "signals": [
+            "integration-flags-conflict",
+            "clarification-raised",
+            "final-recommendation-follows-evidence"
+          ],
+          "scoring": {
+            "primaryMetric": "expert-performance-gap",
+            "successCriterion": "The team does not regress materially below its strongest expert signal."
+          },
+          "sotaBaseline": {
+            "source": "paper-static",
+            "paper": "Multi-Agent Teams Hold Experts Back",
+            "year": 2026,
+            "metric": "expert-performance-gap",
+            "value": 37.6,
+            "notes": "Reference point from the abstract's reported expert-underuse loss.",
+            "url": "https://arxiv.org/abs/2602.01011"
+          }
+        }
+      }
+    },
+    "blackboard-fidelity": {
+      "title": "Blackboard Fidelity",
+      "summary": "Benchmarks for whether raw coordination, summaries, inboxes, ledgers, and integration state stay semantically aligned.",
+      "category": "coordination",
+      "coordinationModel": "blackboard-projection-integrity",
+      "primaryMetric": {
+        "id": "projection-consistency-rate",
+        "title": "Projection Consistency Rate",
+        "unit": "percent",
+        "direction": "higher-is-better",
+        "summary": "Rate at which derived blackboard artifacts preserve the underlying coordination facts."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "targeted-inbox-recall",
+          "title": "Targeted Inbox Recall",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        },
+        {
+          "id": "integration-coherence-rate",
+          "title": "Integration Coherence Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        }
+      ],
+      "benchmarks": {
+        "log-to-summary-consistency": {
+          "title": "Log To Summary Consistency",
+          "summary": "Checks whether the shared summary preserves critical blockers, clarifications, dependencies, and conflicts from the raw log.",
+          "goal": "Measure whether summary generation remains trustworthy as the wave grows.",
+          "failureModes": [
+            "summary-drift",
+            "projection-loss"
+          ],
+          "signals": [
+            "blocker-preserved",
+            "clarification-preserved",
+            "dependency-preserved",
+            "conflict-preserved"
+          ],
+          "scoring": {
+            "primaryMetric": "projection-consistency-rate",
+            "successCriterion": "Critical coordination facts remain visible after projection."
+          }
+        },
+        "inbox-targeting-fidelity": {
+          "title": "Inbox Targeting Fidelity",
+          "summary": "Checks whether relevant facts reach the agents that own the impacted paths, components, or requests.",
+          "goal": "Measure whether inbox targeting reduces silos instead of creating them.",
+          "failureModes": [
+            "mis-targeted-context",
+            "owner-context-loss"
+          ],
+          "signals": [
+            "artifact-relevant-fact-routed",
+            "owned-component-fact-routed",
+            "targeted-request-routed"
+          ],
+          "scoring": {
+            "primaryMetric": "targeted-inbox-recall",
+            "successCriterion": "Agents receive the facts relevant to their owned paths, components, or follow-up work."
+          }
+        },
+        "integration-summary-coherence": {
+          "title": "Integration Summary Coherence",
+          "summary": "Checks whether integration output is faithful to blockers, claims, proof gaps, docs gaps, and deploy risks seen elsewhere.",
+          "goal": "Measure whether the integration steward output is a reliable synthesis layer.",
+          "failureModes": [
+            "integration-hallucination",
+            "integration-omission"
+          ],
+          "signals": [
+            "conflicts-match-log",
+            "proof-gaps-match-agent-state",
+            "doc-gaps-match-doc-queue"
+          ],
+          "scoring": {
+            "primaryMetric": "integration-coherence-rate",
+            "successCriterion": "Integration summaries match the evidence visible in coordination, validation, and runtime signals."
+          }
+        }
+      }
+    },
+    "contradiction-recovery": {
+      "title": "Contradiction Recovery",
+      "summary": "Benchmarks for whether the framework notices conflicting claims and converts them into explicit repair work instead of silent inconsistency.",
+      "category": "coordination",
+      "coordinationModel": "conflict-detection-and-repair",
+      "primaryMetric": {
+        "id": "contradiction-detection-rate",
+        "title": "Contradiction Detection Rate",
+        "unit": "percent",
+        "direction": "higher-is-better",
+        "summary": "Rate at which material conflicting claims are surfaced before closeout."
+      },
+      "secondaryMetrics": [
+        {
+          "id": "repair-closure-rate",
+          "title": "Repair Closure Rate",
+          "unit": "percent",
+          "direction": "higher-is-better"
+        },
+        {
+          "id": "false-consensus-rate",
+          "title": "False Consensus Rate",
+          "unit": "percent",
+          "direction": "lower-is-better"
+        }
+      ],
+      "benchmarks": {
+        "claim-conflict-detection": {
+          "title": "Claim Conflict Detection",
+          "summary": "Checks whether incompatible claims are surfaced in coordination or integration instead of passing through silently.",
+          "goal": "Measure whether the framework sees contradictory evidence before final closure.",
+          "failureModes": [
+            "false-consensus",
+            "silent-contradiction"
+          ],
+          "signals": [
+            "integration-conflict-raised",
+            "cont-qa-blocks",
+            "follow-up-request-created"
+          ],
+          "scoring": {
+            "primaryMetric": "contradiction-detection-rate",
+            "successCriterion": "Conflicting claims are surfaced as explicit blockers or conflicts before closeout."
+          }
+        },
+        "evidence-based-repair": {
+          "title": "Evidence Based Repair",
+          "summary": "Checks whether contradictions produce concrete owner-bound follow-up work and eventually close.",
+          "goal": "Measure whether conflict handling ends in repair rather than logging alone.",
+          "failureModes": [
+            "conflict-without-repair",
+            "dangling-follow-up"
+          ],
+          "signals": [
+            "helper-assignment-created",
+            "clarification-linked-request-closes",
+            "integration-recommendation-improves"
+          ],
+          "scoring": {
+            "primaryMetric": "repair-closure-rate",
+            "successCriterion": "Contradictions produce follow-up work that resolves before final pass."
+          }
+        },
+        "clarification-chain-closure": {
+          "title": "Clarification Chain Closure",
+          "summary": "Checks whether clarification requests remain linked and blocking until their follow-up chain really closes.",
+          "goal": "Measure resistance to fake resolution through status drift.",
+          "failureModes": [
+            "premature-clarification-close",
+            "broken-linkage"
+          ],
+          "signals": [
+            "closure-condition-present",
+            "linked-request-open-while-parent-open",
+            "human-escalation-when-needed"
+          ],
+          "scoring": {
+            "primaryMetric": "false-consensus-rate",
+            "successCriterion": "Clarifications do not silently disappear without an actual linked resolution."
+          }
+        }
+      }
+    }
+  }
+}

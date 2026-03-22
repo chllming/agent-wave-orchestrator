@@ -20,7 +20,7 @@ The starter entries reflect the snapshot shipped in this repository. Replace the
 
 - `wave-parser-and-launcher`: parser, manifest, launcher, and dry-run execution flow
 - `executor-abstraction-and-prompt-transport`: executor selection, prompt overlays, and transport into `codex`, `claude`, `opencode`, or `local`
-- `closure-sweep-and-role-gates`: documentation steward, evaluator, and post-implementation closure logic
+- `closure-sweep-and-role-gates`: documentation steward, cont-QA, and post-implementation closure logic
 - `context7-scope-and-prefetch`: Context7 bundle resolution, prefetch, cache, and prompt injection
 - `state-artifacts-and-feedback`: status summaries, dashboards, logs, message boards, and human feedback queue
 - `starter-docs-and-adoption-guidance`: starter README, shared-plan docs, and adoption instructions

@@ -41,7 +41,9 @@
   - open capability-targeted requests become explicit helper assignments
   - helper assignments are written into coordination state, the ledger, summaries, and traces
   - helper assignments remain blocking until the linked follow-up resolves
-- Closure now runs in staged order: implementation and proof, then `A8` integration, then `A9` documentation, then `A0` evaluator.
+- Closure now runs in staged order: implementation and proof, then optional `E0` cont-EVAL, then `A8` integration, then `A9` documentation, then `A0` cont-QA.
+- `E0` is hybrid: planner-generated waves keep it report-only, while hand-authored waves may assign explicit tuning files and thereby make `E0` participate in implementation proof gating.
+- Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.
 - Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
 - Required inbound cross-lane dependency tickets under `.tmp/wave-orchestrator/dependencies/` block both autonomous wave launch and lane finalization while they remain unresolved.
 - Cross-lane dependency workflows now include:

@@ -782,7 +782,8 @@ export function buildSeedCoordinationRecords({
   agents,
   componentPromotions = [],
   sharedPlanDocs = [],
-  evaluatorAgentId = "A0",
+  contQaAgentId = "A0",
+  contEvalAgentId = "E0",
   integrationAgentId = "A8",
   documentationAgentId = "A9",
   feedbackRequests = [],
@@ -790,7 +791,10 @@ export function buildSeedCoordinationRecords({
   const records = [];
   for (const agent of agents) {
     const targets =
-      agent.agentId === evaluatorAgentId || agent.agentId === documentationAgentId || agent.agentId === integrationAgentId
+      agent.agentId === contQaAgentId ||
+      agent.agentId === contEvalAgentId ||
+      agent.agentId === documentationAgentId ||
+      agent.agentId === integrationAgentId
         ? []
         : [`agent:${agent.agentId}`];
     records.push(
@@ -802,7 +806,9 @@ export function buildSeedCoordinationRecords({
         agentId: "launcher",
         targets,
         priority:
-          agent.agentId === evaluatorAgentId || agent.agentId === documentationAgentId
+          agent.agentId === contQaAgentId ||
+          agent.agentId === contEvalAgentId ||
+          agent.agentId === documentationAgentId
             ? "high"
             : "normal",
         summary: `Wave ${wave} assigned to ${agent.agentId}: ${agent.title}`,
@@ -853,7 +859,7 @@ export function buildSeedCoordinationRecords({
         agentId: "launcher",
         targets: [`agent:${integrationAgentId}`],
         priority: "high",
-        summary: `Synthesize wave ${wave} before documentation and evaluator closure`,
+        summary: `Synthesize wave ${wave} before documentation and cont-QA closure`,
         detail: "Integration steward must reconcile open claims, blockers, interfaces, and release risk.",
       }),
     );

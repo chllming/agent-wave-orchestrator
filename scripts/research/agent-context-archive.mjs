@@ -9,10 +9,22 @@ export const TOPIC_DEFINITIONS = [
       "Current guidance and recent papers on agent harness design, reviewer loops, terminal-native execution, and practical coding-agent workflows.",
   },
   {
+    id: "planning-and-orchestration",
+    title: "Planning and Orchestration",
+    description:
+      "Planning topology, verifier and replanner loops, protocol-driven coordination, and blackboard-aware orchestration patterns for multi-agent systems.",
+  },
+  {
     id: "long-running-agents-and-compaction",
     title: "Long-Running Agents and Compaction",
     description:
       "Long-horizon execution, resumability, memory systems, compaction, and evolving-task evaluation for agents that span many sessions.",
+  },
+  {
+    id: "skills-and-procedural-memory",
+    title: "Skills and Procedural Memory",
+    description:
+      "Reusable skills, procedural memory, workflow induction, skill libraries, and evaluation patterns for agents that improve through reusable procedures.",
   },
   {
     id: "blackboard-and-shared-workspaces",
@@ -25,6 +37,12 @@ export const TOPIC_DEFINITIONS = [
     title: "Repo Context and Evaluation",
     description:
       "Repository-level context files, harness evaluation methods, and evidence on what improves or harms coding-agent performance.",
+  },
+  {
+    id: "security-and-secure-code-generation",
+    title: "Security and Secure Code Generation",
+    description:
+      "Secure code generation, repair and analyzer loops, repository-grounded security benchmarks, and security/privacy risks in multi-agent systems.",
   },
 ];
 
@@ -46,6 +64,44 @@ const TOPIC_OVERRIDE_MAP = {
   "evaluating-agents-md-are-repository-level-context-files-helpful-for-coding-agents":
     ["repo-context-and-evaluation"],
 };
+
+const PLANNING_TOPIC_OVERRIDE_SLUGS = new Set([
+  "building-effective-ai-coding-agents-for-the-terminal-scaffolding-harness-context-engineering-and-lessons-learned",
+  "vero-an-evaluation-harness-for-agents-to-optimize-agents",
+  "evoclaw-evaluating-ai-agents-on-continuous-software-evolution",
+  "exploring-advanced-llm-multi-agent-systems-based-on-blackboard-architecture",
+  "llm-based-multi-agent-blackboard-system-for-information-discovery-in-data-science",
+  "dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation",
+  "symphony-synergistic-multi-agent-planning-with-heterogeneous-language-model-assembly",
+  "silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems",
+  "terrarium-revisiting-the-blackboard-for-multi-agent-safety-privacy-and-security-studies",
+  "macc-multi-agent-collaborative-competition-for-scientific-exploration",
+  "the-orchestration-of-multi-agent-systems-architectures-protocols-and-enterprise-adoption",
+  "describing-agentic-ai-systems-with-c4-lessons-from-industry-projects",
+  "verified-multi-agent-orchestration-a-plan-execute-verify-replan-framework-for-complex-query-resolution",
+  "todoevolve-learning-to-architect-agent-planning-systems",
+  "parallelized-planning-acting-for-efficient-llm-based-multi-agent-systems-in-minecraft",
+  "orchmas-orchestrated-reasoning-with-multi-collaborative-heterogeneous-scientific-expert-structured-agents",
+  "towards-engineering-multi-agent-llms-a-protocol-driven-approach",
+  "advancing-multi-agent-systems-through-model-context-protocol-architecture-implementation-and-applications",
+  "enhancing-model-context-protocol-mcp-with-context-aware-server-collaboration",
+  "why-do-multi-agent-llm-systems-fail",
+  "systematic-failures-in-collective-reasoning-under-distributed-information-in-multi-agent-llms",
+  "dpbench-large-language-models-struggle-with-simultaneous-coordination",
+  "multi-agent-teams-hold-experts-back",
+  "a-survey-on-llm-based-multi-agent-systems-workflow-infrastructure-and-challenges",
+  "llm-based-multi-agent-systems-for-software-engineering-literature-review-vision-and-the-road-ahead",
+  "a-taxonomy-of-hierarchical-multi-agent-systems-design-patterns-coordination-mechanisms-and-industrial-applications",
+  "blackboard-systems-part-one-the-blackboard-model-of-problem-solving-and-the-evolution-of-blackboard-architectures",
+  "a-blackboard-architecture-for-control",
+  "incremental-planning-to-control-a-blackboard-based-problem-solver",
+  "blackboard-systems",
+]);
+
+const SKILLS_TOPIC_OVERRIDE_SLUGS = new Set([
+  "memory-for-autonomous-llm-agents-mechanisms-evaluation-and-emerging-frontiers",
+  "meta-context-engineering-via-agentic-skill-evolution",
+]);
 
 function escapeInlinePipes(value) {
   return String(value ?? "").replaceAll("|", "\\|");
@@ -189,8 +245,15 @@ export function inferTopics(entry, section = null) {
   if (override) {
     topics.push(...override);
   }
+  const hasDeclaredTopics = topics.length > 0;
+  if (PLANNING_TOPIC_OVERRIDE_SLUGS.has(entry.slug)) {
+    topics.push("planning-and-orchestration");
+  }
+  if (SKILLS_TOPIC_OVERRIDE_SLUGS.has(entry.slug)) {
+    topics.push("skills-and-procedural-memory");
+  }
 
-  if (topics.length > 0) {
+  if (hasDeclaredTopics) {
     return unique(topics);
   }
 
@@ -221,9 +284,25 @@ export function inferTopics(entry, section = null) {
   }
 
   if (
+    /skill|procedural memory|workflow memory|skill library|voyager|toolformer|tool makers|synapse|expel|reuseit|skillweaver|procmem|memskill|memento-skills|metaclaw/.test(
+      haystack,
+    )
+  ) {
+    topics.push("skills-and-procedural-memory");
+  }
+
+  if (
     entry.kind === "article" || /harness|codex|terminal|engineering|reviewer|agent-first/.test(haystack)
   ) {
     topics.push("harnesses-and-practice");
+  }
+
+  if (
+    /security|secure code|secure coding|vulnerability|vulnerabilities|cve|static analyzer|codeql|secureagentbench|secrepobench|secodeplt|tosss|privacy/.test(
+      haystack,
+    )
+  ) {
+    topics.push("security-and-secure-code-generation");
   }
 
   if (topics.length === 0) {
@@ -346,9 +425,12 @@ of the repository docs.
 ## Coverage
 
 - Harnesses and practice
+- Planning and orchestration
 - Long-running agents and compaction
+- Skills and procedural memory
 - Blackboard and shared workspaces
 - Repo context and evaluation
+- Security and secure code generation
 
 ${sections.join("\n\n")}
 `;

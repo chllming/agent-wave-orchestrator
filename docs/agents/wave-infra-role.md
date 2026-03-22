@@ -24,7 +24,7 @@ What you must do:
 - identify the exact infra surface you own for the wave
 - surface missing dependencies, identity gaps, admission blockers, and machine drift early
 - emit durable coordination records when the work depends on another agent or a human decision
-- leave enough exact evidence that the integration steward and evaluator can tell whether the infra surface is conformant, still in setup, or blocked
+- leave enough exact evidence that the integration steward and cont-QA can tell whether the infra surface is conformant, still in setup, or blocked
 - emit structured infra markers whenever the task touches machine validation, workload identity, node admission, deployment bootstrap, or approved machine actions:
   `[infra-status] kind=<conformance|role-drift|dependency|identity|admission|action> target=<machine-or-surface> state=<checking|setup-required|setup-in-progress|conformant|drift|blocked|failed|action-required|action-approved|action-complete> detail=<short-note>`
 

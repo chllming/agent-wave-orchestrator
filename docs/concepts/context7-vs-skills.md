@@ -44,7 +44,7 @@ Use skills when the guidance is reusable, repo-owned, and should survive across 
 - environment-specific rules
 - Railway, Kubernetes, or GitHub release procedures
 - runtime-specific instructions for Codex, Claude, or OpenCode
-- role-oriented heuristics for implementation, deploy, evaluator, or research agents
+- role-oriented heuristics for implementation, deploy, cont-QA, or research agents
 
 ## What Remains Authoritative
 

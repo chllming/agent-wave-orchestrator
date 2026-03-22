@@ -7,7 +7,7 @@ Wave Orchestration is a repository harness for running multi-agent work in bound
 1. Write shared docs and one or more `docs/plans/waves/wave-<n>.md` files.
 2. Run `wave launch --dry-run` to validate the wave and materialize prompts, inboxes, dashboards, and executor previews.
 3. A real launch runs implementation agents first. Agents post claims, evidence, requests, and decisions into the coordination log and rolling message board.
-4. When implementation gates pass, closure runs in order: integration (`A8`), documentation (`A9`), evaluator (`A0`).
+4. When implementation gates pass, closure runs in order: optional `cont-EVAL` (`E0`), integration (`A8`), documentation (`A9`), and `cont-QA` (`A0`).
 5. Operators use the generated ledgers, inboxes, feedback queue, dependency views, and traces instead of guessing from raw terminal output.
 
 ## Features
@@ -26,7 +26,7 @@ Wave Orchestration is a repository harness for running multi-agent work in bound
 
 Representative rolling message board output from a real wave run:
 
-<img src="./docs/image.png" alt="Example rolling message board output showing claims, evidence, requests, and evaluator closure for a wave run" width="100%" />
+<img src="./docs/image.png" alt="Example rolling message board output showing claims, evidence, requests, and cont-QA closure for a wave run" width="100%" />
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ If the repo already has Wave config, plans, or waves you want to keep:
 pnpm exec wave init --adopt-existing
 ```
 
-Fresh init also seeds a starter `skills/` library. The launcher projects those skill bundles into Codex, Claude, OpenCode, and local executor overlays after the final runtime for each agent is resolved.
+Fresh init also seeds a starter `skills/` library plus `docs/evals/benchmark-catalog.json`. The launcher projects those skill bundles into Codex, Claude, OpenCode, and local executor overlays after the final runtime for each agent is resolved, and waves that include `cont-EVAL` can declare `## Eval targets` against that catalog.
 
 ## Common Commands
 

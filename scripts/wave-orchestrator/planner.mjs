@@ -355,6 +355,17 @@ function renderSkillsSection(skills) {
   return Array.isArray(skills) && skills.length > 0 ? renderBulletLines(skills) : [];
 }
 
+function renderEvalTargetsSection(evalTargets) {
+  if (!Array.isArray(evalTargets) || evalTargets.length === 0) {
+    return [];
+  }
+  return evalTargets.map((target) =>
+    target.selection === "delegated"
+      ? `- id: ${target.id} | selection: delegated | benchmark-family: ${target.benchmarkFamily} | objective: ${target.objective} | threshold: ${target.threshold}`
+      : `- id: ${target.id} | selection: pinned | benchmarks: ${(target.benchmarks || []).join(", ")} | objective: ${target.objective} | threshold: ${target.threshold}`,
+  );
+}
+
 function renderWaveMarkdown(spec, lanePaths) {
   const sections = [];
   sections.push(`# Wave ${spec.wave} - ${spec.title}`);
@@ -404,6 +415,12 @@ function renderWaveMarkdown(spec, lanePaths) {
   sections.push("## Context7 defaults");
   sections.push("");
   sections.push(...renderContext7Section(spec.context7Defaults));
+  if (Array.isArray(spec.evalTargets) && spec.evalTargets.length > 0) {
+    sections.push("");
+    sections.push("## Eval targets");
+    sections.push("");
+    sections.push(...renderEvalTargetsSection(spec.evalTargets));
+  }
   for (const agent of spec.agents) {
     sections.push("");
     sections.push(`## Agent ${agent.agentId}: ${agent.title}`);
@@ -547,39 +564,71 @@ function buildSpecialAgents({ spec, lanePaths, standardRoles }) {
       ...SHARED_PLAN_DOC_PATHS,
     ]),
   );
-  const evaluatorTitle = standardRoles.evaluator ? "Running Evaluator" : "Custom Evaluator";
+  const contQaTitle = standardRoles.contQa ? "cont-QA" : "Custom cont-QA";
+  const contEvalTitle = standardRoles.contEval ? "cont-EVAL" : "Custom cont-EVAL";
   const integrationTitle = standardRoles.integration ? "Integration Steward" : "Custom Integration Steward";
   const documentationTitle = standardRoles.documentation
     ? "Documentation Steward"
     : "Custom Documentation Steward";
   return [
     {
-      agentId: lanePaths.evaluatorAgentId,
-      title: evaluatorTitle,
-      rolePromptPaths: [lanePaths.evaluatorRolePromptPath],
+      agentId: lanePaths.contQaAgentId,
+      title: contQaTitle,
+      rolePromptPaths: [lanePaths.contQaRolePromptPath],
       skills: [],
       executor: { profile: "deep-review" },
       context7: { bundle: "none", query: "Architecture evaluation only; repository docs remain canonical" },
       components: [],
       capabilities: [],
       exitContract: null,
-      primaryGoal: `Evaluate Wave ${spec.wave} and publish the final verdict.`,
+      primaryGoal: `Run continuous QA for Wave ${spec.wave} and publish the final closure verdict.`,
       collaborationNotes: [
         "Collect explicit verdicts from the implementation-facing agents plus A8 and A9 before closing the wave.",
         "Do not publish PASS unless the evidence, documentation closure, and integration summary are all coherent.",
       ],
       requiredContext: commonRequiredContext,
       earlierWaveOutputs: [],
-      ownedPaths: [`docs/plans/waves/reviews/wave-${spec.wave}-evaluator.md`],
+      ownedPaths: [`docs/plans/waves/reviews/wave-${spec.wave}-cont-qa.md`],
       requirements: [
         "Verify the wave requirements are covered by landed evidence, not only by intent.",
         "Record any blocker that later waves must not silently assume away.",
       ],
       validationCommand:
-        "Re-read the changed reports and end the evaluator report with `Verdict: PASS`, `Verdict: CONCERNS`, or `Verdict: BLOCKED`.",
-      outputSummary: "Summarize the gate verdict and the top unresolved cross-cutting risks.",
+        "Re-read the changed reports and end the cont-QA report with `Verdict: PASS`, `Verdict: CONCERNS`, or `Verdict: BLOCKED`.",
+      outputSummary: "Summarize the cont-QA verdict and the top unresolved cross-cutting risks.",
       deployEnvironmentId: null,
     },
+    ...(standardRoles.contEval
+      ? [
+          {
+            agentId: lanePaths.contEvalAgentId,
+            title: contEvalTitle,
+            rolePromptPaths: [lanePaths.contEvalRolePromptPath],
+            skills: [],
+            executor: { profile: "eval-tuning" },
+            context7: { bundle: "none", query: "Eval tuning only; repository docs remain canonical" },
+            components: [],
+            capabilities: ["eval"],
+            exitContract: null,
+            primaryGoal: `Run the Wave ${spec.wave} eval tuning loop until the declared eval targets are satisfied or explicitly blocked.`,
+            collaborationNotes: [
+              "Treat the wave's eval targets as the governing contract for benchmark choice and tuning depth.",
+              "This standard cont-EVAL role is report-only by default; if fixes belong to another owner, open exact follow-up work instead of broadening scope implicitly.",
+            ],
+            requiredContext: commonRequiredContext,
+            earlierWaveOutputs: [],
+            ownedPaths: [`docs/plans/waves/reviews/wave-${spec.wave}-cont-eval.md`],
+            requirements: [
+              "Record the selected benchmark set, the commands run, observed output gaps, and regressions.",
+              "Emit a final `[wave-eval]` marker with target_ids and benchmark_ids that matches the final tuning state.",
+            ],
+            validationCommand:
+              "Re-run the selected benchmarks or service-output checks and end with a final `[wave-eval]` marker that enumerates target_ids and benchmark_ids.",
+            outputSummary: "Summarize the selected benchmarks, tuning outcome, regressions, and remaining owners.",
+            deployEnvironmentId: null,
+          },
+        ]
+      : []),
     {
       agentId: lanePaths.integrationAgentId,
       title: integrationTitle,
@@ -590,7 +639,7 @@ function buildSpecialAgents({ spec, lanePaths, standardRoles }) {
       components: [],
       capabilities: ["integration", "docs-shared-plan"],
       exitContract: null,
-      primaryGoal: `Synthesize the final Wave ${spec.wave} state before documentation and evaluator closure.`,
+      primaryGoal: `Synthesize the final Wave ${spec.wave} state before documentation and cont-QA closure.`,
       collaborationNotes: [
         "Re-read the message board, compiled inboxes, and latest artifacts before final output.",
         "Treat contradictions, missing proof, or stale shared-plan assumptions as integration failures.",
@@ -684,7 +733,7 @@ function buildWorkerAgentSpec({
       values.primaryGoal || buildDefaultPrimaryGoal(template, roleKind, title),
     collaborationNotes: [
       "Re-read the wave message board before major decisions, before validation, and before final output.",
-      `Notify Agent ${lanePaths.evaluatorAgentId} when your evidence changes the closure picture.`,
+      `Notify Agent ${lanePaths.contQaAgentId} when your evidence changes the closure picture.`,
     ],
     requiredContext,
     earlierWaveOutputs: values.earlierWaveOutputs,
@@ -722,6 +771,7 @@ function buildSpecPayload({ config, lanePaths, profile, draftValues }) {
       bundle: draftValues.context7Bundle,
       query: draftValues.context7Query || null,
     },
+    evalTargets: draftValues.evalTargets,
     componentPromotions: draftValues.componentPromotions,
     componentsCatalog: draftValues.componentCatalog,
     agents: [
@@ -956,7 +1006,7 @@ async function collectWorkerAgents({ prompt, template, profile, componentPromoti
     );
     const executorProfile = await prompt.askChoice(
       `Worker ${agentId} executor profile`,
-      ["implement-fast", "deep-review", "docs-pass", "ops-triage"],
+      ["implement-fast", "deep-review", "eval-tuning", "docs-pass", "ops-triage"],
       defaultExecutorProfile(roleKind),
     );
     const ownedPaths = normalizeRepoPathList(
@@ -1086,6 +1136,57 @@ async function collectWorkerAgents({ prompt, template, profile, componentPromoti
   return workerAgents;
 }
 
+async function collectEvalTargets({ prompt }) {
+  const targetCount = await prompt.askInteger(
+    "How many eval targets should cont-EVAL own?",
+    1,
+    { min: 1 },
+  );
+  const evalTargets = [];
+  for (let index = 0; index < targetCount; index += 1) {
+    const id = normalizeComponentId(
+      await prompt.ask(`Eval target ${index + 1} id`, index === 0 ? "service-output" : `eval-target-${index + 1}`),
+      `eval target ${index + 1} id`,
+    );
+    const selection = await prompt.askChoice(
+      `Eval target ${id} benchmark selection`,
+      ["delegated", "pinned"],
+      "delegated",
+    );
+    const benchmarkFamily =
+      selection === "delegated"
+        ? normalizeComponentId(
+            await prompt.ask(`Eval target ${id} benchmark family`, "service-output"),
+            `eval target ${id} benchmark family`,
+          )
+        : null;
+    const benchmarks =
+      selection === "pinned"
+        ? normalizeListText(
+            await prompt.ask(
+              `Eval target ${id} benchmark ids (comma or | separated)`,
+              "golden-response-smoke, manual-session-review",
+            ),
+          ).map((entry) => normalizeComponentId(entry, `eval target ${id} benchmark id`))
+        : [];
+    const objective = cleanText(
+      await prompt.ask(`Eval target ${id} objective`, "Improve the observable service output against the selected benchmark set."),
+    );
+    const threshold = cleanText(
+      await prompt.ask(`Eval target ${id} success threshold`, "All selected checks green with no unresolved regressions."),
+    );
+    evalTargets.push({
+      id,
+      selection,
+      benchmarkFamily,
+      benchmarks,
+      objective,
+      threshold,
+    });
+  }
+  return evalTargets;
+}
+
 async function runDraftFlow(options = {}) {
   const config = options.config || loadWaveConfig();
   const profile = await ensureProjectProfile({ config });
@@ -1136,10 +1237,14 @@ async function runDraftFlow(options = {}) {
     const context7Bundle = await prompt.askChoice("Wave Context7 bundle", ["none"], "none");
     const context7Query = cleanText(await prompt.ask("Wave Context7 query", ""));
     const standardRoles = {
-      evaluator: await prompt.askBoolean("Use the standard evaluator role?", true),
+      contQa: await prompt.askBoolean("Use the standard cont-QA role?", true),
+      contEval: await prompt.askBoolean("Include the standard cont-EVAL role?", false),
       integration: await prompt.askBoolean("Use the standard integration role?", true),
       documentation: await prompt.askBoolean("Use the standard documentation role?", true),
     };
+    const evalTargets = standardRoles.contEval
+      ? await collectEvalTargets({ prompt })
+      : [];
     const { componentPromotions, componentCatalog } = await collectComponentPromotions({
       prompt,
       matrix,
@@ -1165,6 +1270,7 @@ async function runDraftFlow(options = {}) {
       context7Bundle,
       context7Query,
       standardRoles,
+      evalTargets,
       componentPromotions,
       componentCatalog,
       workerAgents,

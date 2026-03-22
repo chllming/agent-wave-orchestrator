@@ -133,10 +133,12 @@ describe("wave init", () => {
     fs.writeFileSync(path.join(repoDir, ".gitignore"), ".tmp/\ndocs/research/cache/\ndocs/research/agent-context-cache/\ndocs/research/papers/\ndocs/research/articles/\n", "utf8");
     for (const relPath of [
       "wave.config.json",
-      "docs/agents/wave-evaluator-role.md",
+      "docs/agents/wave-cont-qa-role.md",
+      "docs/agents/wave-cont-eval-role.md",
       "docs/agents/wave-documentation-role.md",
       "docs/agents/wave-integration-role.md",
       "docs/context7/bundles.json",
+      "docs/evals/benchmark-catalog.json",
       "docs/plans/component-cutover-matrix.json",
       "docs/plans/component-cutover-matrix.md",
       "docs/plans/context7-wave-orchestrator.md",
@@ -179,9 +181,11 @@ describe("wave upgrade", () => {
     fs.mkdirSync(path.join(repoDir, "docs", "reference"), { recursive: true });
     fs.mkdirSync(path.join(repoDir, "docs", "research"), { recursive: true });
     for (const relPath of [
-      "docs/agents/wave-evaluator-role.md",
+      "docs/agents/wave-cont-qa-role.md",
+      "docs/agents/wave-cont-eval-role.md",
       "docs/agents/wave-documentation-role.md",
       "docs/context7/bundles.json",
+      "docs/evals/benchmark-catalog.json",
       "docs/plans/current-state.md",
       "docs/plans/master-plan.md",
       "docs/plans/migration.md",

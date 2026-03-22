@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Breaking rename: legacy `evaluator` role/config terminology has been removed in favor of `cont-QA`, and config now rejects `roles.evaluator*`, `skills.byRole.evaluator`, and `runtimePolicy.defaultExecutorByRole.evaluator`.
+- Added optional `cont-EVAL` as a first-class closure-stage role for iterative service-output and benchmark tuning, with `## Eval targets`, repo-owned benchmark catalog validation, and dedicated `E0` sequencing before integration closure.
+- Added regression coverage for `cont-EVAL` parsing, validation, closure ordering, adopted-workspace doctor checks, and legacy-role config rejection.
+
 ## 0.5.4 - 2026-03-22
 
 - Added the planner foundation: project bootstrap memory in `.wave/project-profile.json`, `wave project setup|show`, and interactive `wave draft` generation of structured wave specs plus launcher-compatible markdown.
@@ -9,14 +15,14 @@
 
 ## 0.5.3 - 2026-03-22
 
-- Deferred integration, documentation, and evaluator agents until the closure sweep whenever implementation work is still pending, so the runtime now matches the documented closure model.
+- Deferred integration, documentation, and cont-QA agents until the closure sweep whenever implementation work is still pending, so the runtime now matches the documented closure model.
 - Scoped wave wait/progress and human-feedback monitoring to the runs actually launched in the current pass, preventing deferred closure agents from surfacing as false pending or missing-status failures.
 - Added regression coverage for mixed implementation/closure waves and for closure-only retry waves.
 - Published `@chllming/wave-orchestration@0.5.3` successfully to npmjs and GitHub Releases.
 
 ## 0.5.2 - 2026-03-22
 
-- Hardened structured closure marker parsing so fenced or prose example `[wave-*]` lines no longer satisfy implementation, integration, documentation, or evaluator gates.
+- Hardened structured closure marker parsing so fenced or prose example `[wave-*]` lines no longer satisfy implementation, integration, documentation, or cont-QA gates.
 - Hardened `### Deliverables` so declared outputs must remain repo-relative file paths inside the implementation agent's declared file ownership before the exit contract can pass.
 - Added regression coverage for the fenced-marker false-positive path and for deliverables that escape ownership boundaries.
 - Published `@chllming/wave-orchestration@0.5.2` successfully to npmjs, making npmjs the working public install path instead of a pending rollout target.
@@ -48,7 +54,7 @@
 
 - Added the Phase 1 and 2 harness runtime: canonical coordination store, compiled inboxes, wave ledger, integration summaries, and clarification triage.
 - Added planning-time runtime profiles, lane runtime policy, hard runtime-mix validation, and retry fallback reassignment recording.
-- Added integration stewardship and staged closure so integration gates documentation and evaluator closure.
+- Added integration stewardship and staged closure so integration gates documentation and cont-QA closure.
 
 ## 0.2.0 - 2026-03-21
 

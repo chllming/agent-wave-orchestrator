@@ -117,8 +117,9 @@ import {
   agentSummaryPathFromStatusPath,
   buildAgentExecutionSummary,
   readAgentExecutionSummary,
+  validateContEvalSummary,
+  validateContQaSummary,
   validateDocumentationClosureSummary,
-  validateEvaluatorSummary,
   validateIntegrationSummary,
   validateImplementationSummary,
   writeAgentExecutionSummary,
@@ -128,6 +129,10 @@ import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs"
 import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 import { readProjectProfile, resolveDefaultTerminalSurface } from "./project-profile.mjs";
+import {
+  isContEvalImplementationOwningAgent,
+  isContEvalReportOnlyAgent,
+} from "./role-helpers.mjs";
 import {
   resolveAgentSkills,
   summarizeResolvedSkills,
@@ -353,68 +358,118 @@ function isProcessAlive(pid) {
   }
 }
 
-export function readWaveEvaluatorGate(wave, agentRuns, options = {}) {
-  const evaluatorAgentId = options.evaluatorAgentId || wave.evaluatorAgentId || "A0";
-  const evaluatorRun =
-    agentRuns.find((run) => run.agent.agentId === evaluatorAgentId) ?? null;
-  if (!evaluatorRun) {
+export function readWaveContQaGate(wave, agentRuns, options = {}) {
+  const mode = String(options.mode || "compat").trim().toLowerCase();
+  const strict = mode === "live";
+  const contQaAgentId = options.contQaAgentId || wave.contQaAgentId || "A0";
+  const contQaRun =
+    agentRuns.find((run) => run.agent.agentId === contQaAgentId) ?? null;
+  if (!contQaRun) {
     return {
       ok: false,
-      agentId: evaluatorAgentId,
-      statusCode: "missing-evaluator",
-      detail: `Agent ${evaluatorAgentId} is missing.`,
+      agentId: contQaAgentId,
+      statusCode: "missing-cont-qa",
+      detail: `Agent ${contQaAgentId} is missing.`,
       logPath: null,
     };
   }
-  const summary = readRunExecutionSummary(evaluatorRun);
+  const summary = readRunExecutionSummary(contQaRun, strict ? wave : null);
   if (summary) {
-    const validation = validateEvaluatorSummary(evaluatorRun.agent, summary);
+    const validation = validateContQaSummary(contQaRun.agent, summary, { mode });
     return {
       ok: validation.ok,
-      agentId: evaluatorRun.agent.agentId,
+      agentId: contQaRun.agent.agentId,
       statusCode: validation.statusCode,
       detail: validation.detail,
-      logPath: summary.logPath || path.relative(REPO_ROOT, evaluatorRun.logPath),
+      logPath: summary.logPath || path.relative(REPO_ROOT, contQaRun.logPath),
     };
   }
-  const evaluatorReportPath = wave.evaluatorReportPath
-    ? path.resolve(REPO_ROOT, wave.evaluatorReportPath)
+  if (strict) {
+    return {
+      ok: false,
+      agentId: contQaRun.agent.agentId,
+      statusCode: "missing-wave-gate",
+      detail: `Missing structured cont-QA summary for ${contQaRun.agent.agentId}.`,
+      logPath: path.relative(REPO_ROOT, contQaRun.logPath),
+    };
+  }
+  const contQaReportPath = wave.contQaReportPath
+    ? path.resolve(REPO_ROOT, wave.contQaReportPath)
     : null;
   const reportText =
-    evaluatorReportPath && fs.existsSync(evaluatorReportPath)
-      ? fs.readFileSync(evaluatorReportPath, "utf8")
+    contQaReportPath && fs.existsSync(contQaReportPath)
+      ? fs.readFileSync(contQaReportPath, "utf8")
       : "";
   const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
   if (reportVerdict.verdict) {
     return {
       ok: reportVerdict.verdict === "pass",
-      agentId: evaluatorRun.agent.agentId,
-      statusCode: reportVerdict.verdict === "pass" ? "pass" : `evaluator-${reportVerdict.verdict}`,
-      detail: reportVerdict.detail || "Verdict read from evaluator report.",
-      logPath: path.relative(REPO_ROOT, evaluatorRun.logPath),
+      agentId: contQaRun.agent.agentId,
+      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
+      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
+      logPath: path.relative(REPO_ROOT, contQaRun.logPath),
     };
   }
   const logVerdict = parseVerdictFromText(
-    readFileTail(evaluatorRun.logPath, 30000),
+    readFileTail(contQaRun.logPath, 30000),
     WAVE_VERDICT_REGEX,
   );
   if (logVerdict.verdict) {
     return {
       ok: logVerdict.verdict === "pass",
-      agentId: evaluatorRun.agent.agentId,
-      statusCode: logVerdict.verdict === "pass" ? "pass" : `evaluator-${logVerdict.verdict}`,
-      detail: logVerdict.detail || "Verdict read from evaluator log marker.",
-      logPath: path.relative(REPO_ROOT, evaluatorRun.logPath),
+      agentId: contQaRun.agent.agentId,
+      statusCode: logVerdict.verdict === "pass" ? "pass" : `cont-qa-${logVerdict.verdict}`,
+      detail: logVerdict.detail || "Verdict read from cont-QA log marker.",
+      logPath: path.relative(REPO_ROOT, contQaRun.logPath),
     };
   }
   return {
     ok: false,
-    agentId: evaluatorRun.agent.agentId,
-    statusCode: "missing-evaluator-verdict",
-    detail: evaluatorReportPath
-      ? `Missing Verdict line in ${path.relative(REPO_ROOT, evaluatorReportPath)} and no [wave-verdict] marker in ${path.relative(REPO_ROOT, evaluatorRun.logPath)}.`
-      : `Missing evaluator report path and no [wave-verdict] marker in ${path.relative(REPO_ROOT, evaluatorRun.logPath)}.`,
-    logPath: path.relative(REPO_ROOT, evaluatorRun.logPath),
+    agentId: contQaRun.agent.agentId,
+    statusCode: "missing-cont-qa-verdict",
+    detail: contQaReportPath
+      ? `Missing Verdict line in ${path.relative(REPO_ROOT, contQaReportPath)} and no [wave-verdict] marker in ${path.relative(REPO_ROOT, contQaRun.logPath)}.`
+      : `Missing cont-QA report path and no [wave-verdict] marker in ${path.relative(REPO_ROOT, contQaRun.logPath)}.`,
+    logPath: path.relative(REPO_ROOT, contQaRun.logPath),
+  };
+}
+
+export function readWaveContEvalGate(wave, agentRuns, options = {}) {
+  const mode = String(options.mode || "compat").trim().toLowerCase();
+  const strict = mode === "live";
+  const contEvalAgentId = options.contEvalAgentId || wave.contEvalAgentId || "E0";
+  const contEvalRun =
+    agentRuns.find((run) => run.agent.agentId === contEvalAgentId) ?? null;
+  if (!contEvalRun) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: "pass",
+      detail: "Wave does not include cont-EVAL.",
+      logPath: null,
+    };
+  }
+  const summary = readRunExecutionSummary(contEvalRun, strict ? wave : null);
+  if (summary) {
+    const validation = validateContEvalSummary(contEvalRun.agent, summary, {
+      mode,
+      evalTargets: options.evalTargets || wave.evalTargets,
+      benchmarkCatalogPath: options.benchmarkCatalogPath,
+    });
+    return {
+      ok: validation.ok,
+      agentId: contEvalRun.agent.agentId,
+      statusCode: validation.statusCode,
+      detail: validation.detail,
+      logPath: summary.logPath || path.relative(REPO_ROOT, contEvalRun.logPath),
+    };
+  }
+  return {
+    ok: false,
+    agentId: contEvalRun.agent.agentId,
+    statusCode: "missing-wave-eval",
+    detail: `Missing [wave-eval] marker for ${contEvalRun.agent.agentId}.`,
+    logPath: path.relative(REPO_ROOT, contEvalRun.logPath),
   };
 }
 
@@ -423,10 +478,15 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
   if (!statusRecord) {
     return null;
   }
-  const reportPath =
-    runInfo.agent.agentId === (wave.evaluatorAgentId || "A0") && wave.evaluatorReportPath
-      ? path.resolve(REPO_ROOT, wave.evaluatorReportPath)
-      : null;
+  const reportPath = (() => {
+    if (runInfo.agent.agentId === (wave.contQaAgentId || "A0") && wave.contQaReportPath) {
+      return path.resolve(REPO_ROOT, wave.contQaReportPath);
+    }
+    if (runInfo.agent.agentId === (wave.contEvalAgentId || "E0") && wave.contEvalReportPath) {
+      return path.resolve(REPO_ROOT, wave.contEvalReportPath);
+    }
+    return null;
+  })();
   const summary = buildAgentExecutionSummary({
     agent: runInfo.agent,
     statusRecord,
@@ -437,7 +497,7 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
   return summary;
 }
 
-function readRunExecutionSummary(runInfo) {
+function readRunExecutionSummary(runInfo, wave = null) {
   if (runInfo?.summary && typeof runInfo.summary === "object") {
     return runInfo.summary;
   }
@@ -447,7 +507,17 @@ function readRunExecutionSummary(runInfo) {
   if (runInfo?.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(runInfo.statusPath))) {
     return readAgentExecutionSummary(runInfo.statusPath);
   }
+  if (wave && runInfo?.statusPath && runInfo?.logPath && fs.existsSync(runInfo.statusPath)) {
+    return materializeAgentExecutionSummaryForRun(wave, runInfo);
+  }
   return null;
+}
+
+export function readWaveEvaluatorGate(wave, agentRuns, options = {}) {
+  return readWaveContQaGate(wave, agentRuns, {
+    ...options,
+    contQaAgentId: options.evaluatorAgentId || options.contQaAgentId,
+  });
 }
 
 function materializeAgentExecutionSummaries(wave, agentRuns) {
@@ -679,12 +749,30 @@ function buildIntegrationEvidence({
   const deployRiskEntries = [];
   for (const agent of wave.agents || []) {
     const summary = summariesByAgentId?.[agent.agentId] || null;
+    const contEvalImplementationOwning =
+      agent.agentId === lanePaths.contEvalAgentId &&
+      isContEvalImplementationOwningAgent(agent, {
+        contEvalAgentId: lanePaths.contEvalAgentId,
+      });
+    if (agent.agentId === lanePaths.contEvalAgentId) {
+      const validation = validateContEvalSummary(agent, summary, {
+        mode: "live",
+        evalTargets: wave.evalTargets,
+        benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
+      });
+      if (!validation.ok) {
+        proofGapEntries.push(
+          summarizeGap(agent.agentId, validation.detail, "cont-EVAL target is not yet satisfied."),
+        );
+      }
+    }
     if (
       ![
-        lanePaths.evaluatorAgentId,
+        lanePaths.contQaAgentId,
         lanePaths.integrationAgentId,
         lanePaths.documentationAgentId,
-      ].includes(agent.agentId)
+      ].includes(agent.agentId) &&
+      (agent.agentId !== lanePaths.contEvalAgentId || contEvalImplementationOwning)
     ) {
       const validation = validateImplementationSummary(agent, summary);
       if (!validation.ok) {
@@ -913,7 +1001,8 @@ function writeWaveDerivedState({
     agents: wave.agents,
     componentPromotions: wave.componentPromotions,
     sharedPlanDocs: lanePaths.sharedPlanDocs,
-    evaluatorAgentId: lanePaths.evaluatorAgentId,
+    contQaAgentId: lanePaths.contQaAgentId,
+    contEvalAgentId: lanePaths.contEvalAgentId,
     integrationAgentId: lanePaths.integrationAgentId,
     documentationAgentId: lanePaths.documentationAgentId,
     feedbackRequests,
@@ -1008,9 +1097,11 @@ function writeWaveDerivedState({
     integrationSummary,
     docsQueue,
     attempt,
-    evaluatorAgentId: lanePaths.evaluatorAgentId,
+    contQaAgentId: lanePaths.contQaAgentId,
+    contEvalAgentId: lanePaths.contEvalAgentId,
     integrationAgentId: lanePaths.integrationAgentId,
     documentationAgentId: lanePaths.documentationAgentId,
+    benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
     capabilityAssignments,
     dependencySnapshot,
   });
@@ -1090,14 +1181,18 @@ function applyDerivedStateToDashboard(dashboardState, derivedState) {
 }
 
 export function readWaveImplementationGate(wave, agentRuns) {
-  const evaluatorAgentId = wave.evaluatorAgentId || "A0";
+  const contQaAgentId = wave.contQaAgentId || "A0";
+  const contEvalAgentId = wave.contEvalAgentId || "E0";
   const integrationAgentId = wave.integrationAgentId || "A8";
   const documentationAgentId = wave.documentationAgentId || "A9";
   for (const runInfo of agentRuns) {
-    if ([evaluatorAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId)) {
+    if (
+      [contQaAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId) ||
+      isContEvalReportOnlyAgent(runInfo.agent, { contEvalAgentId })
+    ) {
       continue;
     }
-    const summary = readRunExecutionSummary(runInfo);
+    const summary = readRunExecutionSummary(runInfo, wave);
     const validation = validateImplementationSummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -1120,7 +1215,7 @@ export function readWaveImplementationGate(wave, agentRuns) {
 
 export function readWaveComponentGate(wave, agentRuns, options = {}) {
   const summariesByAgentId = Object.fromEntries(
-    agentRuns.map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo)]),
+    agentRuns.map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo, wave)]),
   );
   const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
   if (validation.ok) {
@@ -1184,7 +1279,7 @@ export function readWaveDocumentationGate(wave, agentRuns) {
       logPath: null,
     };
   }
-  const summary = readRunExecutionSummary(docRun);
+  const summary = readRunExecutionSummary(docRun, wave);
   const validation = validateDocumentationClosureSummary(docRun.agent, summary);
   return {
     ok: validation.ok,
@@ -1216,7 +1311,7 @@ export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const summary = readRunExecutionSummary(integrationRun);
+  const summary = readRunExecutionSummary(integrationRun, wave);
   const validation = validateIntegrationSummary(integrationRun.agent, summary);
   return {
     ok: validation.ok,
@@ -1310,10 +1405,25 @@ export async function runClosureSweepPhase({
   launchAgentSessionFn = launchAgentSession,
   waitForWaveCompletionFn = waitForWaveCompletion,
 }) {
-  const evaluatorAgentId = wave.evaluatorAgentId || "A0";
+  const contQaAgentId = wave.contQaAgentId || "A0";
+  const contEvalAgentId = wave.contEvalAgentId || lanePaths.contEvalAgentId || "E0";
   const integrationAgentId = wave.integrationAgentId || lanePaths.integrationAgentId || "A8";
   const documentationAgentId = wave.documentationAgentId || "A9";
   const stagedRuns = [
+    {
+      agentId: contEvalAgentId,
+      label: "cont-EVAL gate",
+      runs: closureRuns.filter((run) => run.agent.agentId === contEvalAgentId),
+      validate: () =>
+        readWaveContEvalGate(wave, closureRuns, {
+          contEvalAgentId,
+          mode: "live",
+          evalTargets: wave.evalTargets,
+          benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
+        }),
+      actionRequested:
+        `Lane ${lanePaths.lane} owners should resolve cont-EVAL tuning gaps before integration closure.`,
+    },
     {
       agentId: integrationAgentId,
       label: "Integration gate",
@@ -1324,7 +1434,7 @@ export async function runClosureSweepPhase({
           requireIntegrationStewardFromWave: lanePaths.requireIntegrationStewardFromWave,
         }),
       actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before doc/evaluator closure.`,
+        `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before documentation and cont-QA closure.`,
     },
     {
       agentId: documentationAgentId,
@@ -1341,15 +1451,15 @@ export async function runClosureSweepPhase({
         });
       },
       actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve the shared-plan or component-matrix closure state before evaluator progression.`,
+        `Lane ${lanePaths.lane} owners should resolve the shared-plan or component-matrix closure state before cont-QA progression.`,
     },
     {
-      agentId: evaluatorAgentId,
-      label: "Evaluator gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === evaluatorAgentId),
-      validate: () => readWaveEvaluatorGate(wave, closureRuns),
+      agentId: contQaAgentId,
+      label: "cont-QA gate",
+      runs: closureRuns.filter((run) => run.agent.agentId === contQaAgentId),
+      validate: () => readWaveContQaGate(wave, closureRuns, { contQaAgentId, mode: "live" }),
       actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve the evaluator gate before wave progression.`,
+        `Lane ${lanePaths.lane} owners should resolve the cont-QA gate before wave progression.`,
     },
   ];
   for (const stage of stagedRuns) {
@@ -1844,8 +1954,11 @@ async function launchAgentSession(lanePaths, params) {
     inboxText,
     context7,
     componentPromotions: wave.componentPromotions,
+    evalTargets: wave.evalTargets,
+    benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
     sharedPlanDocs: lanePaths.sharedPlanDocs,
-    evaluatorAgentId: lanePaths.evaluatorAgentId,
+    contQaAgentId: lanePaths.contQaAgentId,
+    contEvalAgentId: lanePaths.contEvalAgentId,
     integrationAgentId: lanePaths.integrationAgentId,
     documentationAgentId: lanePaths.documentationAgentId,
   });
@@ -2201,9 +2314,10 @@ export function hasReusableSuccessStatus(agent, statusPath) {
 
 function isClosureAgentId(agentId, lanePaths) {
   return [
+    lanePaths.contEvalAgentId,
     lanePaths.integrationAgentId,
     lanePaths.documentationAgentId,
-    lanePaths.evaluatorAgentId,
+    lanePaths.contQaAgentId,
   ].includes(agentId);
 }
 
@@ -2490,6 +2604,7 @@ export function buildGateSnapshot({
   lanePaths,
   componentMatrixPayload,
   componentMatrixJsonPath,
+  validationMode = "compat",
 }) {
   const implementationGate = readWaveImplementationGate(wave, agentRuns);
   const componentGate = readWaveComponentGate(wave, agentRuns, {
@@ -2510,8 +2625,15 @@ export function buildGateSnapshot({
     componentMatrixPayload,
     componentMatrixJsonPath,
   });
-  const evaluatorGate = readWaveEvaluatorGate(wave, agentRuns, {
-    evaluatorAgentId: lanePaths?.evaluatorAgentId,
+  const contEvalGate = readWaveContEvalGate(wave, agentRuns, {
+    contEvalAgentId: lanePaths?.contEvalAgentId,
+    mode: validationMode,
+    evalTargets: wave.evalTargets,
+    benchmarkCatalogPath: lanePaths?.laneProfile?.paths?.benchmarkCatalogPath,
+  });
+  const contQaGate = readWaveContQaGate(wave, agentRuns, {
+    contQaAgentId: lanePaths?.contQaAgentId,
+    mode: validationMode,
   });
   const infraGate = readWaveInfraGate(agentRuns);
   const clarificationBarrier = readClarificationBarrier(derivedState);
@@ -2522,10 +2644,11 @@ export function buildGateSnapshot({
     ["componentGate", componentGate],
     ["helperAssignmentBarrier", helperAssignmentBarrier],
     ["dependencyBarrier", dependencyBarrier],
+    ["contEvalGate", contEvalGate],
     ["integrationBarrier", integrationBarrier],
     ["documentationGate", documentationGate],
     ["componentMatrixGate", componentMatrixGate],
-    ["evaluatorGate", evaluatorGate],
+    ["contQaGate", contQaGate],
     ["infraGate", infraGate],
     ["clarificationBarrier", clarificationBarrier],
   ];
@@ -2537,7 +2660,8 @@ export function buildGateSnapshot({
     integrationBarrier,
     documentationGate,
     componentMatrixGate,
-    evaluatorGate,
+    contEvalGate,
+    contQaGate,
     infraGate,
     clarificationBarrier,
     helperAssignmentBarrier,
@@ -2697,9 +2821,15 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
       barrier: null,
     };
   }
-  if (derivedState?.ledger?.phase === "evaluator-closure") {
+  if (derivedState?.ledger?.phase === "cont-eval") {
     return {
-      runs: [runsByAgentId.get(lanePaths.evaluatorAgentId)].filter(Boolean),
+      runs: [runsByAgentId.get(lanePaths.contEvalAgentId)].filter(Boolean),
+      barrier: null,
+    };
+  }
+  if (derivedState?.ledger?.phase === "cont-qa-closure") {
+    return {
+      runs: [runsByAgentId.get(lanePaths.contQaAgentId)].filter(Boolean),
       barrier: null,
     };
   }
@@ -2837,7 +2967,8 @@ export async function runLauncherCli(argv) {
             lane: lanePaths.lane,
             bundleIndex: context7BundleIndex,
           }),
-          evaluatorAgentId: lanePaths.evaluatorAgentId,
+          contQaAgentId: lanePaths.contQaAgentId,
+          contEvalAgentId: lanePaths.contEvalAgentId,
           integrationAgentId: lanePaths.integrationAgentId,
           documentationAgentId: lanePaths.documentationAgentId,
         }),
@@ -2850,7 +2981,8 @@ export async function runLauncherCli(argv) {
       {
         logsDir: lanePaths.logsDir,
         coordinationDir: lanePaths.coordinationDir,
-        evaluatorAgentId: lanePaths.evaluatorAgentId,
+        contQaAgentId: lanePaths.contQaAgentId,
+        contEvalAgentId: lanePaths.contEvalAgentId,
         integrationAgentId: lanePaths.integrationAgentId,
         documentationAgentId: lanePaths.documentationAgentId,
         requireExitContractsFromWave: lanePaths.requireExitContractsFromWave,
@@ -3159,7 +3291,7 @@ export async function runLauncherCli(argv) {
         const refreshDerivedState = (attemptNumber = 0) => {
           const summariesByAgentId = Object.fromEntries(
             agentRuns
-              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run, wave)])
               .filter(([, summary]) => summary),
           );
           const feedbackRequests = readWaveHumanFeedbackRequests({
@@ -3264,19 +3396,21 @@ export async function runLauncherCli(argv) {
           const launchedImplementationRuns = runsToLaunch.filter(
             (run) =>
               ![
-                lanePaths.evaluatorAgentId,
+                lanePaths.contEvalAgentId,
+                lanePaths.contQaAgentId,
                 lanePaths.integrationAgentId,
                 lanePaths.documentationAgentId,
               ].includes(
                 run.agent.agentId,
               ),
           );
-          const evaluatorOnlyRetry =
+          const closureOnlyRetry =
             runsToLaunch.length > 0 &&
             launchedImplementationRuns.length === 0 &&
             runsToLaunch.every((run) =>
               [
-                lanePaths.evaluatorAgentId,
+                lanePaths.contEvalAgentId,
+                lanePaths.contQaAgentId,
                 lanePaths.integrationAgentId,
                 lanePaths.documentationAgentId,
               ].includes(
@@ -3286,7 +3420,7 @@ export async function runLauncherCli(argv) {
 
           let failures = [];
           let timedOut = false;
-          if (evaluatorOnlyRetry) {
+          if (closureOnlyRetry) {
             const closureResult = await runClosureSweepPhase({
               lanePaths,
               wave,
@@ -3515,7 +3649,8 @@ export async function runLauncherCli(argv) {
                     wave,
                     closureRuns: agentRuns.filter((run) =>
                       [
-                        lanePaths.evaluatorAgentId,
+                        lanePaths.contEvalAgentId,
+                        lanePaths.contQaAgentId,
                         lanePaths.integrationAgentId,
                         lanePaths.documentationAgentId,
                       ].includes(
@@ -3595,6 +3730,36 @@ export async function runLauncherCli(argv) {
           }
 
           if (failures.length === 0) {
+            const contEvalGate = readWaveContEvalGate(wave, agentRuns, {
+              contEvalAgentId: lanePaths.contEvalAgentId,
+              mode: "live",
+              evalTargets: wave.evalTargets,
+              benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
+            });
+            if (!contEvalGate.ok) {
+              failures = [
+                {
+                  agentId: contEvalGate.agentId,
+                  statusCode: contEvalGate.statusCode,
+                  logPath: contEvalGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                },
+              ];
+              recordCombinedEvent({
+                level: "error",
+                agentId: contEvalGate.agentId,
+                message: `cont-EVAL blocked wave ${wave.wave}: ${contEvalGate.detail}`,
+              });
+              appendCoordination({
+                event: "wave_gate_blocked",
+                waves: [wave.wave],
+                status: "blocked",
+                details: `agent=${contEvalGate.agentId}; reason=${contEvalGate.statusCode}; ${contEvalGate.detail}`,
+                actionRequested: `Lane ${lanePaths.lane} owners should resolve cont-EVAL tuning gaps before integration closure.`,
+              });
+            }
+          }
+
+          if (failures.length === 0) {
             const integrationGate = readWaveIntegrationGate(wave, agentRuns, {
               integrationAgentId: lanePaths.integrationAgentId,
               requireIntegrationStewardFromWave: lanePaths.requireIntegrationStewardFromWave,
@@ -3617,7 +3782,7 @@ export async function runLauncherCli(argv) {
                 waves: [wave.wave],
                 status: "blocked",
                 details: `agent=${integrationGate.agentId}; reason=${integrationGate.statusCode}; ${integrationGate.detail}`,
-                actionRequested: `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before doc/evaluator closure.`,
+                actionRequested: `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before documentation and cont-QA closure.`,
               });
             }
           }
@@ -3677,38 +3842,38 @@ export async function runLauncherCli(argv) {
           }
 
           if (failures.length === 0) {
-            const evaluatorGate = readWaveEvaluatorGate(wave, agentRuns);
-            if (!evaluatorGate.ok) {
+            const contQaGate = readWaveContQaGate(wave, agentRuns, { mode: "live" });
+            if (!contQaGate.ok) {
               failures = [
                 {
-                  agentId: evaluatorGate.agentId,
-                  statusCode: evaluatorGate.statusCode,
-                  logPath: evaluatorGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                  agentId: contQaGate.agentId,
+                  statusCode: contQaGate.statusCode,
+                  logPath: contQaGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
                 },
               ];
               recordCombinedEvent({
                 level: "error",
-                agentId: evaluatorGate.agentId,
-                message: `Evaluator gate blocked wave ${wave.wave}: ${evaluatorGate.detail}`,
+                agentId: contQaGate.agentId,
+                message: `cont-QA gate blocked wave ${wave.wave}: ${contQaGate.detail}`,
               });
               appendCoordination({
                 event: "wave_gate_blocked",
                 waves: [wave.wave],
                 status: "blocked",
-                details: `agent=${evaluatorGate.agentId}; reason=${evaluatorGate.statusCode}; ${evaluatorGate.detail}`,
-                actionRequested: `Lane ${lanePaths.lane} owners should resolve the evaluator gate before wave progression.`,
+                details: `agent=${contQaGate.agentId}; reason=${contQaGate.statusCode}; ${contQaGate.detail}`,
+                actionRequested: `Lane ${lanePaths.lane} owners should resolve the cont-QA gate before wave progression.`,
               });
             } else {
-              setWaveDashboardAgent(dashboardState, evaluatorGate.agentId, {
-                detail: evaluatorGate.detail
-                  ? `Exit 0; evaluator PASS (${evaluatorGate.detail})`
-                  : "Exit 0; evaluator PASS",
+              setWaveDashboardAgent(dashboardState, contQaGate.agentId, {
+                detail: contQaGate.detail
+                  ? `Exit 0; cont-QA PASS (${contQaGate.detail})`
+                  : "Exit 0; cont-QA PASS",
               });
               recordCombinedEvent({
-                agentId: evaluatorGate.agentId,
-                message: evaluatorGate.detail
-                  ? `Evaluator verdict PASS: ${evaluatorGate.detail}`
-                  : "Evaluator verdict PASS.",
+                agentId: contQaGate.agentId,
+                message: contQaGate.detail
+                  ? `cont-QA verdict PASS: ${contQaGate.detail}`
+                  : "cont-QA verdict PASS.",
               });
             }
           }
@@ -3769,7 +3934,7 @@ export async function runLauncherCli(argv) {
           );
           const summariesByAgentId = Object.fromEntries(
             agentRuns
-              .map((run) => [run.agent.agentId, readRunExecutionSummary(run)])
+              .map((run) => [run.agent.agentId, readRunExecutionSummary(run, wave)])
               .filter(([, summary]) => summary),
           );
           const gateSnapshot = buildGateSnapshot({
@@ -3777,6 +3942,7 @@ export async function runLauncherCli(argv) {
             agentRuns,
             derivedState,
             lanePaths,
+            validationMode: "live",
           });
           const traceDir = writeTraceBundle({
             tracesDir: lanePaths.tracesDir,
@@ -3846,8 +4012,8 @@ export async function runLauncherCli(argv) {
             if (
               failures.every(
                 (failure) =>
-                  String(failure.statusCode).startsWith("evaluator-") ||
-                  String(failure.statusCode) === "missing-evaluator-verdict",
+                  String(failure.statusCode).startsWith("cont-qa-") ||
+                  String(failure.statusCode) === "missing-cont-qa-verdict",
               )
             ) {
               error.exitCode = 42;

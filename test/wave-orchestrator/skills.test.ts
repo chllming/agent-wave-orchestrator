@@ -28,6 +28,8 @@ function makeLaneProfile() {
       dir: "skills",
       base: ["wave-core", "repo-coding-rules"],
       byRole: {
+        "cont-qa": ["role-cont-qa"],
+        "cont-eval": ["role-cont-eval"],
         deploy: ["role-deploy"],
       },
       byRuntime: {
@@ -85,6 +87,41 @@ describe("skill resolution", () => {
     ).toMatchObject({
       ok: false,
     });
+  });
+
+  it("loads runtime adapters for cont-QA and cont-EVAL role skills", () => {
+    const contQaSkills = resolveAgentSkills(
+      {
+        agentId: "A0",
+        executorResolved: {
+          id: "claude",
+          role: "cont-qa",
+        },
+      },
+      {},
+      { laneProfile: makeLaneProfile() },
+    );
+    const contEvalSkills = resolveAgentSkills(
+      {
+        agentId: "E0",
+        executorResolved: {
+          id: "codex",
+          role: "cont-eval",
+        },
+      },
+      {},
+      { laneProfile: makeLaneProfile() },
+    );
+
+    expect(contQaSkills.ids).toContain("role-cont-qa");
+    expect(contQaSkills.promptText).toContain("## Skill role-cont-qa");
+    expect(contQaSkills.promptText).toContain("### claude adapter");
+    expect(contQaSkills.promptText).toContain("smallest blocking set");
+
+    expect(contEvalSkills.ids).toContain("role-cont-eval");
+    expect(contEvalSkills.promptText).toContain("## Skill role-cont-eval");
+    expect(contEvalSkills.promptText).toContain("### codex adapter");
+    expect(contEvalSkills.promptText).toContain("target_ids");
   });
 });
 

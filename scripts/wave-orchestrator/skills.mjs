@@ -112,10 +112,14 @@ export function normalizeSkillsConfig(rawSkills = {}, label = "skills", options 
       : options.preserveOmittedDir
         ? null
         : DEFAULT_SKILLS_DIR;
+  const byRole = normalizeSkillMap(skills.byRole, `${label}.byRole`);
+  if (Object.prototype.hasOwnProperty.call(byRole, "evaluator")) {
+    throw new Error(`${label}.byRole.evaluator was renamed to ${label}.byRole.cont-qa`);
+  }
   return {
     dir,
     base: normalizeSkillIdArray(skills.base, `${label}.base`),
-    byRole: normalizeSkillMap(skills.byRole, `${label}.byRole`),
+    byRole,
     byRuntime: normalizeSkillMap(skills.byRuntime, `${label}.byRuntime`),
     byDeployKind: normalizeSkillMap(skills.byDeployKind, `${label}.byDeployKind`),
   };
@@ -218,6 +222,16 @@ export function loadSkillBundle(skillId, options = {}) {
     adapterPathByRuntime[runtimeId] = repoRelativePath(adapterPath);
     adapterTextByRuntime[runtimeId] = fs.readFileSync(adapterPath, "utf8").trim();
   }
+  const referencesDir = path.join(bundleDir, "references");
+  const referencePaths = [];
+  if (fs.existsSync(referencesDir) && fs.statSync(referencesDir).isDirectory()) {
+    for (const entry of fs.readdirSync(referencesDir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        referencePaths.push(repoRelativePath(path.join(referencesDir, entry.name)));
+      }
+    }
+    referencePaths.sort();
+  }
   const sourceFiles = listFilesRecursively(bundleDir).map((filePath) => ({
     path: repoRelativePath(filePath),
     hash: hashBuffer(fs.readFileSync(filePath)),
@@ -229,12 +243,17 @@ export function loadSkillBundle(skillId, options = {}) {
     id: normalizedSkillId,
     title: cleanText(manifest.title) || normalizedSkillId,
     description: cleanText(manifest.description) || cleanText(manifest.summary) || null,
+    version: cleanText(manifest.version) || null,
+    tags: Array.isArray(manifest.tags)
+      ? manifest.tags.map((tag) => cleanText(tag)).filter(Boolean)
+      : [],
     bundlePath: repoRelativePath(bundleDir),
     manifestPath: repoRelativePath(manifestPath),
     skillPath: repoRelativePath(skillPath),
     skillText,
     adapterPathByRuntime,
     adapterTextByRuntime,
+    referencePaths,
     sourceFiles,
     bundleHash,
   };
@@ -257,6 +276,13 @@ function renderBundlePrompt(bundle, runtimeId) {
     lines.push("```text");
     lines.push(adapterText);
     lines.push("```");
+  }
+  if (Array.isArray(bundle.referencePaths) && bundle.referencePaths.length > 0) {
+    lines.push("");
+    lines.push("### Available references");
+    for (const refPath of bundle.referencePaths) {
+      lines.push(`- ${refPath}`);
+    }
   }
   lines.push("");
   return lines;
@@ -343,10 +369,13 @@ export function resolveAgentSkills(agent, wave, options = {}) {
       id: bundle.id,
       title: bundle.title,
       description: bundle.description,
+      version: bundle.version,
+      tags: bundle.tags,
       bundlePath: bundle.bundlePath,
       manifestPath: bundle.manifestPath,
       skillPath: bundle.skillPath,
       adapterPath: bundle.adapterPathByRuntime[runtimeId] || null,
+      referencePaths: bundle.referencePaths,
       bundleHash: bundle.bundleHash,
       sourceFiles: bundle.sourceFiles.map((entry) => entry.path),
     })),
@@ -384,10 +413,13 @@ export function summarizeResolvedSkills(resolvedSkills) {
           id: bundle.id,
           title: bundle.title || null,
           description: bundle.description || null,
+          version: bundle.version || null,
+          tags: Array.isArray(bundle.tags) ? bundle.tags.slice() : [],
           bundlePath: bundle.bundlePath,
           manifestPath: bundle.manifestPath,
           skillPath: bundle.skillPath,
           adapterPath: bundle.adapterPath || null,
+          referencePaths: Array.isArray(bundle.referencePaths) ? bundle.referencePaths.slice() : [],
           bundleHash: bundle.bundleHash || null,
           sourceFiles: Array.isArray(bundle.sourceFiles) ? bundle.sourceFiles.slice() : [],
         }))

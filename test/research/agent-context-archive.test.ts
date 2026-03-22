@@ -101,6 +101,48 @@ describe("topic inference and grouping", () => {
     expect(topics).toContain("long-running-agents-and-compaction");
   });
 
+  it("classifies secure-coding benchmarks into the security topic", () => {
+    const topics = inferTopics({
+      slug: "secureagentbench-benchmarking-secure-code-generation-under-realistic-vulnerability-scenarios",
+      title: "SecureAgentBench: Benchmarking Secure Code Generation under Realistic Vulnerability Scenarios",
+      mapsTo: "Secure code generation benchmark tasks grounded in realistic vulnerability scenarios.",
+      fit: "Checks whether security improvements hold under more realistic attack conditions.",
+      kind: "paper",
+      topics: [],
+    });
+
+    expect(topics).toContain("security-and-secure-code-generation");
+    expect(topics).toContain("repo-context-and-evaluation");
+  });
+
+  it("adds planning as an override topic without removing existing categories", () => {
+    const topics = inferTopics({
+      slug: "symphony-synergistic-multi-agent-planning-with-heterogeneous-language-model-assembly",
+      title: "SYMPHONY: Synergistic Multi-agent Planning with Heterogeneous Language Model Assembly",
+      mapsTo: "Heterogeneous agent pools and multi-agent planning.",
+      fit: "Broadens the coordination design space while staying relevant to shared-workspace orchestration.",
+      kind: "paper",
+      topics: ["blackboard-and-shared-workspaces"],
+    });
+
+    expect(topics).toContain("planning-and-orchestration");
+    expect(topics).toContain("blackboard-and-shared-workspaces");
+  });
+
+  it("adds skills as an override topic without removing existing categories", () => {
+    const topics = inferTopics({
+      slug: "memory-for-autonomous-llm-agents-mechanisms-evaluation-and-emerging-frontiers",
+      title: "Memory for Autonomous LLM Agents: Mechanisms, Evaluation, and Emerging Frontiers",
+      mapsTo: "Memory architecture, procedural memory, retrieval, reflection, and policy-aware context management.",
+      fit: "Adds a concrete memory survey that overlaps with reusable skill systems.",
+      kind: "paper",
+      topics: ["long-running-agents-and-compaction"],
+    });
+
+    expect(topics).toContain("skills-and-procedural-memory");
+    expect(topics).toContain("long-running-agents-and-compaction");
+  });
+
   it("loads entries from the archive tree and groups them by section and topic", async () => {
     const archiveRoot = makeTempDir();
     fs.mkdirSync(path.join(archiveRoot, "papers"), { recursive: true });

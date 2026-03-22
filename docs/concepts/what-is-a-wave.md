@@ -18,7 +18,7 @@ It is not just a prompt file. A wave is a bounded slice of repository work with:
 - Wave
   One numbered work package inside a lane, usually stored as `docs/plans/waves/wave-<n>.md`.
 - Agent
-  One role inside the wave, such as implementation, integration, documentation, evaluator, infra, or deploy.
+  One role inside the wave, such as implementation, `cont-EVAL`, integration, documentation, cont-QA, infra, or deploy.
 - Attempt
   One execution pass of a wave. A wave can have multiple attempts due to retries or fallback.
 - Closure
@@ -44,6 +44,7 @@ Wave markdown is the authored execution surface today. A typical wave can includ
 - reference rule
 - deploy environments
 - component promotions
+- eval targets
 - Context7 defaults
 - one `## Agent ...` block per role
 
@@ -53,6 +54,9 @@ Inside each agent block, the important sections are:
   Standing role identity imported from `docs/agents/*.md`.
 - `### Executor`
   Runtime selection, profile, model, fallbacks, and budgets.
+- `## Eval targets`
+  Optional wave-level contract for `cont-EVAL`, including benchmark family or pinned benchmarks, objective, and stop condition.
+  See [docs/evals/README.md](../evals/README.md) for guidance on delegated versus pinned targets and the coordination benchmark families.
 - `### Context7`
   External library truth to prefetch and inject.
 - `### Skills`
@@ -70,16 +74,18 @@ Inside each agent block, the important sections are:
 
 ## Standard Roles
 
-The starter runtime expects three closure roles:
+The starter runtime expects three standard closure roles and one optional eval-tuning role:
 
 - `A8`
   Integration steward
 - `A9`
   Documentation steward
 - `A0`
-  Evaluator
+  cont-QA
+- `E0`
+  Optional `cont-EVAL` for iterative benchmark or output tuning; report-only by default, implementation-owning only when explicitly assigned non-report files
 
-Implementation or specialist agents own the actual work slices. Closure roles do not replace implementation ownership; they decide whether the combined result is closure-ready.
+Implementation or specialist agents own the actual work slices. Closure roles do not replace implementation ownership; they decide whether the combined result is closure-ready. `cont-EVAL` is the one hybrid role: most waves keep it report-only, but human-authored waves may assign explicit tuning files to `E0`, in which case it must satisfy both implementation proof and eval proof.
 
 ## Lifecycle Of A Wave
 
@@ -89,8 +95,14 @@ Implementation or specialist agents own the actual work slices. Closure roles do
 4. A live run launches implementation agents first when implementation work remains.
 5. Agents write structured coordination events instead of relying on ad hoc terminal output.
 6. The launcher checks implementation contracts, promoted-component proof, helper assignments, dependencies, and clarification state.
-7. If implementation is ready, closure runs in order: integration, documentation, evaluator.
+7. If implementation is ready, closure runs in order: optional `cont-EVAL`, integration, documentation, then cont-QA.
 8. The attempt is captured in per-wave traces, ledgers, inboxes, summaries, and copied artifacts.
+
+Current live waves are strict about closure artifacts:
+
+- `cont-EVAL` must emit a structured `[wave-eval]` marker whose `target_ids` matches the declared eval targets and whose `benchmark_ids` enumerates the executed benchmark set.
+- `cont-QA` must emit both a final `Verdict:` line and a final `[wave-gate]` marker.
+- Replay keeps read-only compatibility with older traces and older evaluator-era artifacts, but live waves do not pass on verdict-only or underspecified closure markers.
 
 ## What Makes A Wave "Done"
 
@@ -102,8 +114,9 @@ A wave is not done because an agent said so. It is done only when the runtime su
 - helper assignments are resolved
 - required dependency tickets are resolved
 - clarification follow-ups or escalations are resolved
+- if present, `cont-EVAL` satisfies its declared eval targets
 - integration recommends closure
-- documentation and evaluator closure pass
+- documentation and cont-QA closure pass
 
 ## Where The State Lives
 

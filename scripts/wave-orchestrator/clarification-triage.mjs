@@ -260,11 +260,18 @@ function buildPolicyResolution(record, wave, lanePaths, resolutionContext = {}) 
       guidance: `Shared plan and component matrix updates are owned by ${lanePaths.documentationAgentId}.`,
     };
   }
-  if (lower.includes("evaluator") || lower.includes("gate")) {
+  if (lower.includes("cont-eval") || lower.includes("benchmark") || lower.includes("eval target")) {
     return {
       type: "route",
-      routeAgentId: lanePaths.evaluatorAgentId,
-      guidance: `Final pass/fail judgement and gate interpretation are owned by ${lanePaths.evaluatorAgentId}.`,
+      routeAgentId: lanePaths.contEvalAgentId,
+      guidance: `Eval target selection and tuning are owned by ${lanePaths.contEvalAgentId}.`,
+    };
+  }
+  if (lower.includes("cont-qa") || lower.includes("evaluator") || lower.includes("gate")) {
+    return {
+      type: "route",
+      routeAgentId: lanePaths.contQaAgentId,
+      guidance: `Final cont-QA pass/fail judgement and gate interpretation are owned by ${lanePaths.contQaAgentId}.`,
     };
   }
   return null;

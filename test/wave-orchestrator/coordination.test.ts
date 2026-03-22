@@ -82,13 +82,13 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).not.toContain("docs/leap-claw/plans");
   });
 
-  it("adds evaluator verdict requirements for agent A0", () => {
+  it("adds cont-qa verdict requirements for agent A0", () => {
     const prompt = buildExecutionPrompt({
       lane: "main",
       wave: 0,
       agent: {
         agentId: "A0",
-        title: "Evaluator",
+        title: "cont-QA",
         slug: "0-a0",
         prompt: "Review the wave.",
       },
@@ -103,6 +103,64 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("documentation gate is closed");
     expect(prompt).toContain("exact remaining doc delta");
     expect(prompt).toContain("explicit `closed` or `no-change` note");
+  });
+
+  it("renders strict eval target instructions for report-only cont-EVAL agents", () => {
+    const prompt = buildExecutionPrompt({
+      lane: "main",
+      wave: 4,
+      agent: {
+        agentId: "E0",
+        title: "cont-EVAL",
+        slug: "4-e0",
+        prompt: "Tune the output surface.",
+        ownedPaths: ["docs/plans/waves/reviews/wave-4-cont-eval.md"],
+      },
+      orchestratorId: "main-orch",
+      messageBoardPath: "/repo/.tmp/main-wave-launcher/messageboards/wave-4.md",
+      messageBoardSnapshot: "# Wave 4 Message Board",
+      evalTargets: [
+        {
+          id: "response-quality",
+          selection: "delegated",
+          benchmarkFamily: "service-output",
+          benchmarks: [],
+          objective: "Tune response quality",
+          threshold: "Golden response smoke passes",
+        },
+      ],
+      benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+    });
+
+    expect(prompt).toContain("You are report-only in this wave unless the prompt explicitly assigns additional non-report files.");
+    expect(prompt).toContain("Benchmark catalog: docs/evals/benchmark-catalog.json");
+    expect(prompt).toContain("allowed-benchmarks=golden-response-smoke, manual-session-review");
+    expect(prompt).toContain("target_ids=<csv> benchmark_ids=<csv>");
+    expect(prompt).not.toContain("[wave-proof]");
+  });
+
+  it("treats implementation-owning cont-EVAL agents like proof-owning workers", () => {
+    const prompt = buildExecutionPrompt({
+      lane: "main",
+      wave: 4,
+      agent: {
+        agentId: "E0",
+        title: "cont-EVAL",
+        slug: "4-e0",
+        prompt: "Tune the output surface.",
+        ownedPaths: [
+          "docs/plans/waves/reviews/wave-4-cont-eval.md",
+          "src/runtime.ts",
+        ],
+      },
+      orchestratorId: "main-orch",
+      messageBoardPath: "/repo/.tmp/main-wave-launcher/messageboards/wave-4.md",
+      messageBoardSnapshot: "# Wave 4 Message Board",
+    });
+
+    expect(prompt).toContain("You also own explicit non-report files in this wave.");
+    expect(prompt).toContain("[wave-proof]");
+    expect(prompt).toContain("[wave-doc-delta]");
   });
 
   it("uses lane-scoped shared plan doc paths for non-default lanes", () => {

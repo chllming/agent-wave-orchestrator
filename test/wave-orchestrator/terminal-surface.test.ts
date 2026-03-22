@@ -43,11 +43,11 @@ function writeLocalExecutorWave(repoDir) {
 
 - bundle: none
 
-## Agent A0: Running Evaluator
+## Agent A0: cont-QA
 
 ### Role prompts
 
-- docs/agents/wave-evaluator-role.md
+- docs/agents/wave-cont-qa-role.md
 
 ### Executor
 
@@ -68,7 +68,7 @@ Required context before coding:
 - Read docs/research/agent-context-sources.md.
 
 File ownership (only touch these paths):
-- docs/plans/waves/reviews/wave-0-evaluator.md
+- docs/plans/waves/reviews/wave-0-cont-qa.md
 \`\`\`
 
 ## Agent A8: Integration Steward

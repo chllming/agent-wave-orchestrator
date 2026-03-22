@@ -13,7 +13,8 @@ import {
   markLauncherFailed,
   readWaveComponentGate,
   readWaveComponentMatrixGate,
-  readWaveEvaluatorGate,
+  readWaveContEvalGate,
+  readWaveContQaGate,
   readWaveInfraGate,
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
@@ -50,10 +51,13 @@ function makeLanePaths(dir) {
     tmuxSocketName: `test-${path.basename(dir)}`,
     integrationAgentId: "A8",
     documentationAgentId: "A9",
-    evaluatorAgentId: "A0",
+    contQaAgentId: "A0",
     laneProfile: {
       runtimePolicy: {
         runtimeMixTargets: {},
+      },
+      validation: {
+        requireComponentPromotionsFromWave: 0,
       },
     },
     capabilityRouting: { preferredAgents: {} },
@@ -66,10 +70,10 @@ afterEach(() => {
   }
 });
 
-describe("readWaveEvaluatorGate", () => {
-  it("prefers structured evaluator summaries when present", () => {
+describe("readWaveContQaGate", () => {
+  it("prefers structured cont-qa summaries when present", () => {
     const dir = makeTempDir();
-    const reportPath = path.join(dir, "wave-6-evaluator.md");
+    const reportPath = path.join(dir, "wave-6-cont-qa.md");
     const logPath = path.join(dir, "wave-6-a0.log");
     const statusPath = path.join(dir, "wave-6-a0.status");
     const summaryPath = path.join(dir, "wave-6-a0.summary.json");
@@ -100,9 +104,9 @@ describe("readWaveEvaluatorGate", () => {
     );
 
     expect(
-      readWaveEvaluatorGate(
+      readWaveContQaGate(
         {
-          evaluatorReportPath: reportPath,
+          contQaReportPath: reportPath,
         },
         [
           {
@@ -119,18 +123,18 @@ describe("readWaveEvaluatorGate", () => {
     });
   });
 
-  it("normalizes legacy HOLD verdicts from evaluator reports", () => {
+  it("normalizes legacy HOLD verdicts from cont-qa reports", () => {
     const dir = makeTempDir();
-    const reportPath = path.join(dir, "wave-0-evaluator.md");
+    const reportPath = path.join(dir, "wave-0-cont-qa.md");
     const logPath = path.join(dir, "wave-0-a0.log");
 
     fs.writeFileSync(reportPath, "# Review\n\nVerdict: HOLD - waiting on QA\n", "utf8");
     fs.writeFileSync(logPath, "", "utf8");
 
     expect(
-      readWaveEvaluatorGate(
+      readWaveContQaGate(
         {
-          evaluatorReportPath: reportPath,
+          contQaReportPath: reportPath,
         },
         [
           {
@@ -142,21 +146,21 @@ describe("readWaveEvaluatorGate", () => {
     ).toMatchObject({
       ok: false,
       agentId: "A0",
-      statusCode: "evaluator-concerns",
+      statusCode: "cont-qa-concerns",
       detail: "waiting on QA",
     });
   });
 
-  it("falls back to wave verdict markers in the evaluator log", () => {
+  it("falls back to wave verdict markers in the cont-qa log", () => {
     const dir = makeTempDir();
     const logPath = path.join(dir, "wave-0-a0.log");
 
     fs.writeFileSync(logPath, "[wave-verdict] fail detail=tests-broken\n", "utf8");
 
     expect(
-      readWaveEvaluatorGate(
+      readWaveContQaGate(
         {
-          evaluatorReportPath: path.join(dir, "missing.md"),
+          contQaReportPath: path.join(dir, "missing.md"),
         },
         [
           {
@@ -168,8 +172,135 @@ describe("readWaveEvaluatorGate", () => {
     ).toMatchObject({
       ok: false,
       agentId: "A0",
-      statusCode: "evaluator-blocked",
+      statusCode: "cont-qa-blocked",
       detail: "tests-broken",
+    });
+  });
+
+  it("fails live cont-qa validation when only a verdict-only report exists", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-0-cont-qa.md");
+    const logPath = path.join(dir, "wave-0-a0.log");
+    const statusPath = path.join(dir, "wave-0-a0.status");
+
+    fs.writeFileSync(reportPath, "# Review\n\nVerdict: PASS\n", "utf8");
+    fs.writeFileSync(logPath, "[wave-verdict] pass detail=legacy-pass\n", "utf8");
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+
+    expect(
+      readWaveContQaGate(
+        {
+          contQaReportPath: reportPath,
+        },
+        [
+          {
+            agent: { agentId: "A0" },
+            logPath,
+            statusPath,
+          },
+        ],
+        { mode: "live" },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-wave-gate",
+    });
+  });
+});
+
+describe("readWaveContEvalGate", () => {
+  it("fails live cont-EVAL validation when the eval marker does not enumerate target ids", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-4-cont-eval.md");
+    const logPath = path.join(dir, "wave-4-e0.log");
+    const statusPath = path.join(dir, "wave-4-e0.status");
+
+    fs.writeFileSync(reportPath, "# cont-EVAL\n", "utf8");
+    fs.writeFileSync(
+      logPath,
+      "[wave-eval] state=satisfied targets=1 benchmarks=1 regressions=0 benchmark_ids=golden-response-smoke detail=bad-marker\n",
+      "utf8",
+    );
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+
+    expect(
+      readWaveContEvalGate(
+        {
+          contEvalReportPath: reportPath,
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+          ],
+        },
+        [
+          {
+            agent: { agentId: "E0" },
+            logPath,
+            statusPath,
+          },
+        ],
+        {
+          mode: "live",
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-cont-eval-target-ids",
+    });
+  });
+
+  it("materializes live cont-EVAL summaries from status and log artifacts", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-4-cont-eval.md");
+    const logPath = path.join(dir, "wave-4-e0.log");
+    const statusPath = path.join(dir, "wave-4-e0.status");
+
+    fs.writeFileSync(reportPath, "# cont-EVAL\n", "utf8");
+    fs.writeFileSync(
+      logPath,
+      "[wave-eval] state=satisfied targets=1 benchmarks=1 regressions=0 target_ids=response-quality benchmark_ids=golden-response-smoke detail=ready\n",
+      "utf8",
+    );
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+
+    expect(
+      readWaveContEvalGate(
+        {
+          contEvalReportPath: reportPath,
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+          ],
+        },
+        [
+          {
+            agent: { agentId: "E0" },
+            logPath,
+            statusPath,
+          },
+        ],
+        {
+          mode: "live",
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+      detail: "ready",
     });
   });
 });
@@ -238,7 +369,7 @@ describe("buildWaveIntegrationSummary", () => {
         },
         { agentId: "A8", title: "Integration" },
         { agentId: "A9", title: "Docs" },
-        { agentId: "A0", title: "Evaluator" },
+        { agentId: "A0", title: "cont-QA" },
       ],
     };
     const coordinationState = materializeCoordinationState([
@@ -378,7 +509,7 @@ describe("buildWaveIntegrationSummary", () => {
         },
         { agentId: "A8", title: "Integration" },
         { agentId: "A9", title: "Docs" },
-        { agentId: "A0", title: "Evaluator" },
+        { agentId: "A0", title: "cont-QA" },
       ],
     };
 
@@ -457,7 +588,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         capabilityRouting: { preferredAgents: {} },
       },
@@ -501,7 +632,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         capabilityRouting: { preferredAgents: {} },
       },
@@ -535,7 +666,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         capabilityRouting: { preferredAgents: {} },
       },
@@ -581,7 +712,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         laneProfile: { runtimePolicy: { runtimeMixTargets: {} } },
         capabilityRouting: { preferredAgents: {} },
@@ -664,7 +795,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         laneProfile: {
           skills: {
@@ -768,7 +899,7 @@ describe("resolveRelaunchRuns", () => {
       },
       {
         documentationAgentId: "A9",
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         laneProfile: {
           runtimePolicy: {
@@ -799,6 +930,109 @@ describe("resolveRelaunchRuns", () => {
 });
 
 describe("runClosureSweepPhase", () => {
+  it("runs cont-EVAL before integration, documentation, and cont-QA when present", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.contEvalAgentId = "E0";
+    lanePaths.laneProfile.validation.requireComponentPromotionsFromWave = null;
+    const contEvalReportPath = path.join(dir, "wave-0-cont-eval.md");
+    const contQaReportPath = path.join(dir, "wave-0-cont-qa.md");
+    const closureRuns = ["E0", "A8", "A9", "A0"].map((agentId) => ({
+      agent: { agentId, title: agentId },
+      sessionName: `wave-${agentId.toLowerCase()}`,
+      promptPath: path.join(dir, `${agentId}.prompt.md`),
+      logPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.log`),
+      statusPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.status`),
+      messageBoardPath: path.join(dir, "board.md"),
+      messageBoardSnapshot: "",
+      sharedSummaryPath: path.join(dir, "shared.md"),
+      sharedSummaryText: "",
+      inboxPath: path.join(dir, `${agentId}.inbox.md`),
+      inboxText: "",
+    }));
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: {
+        wave: 0,
+        contQaAgentId: "A0",
+        contQaReportPath,
+        contEvalAgentId: "E0",
+        contEvalReportPath,
+        evalTargets: [
+          {
+            id: "response-quality",
+            selection: "delegated",
+            benchmarkFamily: "service-output",
+            benchmarks: [],
+            objective: "Tune response quality",
+            threshold: "Golden response smoke passes",
+          },
+        ],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+      },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Integration is coherent.",
+        },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        fs.writeFileSync(
+          params.statusPath,
+          JSON.stringify({ code: 0, promptHash: "hash" }, null, 2),
+          "utf8",
+        );
+        if (params.agent.agentId === "E0") {
+          fs.writeFileSync(contEvalReportPath, "# cont-EVAL\n", "utf8");
+        }
+        if (params.agent.agentId === "A0") {
+          fs.writeFileSync(contQaReportPath, "# cont-QA\n\nVerdict: PASS\n", "utf8");
+        }
+        const logText =
+          params.agent.agentId === "E0"
+            ? "[wave-eval] state=satisfied targets=1 benchmarks=1 regressions=0 target_ids=response-quality benchmark_ids=golden-response-smoke detail=targets-satisfied\n"
+            : params.agent.agentId === "A8"
+              ? "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=ready\n"
+              : params.agent.agentId === "A9"
+                ? "[wave-doc-closure] state=closed paths=docs/plans/current-state.md detail=shared-plan-updated\n"
+                : [
+                    "[wave-gate] architecture=pass integration=pass durability=pass live=pass docs=pass detail=ready",
+                    "[wave-verdict] pass detail=ready",
+                  ].join("\n");
+        fs.writeFileSync(params.logPath, `${logText}\n`, "utf8");
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual(["E0", "A8", "A9", "A0"]);
+    expect(result.failures).toEqual([]);
+  });
+
   it("stops after integration when the integration summary is not ready for doc closure", async () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);
@@ -832,7 +1066,7 @@ describe("runClosureSweepPhase", () => {
         inboxText: "",
       },
       {
-        agent: { agentId: "A0", title: "Evaluator" },
+        agent: { agentId: "A0", title: "cont-QA" },
         sessionName: "wave-a0",
         promptPath: path.join(dir, "a0.prompt.md"),
         logPath: path.join(dir, "wave-0-a0.log"),
@@ -849,7 +1083,7 @@ describe("runClosureSweepPhase", () => {
 
     const result = await runClosureSweepPhase({
       lanePaths,
-      wave: { wave: 0, evaluatorAgentId: "A0", integrationAgentId: "A8", documentationAgentId: "A9" },
+      wave: { wave: 0, contQaAgentId: "A0", integrationAgentId: "A8", documentationAgentId: "A9" },
       closureRuns,
       coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
       refreshDerivedState: () => ({
@@ -909,7 +1143,7 @@ describe("selectInitialWaveRuns", () => {
       { agent: { agentId: "A1", title: "Implementation" } },
       { agent: { agentId: "A8", title: "Integration" } },
       { agent: { agentId: "A9", title: "Docs" } },
-      { agent: { agentId: "A0", title: "Evaluator" } },
+      { agent: { agentId: "A0", title: "cont-QA" } },
     ];
 
     expect(selectInitialWaveRuns(runs, lanePaths).map((run) => run.agent.agentId)).toEqual([
@@ -922,7 +1156,7 @@ describe("selectInitialWaveRuns", () => {
     const runs = [
       { agent: { agentId: "A8", title: "Integration" } },
       { agent: { agentId: "A9", title: "Docs" } },
-      { agent: { agentId: "A0", title: "Evaluator" } },
+      { agent: { agentId: "A0", title: "cont-QA" } },
     ];
 
     expect(selectInitialWaveRuns(runs, lanePaths).map((run) => run.agent.agentId)).toEqual([

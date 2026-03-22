@@ -17,7 +17,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - supports launcher-side Context7 prefetch and injection for headless runs
 - supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
 - supports a file-backed human feedback queue
-- performs a closure sweep so integration, documentation, and evaluator gates reflect final landed state
+- performs a closure sweep so optional `cont-EVAL`, integration, documentation, and cont-QA gates reflect final landed state
 
 ## Main Commands
 
@@ -44,6 +44,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 
 - `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
+- `docs/evals/README.md` explains how to author delegated versus pinned `## Eval targets`, including the coordination-oriented benchmark families.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
 - `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
@@ -58,7 +59,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - Starter bundles in this repo cover:
   - core Wave coordination and repo coding rules
   - runtime packs for Codex, Claude, OpenCode, and local execution
-  - role packs for implementation, integration, documentation, evaluator, infra, deploy, and research work
+  - role packs for implementation, `cont-EVAL`, integration, documentation, cont-QA, infra, deploy, and research work
   - deploy and environment packs for Railway, Docker Compose, Kubernetes, SSH/manual rollout, and generic custom deploys
   - explicit provider packs for GitHub release flow and AWS norms when a wave or lane wants to attach them
 
@@ -195,7 +196,7 @@ pnpm exec wave changelog --since-installed
 
 ## Authoring Rules
 
-- Every wave must include the configured evaluator agent.
+- Every wave must include the configured cont-QA agent.
 - Under the starter config, every wave must also include the configured integration steward and documentation steward.
 - From the configured thresholds onward, declare `## Component promotions` and keep them aligned with the component cutover matrix.
 - From the configured thresholds onward, every non-A0/A8/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
@@ -209,6 +210,7 @@ pnpm exec wave changelog --since-installed
 - Optional standing roles available in this repo include `docs/agents/wave-infra-role.md` for infra proof and `docs/agents/wave-deploy-verifier-role.md` for rollout verification.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
+- For benchmark-family guidance and delegated-versus-pinned eval examples, see [docs/evals/README.md](../evals/README.md).
 - Agents should use `wave coord post` for durable blockers, handoffs, evidence, and requests instead of relying on ad hoc board edits.
 - Keep shared plan docs and the component cutover matrix owned by the configured documentation steward once that rule becomes active.
 - Use the runtime reference pages for the full executor surface instead of relying on this runbook to enumerate every key:
@@ -276,4 +278,10 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. Documentation and evaluator closure only run after integration is explicitly ready for doc closure; if integration reports `needs-more-work`, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the integration steward.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. When present, `cont-EVAL` must satisfy its declared eval targets before integration can close. In the default planner shape `E0` is report-only; if a wave explicitly assigns `E0` non-report files, the launcher also applies the normal implementation proof gates to that role. Documentation and cont-QA closure only run after integration is explicitly ready for doc closure; if `cont-EVAL` or integration reports more work, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the relevant closure steward.
+
+Live closure is fail-closed:
+
+- `cont-EVAL` PASS requires a report artifact plus a structured `[wave-eval]` marker whose `target_ids` exactly matches the wave contract and whose `benchmark_ids` stays within the declared benchmark catalog surface.
+- `cont-QA` PASS requires both the final verdict and the final `[wave-gate]` marker.
+- Legacy evaluator-era or underspecified closure artifacts are still readable in replay and trace analysis, but they no longer satisfy live completion.

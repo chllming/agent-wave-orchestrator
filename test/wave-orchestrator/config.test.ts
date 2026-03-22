@@ -294,4 +294,61 @@ describe("runtime configuration normalization", () => {
       },
     });
   });
+
+  it("rejects legacy evaluator role config keys", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          roles: {
+            evaluatorAgentId: "A0",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    expect(() => loadWaveConfig(configPath)).toThrow(
+      /roles\.evaluatorAgentId was renamed to roles\.contQaAgentId/,
+    );
+  });
+
+  it("rejects legacy evaluator role mappings in runtime policy and skills", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultLane: "main",
+          skills: {
+            byRole: {
+              evaluator: ["role-cont-qa"],
+            },
+          },
+          lanes: {
+            main: {
+              runtimePolicy: {
+                defaultExecutorByRole: {
+                  evaluator: "claude",
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    expect(() => loadWaveConfig(configPath)).toThrow(/byRole\.evaluator was renamed to .*cont-qa/);
+  });
 });

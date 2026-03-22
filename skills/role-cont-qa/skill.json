@@ -1,0 +1,5 @@
+{
+  "id": "role-cont-qa",
+  "title": "cont-QA Role",
+  "description": "Fail-closed closure guidance for final cont-QA verdicts, gate consistency, and blocker reporting."
+}

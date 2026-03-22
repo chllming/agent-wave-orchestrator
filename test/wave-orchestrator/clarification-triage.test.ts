@@ -24,7 +24,7 @@ function makeLanePaths(dir) {
     feedbackTriageDir: path.join(dir, "feedback", "triage"),
     documentationAgentId: "A9",
     integrationAgentId: "A8",
-    evaluatorAgentId: "A0",
+    contQaAgentId: "A0",
   };
 }
 

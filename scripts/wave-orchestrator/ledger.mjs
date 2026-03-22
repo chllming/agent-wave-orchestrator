@@ -1,13 +1,16 @@
 import {
+  DEFAULT_CONT_EVAL_AGENT_ID,
   DEFAULT_DOCUMENTATION_AGENT_ID,
-  DEFAULT_EVALUATOR_AGENT_ID,
+  DEFAULT_CONT_QA_AGENT_ID,
   DEFAULT_INTEGRATION_AGENT_ID,
 } from "./config.mjs";
 import {
+  validateContEvalSummary,
   validateDocumentationClosureSummary,
-  validateEvaluatorSummary,
+  validateContQaSummary,
   validateImplementationSummary,
 } from "./agent-state.mjs";
+import { isContEvalImplementationOwningAgent } from "./role-helpers.mjs";
 import { openClarificationLinkedRequests } from "./coordination-store.mjs";
 import { buildHelperTasks } from "./routing-state.mjs";
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
@@ -40,15 +43,18 @@ function openClarifications(state) {
 export function buildSeedWaveLedger({
   lane,
   wave,
-  evaluatorAgentId = DEFAULT_EVALUATOR_AGENT_ID,
+  contQaAgentId = DEFAULT_CONT_QA_AGENT_ID,
+  contEvalAgentId = DEFAULT_CONT_EVAL_AGENT_ID,
   integrationAgentId = DEFAULT_INTEGRATION_AGENT_ID,
   documentationAgentId = DEFAULT_DOCUMENTATION_AGENT_ID,
 }) {
   const tasks = [];
   for (const agent of wave.agents) {
     const kind =
-      agent.agentId === evaluatorAgentId
-        ? "evaluator"
+      agent.agentId === contQaAgentId
+        ? "cont-qa"
+        : agent.agentId === contEvalAgentId
+          ? "cont-eval"
         : agent.agentId === integrationAgentId
           ? "integration"
           : agent.agentId === documentationAgentId
@@ -107,9 +113,10 @@ export function buildSeedWaveLedger({
     clarificationLinkedRequests: [],
     humanFeedback: [],
     humanEscalations: [],
+    contEvalState: "pending",
     integrationState: "pending",
     docClosureState: "pending",
-    evaluatorState: "pending",
+    contQaState: "pending",
     updatedAt: toIsoTimestamp(),
   };
 }
@@ -117,8 +124,9 @@ export function buildSeedWaveLedger({
 function derivePhase({
   tasks,
   integrationSummary,
+  contEvalValidation,
   docValidation,
-  evaluatorValidation,
+  contQaValidation,
   state,
   dependencySnapshot = null,
 }) {
@@ -149,14 +157,17 @@ function derivePhase({
   if (!allImplementationDone) {
     return "running";
   }
+  if (tasks.some((task) => task.kind === "cont-eval") && !contEvalValidation?.ok) {
+    return "cont-eval";
+  }
   if (integrationSummary?.recommendation !== "ready-for-doc-closure") {
     return "integrating";
   }
   if (!docValidation?.ok) {
     return "docs-closure";
   }
-  if (!evaluatorValidation?.ok) {
-    return "evaluator-closure";
+  if (!contQaValidation?.ok) {
+    return "cont-qa-closure";
   }
   return "completed";
 }
@@ -169,16 +180,19 @@ export function deriveWaveLedger({
   integrationSummary = null,
   docsQueue = null,
   attempt = 0,
-  evaluatorAgentId = DEFAULT_EVALUATOR_AGENT_ID,
+  contQaAgentId = DEFAULT_CONT_QA_AGENT_ID,
+  contEvalAgentId = DEFAULT_CONT_EVAL_AGENT_ID,
   integrationAgentId = DEFAULT_INTEGRATION_AGENT_ID,
   documentationAgentId = DEFAULT_DOCUMENTATION_AGENT_ID,
+  benchmarkCatalogPath = null,
   capabilityAssignments = [],
   dependencySnapshot = null,
 }) {
   const seed = buildSeedWaveLedger({
     lane,
     wave,
-    evaluatorAgentId,
+    contQaAgentId,
+    contEvalAgentId,
     integrationAgentId,
     documentationAgentId,
   });
@@ -203,8 +217,29 @@ export function deriveWaveLedger({
         docState: validation.ok ? "closed" : "open",
       };
     }
-    if (task.kind === "evaluator" && agent) {
-      const validation = validateEvaluatorSummary(agent, summary);
+    if (task.kind === "cont-eval" && agent) {
+      const evalValidation = validateContEvalSummary(agent, summary, {
+        mode: "live",
+        evalTargets: wave.evalTargets,
+        benchmarkCatalogPath,
+      });
+      const implementationValidation = isContEvalImplementationOwningAgent(agent, {
+        contEvalAgentId,
+      })
+        ? validateImplementationSummary(agent, summary)
+        : { ok: true, statusCode: "pass", detail: "cont-EVAL is report-only." };
+      const validation = !evalValidation.ok ? evalValidation : implementationValidation;
+      return {
+        ...task,
+        state: taskStateFromValidation(validation),
+        proofState: validation.ok ? "met" : "gap",
+        docState: "n/a",
+      };
+    }
+    if (task.kind === "cont-qa" && agent) {
+      const validation = validateContQaSummary(agent, summary, {
+        mode: "live",
+      });
       return {
         ...task,
         state: taskStateFromValidation(validation),
@@ -255,12 +290,37 @@ export function deriveWaveLedger({
   });
   const tasks = [...primaryTasks, ...helperTasks];
   const docAgent = wave.agents.find((agent) => agent.agentId === documentationAgentId);
-  const evaluatorAgent = wave.agents.find((agent) => agent.agentId === evaluatorAgentId);
+  const contEvalAgent = wave.agents.find((agent) => agent.agentId === contEvalAgentId);
+  const contQaAgent = wave.agents.find((agent) => agent.agentId === contQaAgentId);
+  const contEvalValidation = (() => {
+    if (!contEvalAgent) {
+      return { ok: true };
+    }
+    const summary = summariesByAgentId[contEvalAgentId];
+    const evalValidation = validateContEvalSummary(contEvalAgent, summary, {
+      mode: "live",
+      evalTargets: wave.evalTargets,
+      benchmarkCatalogPath,
+    });
+    if (!evalValidation.ok) {
+      return evalValidation;
+    }
+    if (
+      isContEvalImplementationOwningAgent(contEvalAgent, {
+        contEvalAgentId,
+      })
+    ) {
+      return validateImplementationSummary(contEvalAgent, summary);
+    }
+    return evalValidation;
+  })();
   const docValidation = docAgent
     ? validateDocumentationClosureSummary(docAgent, summariesByAgentId[documentationAgentId])
     : { ok: true };
-  const evaluatorValidation = evaluatorAgent
-    ? validateEvaluatorSummary(evaluatorAgent, summariesByAgentId[evaluatorAgentId])
+  const contQaValidation = contQaAgent
+    ? validateContQaSummary(contQaAgent, summariesByAgentId[contQaAgentId], {
+        mode: "live",
+      })
     : { ok: true };
   return {
     wave: wave.wave,
@@ -269,8 +329,9 @@ export function deriveWaveLedger({
     phase: derivePhase({
       tasks,
       integrationSummary,
+      contEvalValidation,
       docValidation,
-      evaluatorValidation,
+      contQaValidation,
       state: coordinationState,
       dependencySnapshot,
     }),
@@ -311,14 +372,15 @@ export function deriveWaveLedger({
         .map((record) => record.id),
       ...(coordinationState?.humanEscalations || [])
         .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
-        .map((record) => record.id),
+      .map((record) => record.id),
     ],
     humanEscalations: (coordinationState?.humanEscalations || [])
       .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
       .map((record) => record.id),
+    contEvalState: contEvalValidation.ok ? "pass" : "open",
     integrationState: integrationSummary?.recommendation || "pending",
     docClosureState: docValidation.ok ? "closed" : "open",
-    evaluatorState: evaluatorValidation.ok ? "pass" : "open",
+    contQaState: contQaValidation.ok ? "pass" : "open",
     updatedAt: toIsoTimestamp(),
   };
 }

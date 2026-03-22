@@ -8,6 +8,13 @@ summary: "How to migrate a repository from the earlier 0.2 wave baseline to the 
 This guide explains how to migrate a repository from the earlier Wave
 Orchestration 0.2 baseline to the current post-roadmap Wave model.
 
+Current mainline note:
+
+- legacy `evaluator` terminology has been retired in favor of `cont-QA`
+- waves can now add optional `cont-EVAL` plus `## Eval targets` for iterative benchmark or output tuning
+- live closure is stricter than replay compatibility: current waves must emit structured cont-QA and cont-EVAL artifacts even though replay can still read older evaluator-era traces
+- the benchmark catalog lives in `docs/evals/benchmark-catalog.json`
+
 It uses two concrete references:
 
 - the 0.2-style baseline in the sibling `~/slowfast.ai` repo
@@ -35,8 +42,8 @@ The migration is intentionally evolutionary:
 - keep wave markdown as the authored plan surface
 - keep lanes
 - keep multi-role agents
-- keep A0 evaluator and A9 documentation stewardship
-- add stronger runtime planning, typed coordination, A8 integration, and
+- keep A0 cont-QA and A9 documentation stewardship
+- add stronger runtime planning, typed coordination, optional E0 cont-EVAL, A8 integration, and
   orchestrator-first clarification handling
 
 ## What Changes
@@ -45,7 +52,7 @@ The migration is intentionally evolutionary:
 | --- | --- | --- | --- |
 | Shared coordination | markdown message board plus status files | canonical coordination JSONL plus rendered board projection | Treat the markdown board as a view, not the source of truth |
 | Agent context | raw board snapshots in prompts | compiled shared summary plus per-agent inbox | Switch operator review and agent recovery to inbox artifacts |
-| Closure flow | implementation -> A9 -> A0 | implementation -> A8 integration -> A9 -> A0 | Add and require an integration steward |
+| Closure flow | implementation -> A9 -> A0 | implementation -> optional E0 cont-EVAL -> A8 integration -> A9 -> A0 | Add the integration steward and use cont-EVAL when the outcome needs iterative eval tuning |
 | Runtime selection | lane default plus limited per-agent overrides | runtime profiles, role defaults, mix targets, fallbacks, budgets | Expand `wave.config.json` and deliberate `### Executor` planning |
 | Clarification flow | file-backed human feedback queue | `clarification-request` -> orchestrator triage -> human escalation only if needed | Move humans to the end of the escalation ladder |
 | Derived state | status summaries and dashboards | ledger, docs queue, integration summary, traces, triage logs | Update operator workflow and acceptance checks |
@@ -62,7 +69,7 @@ do otherwise:
 - Fallback executors are allowed on retry after unavailability, timeout, or
   failed attempt when policy permits.
 - Automatic fallback must stay within the declared runtime mix.
-- Documentation and evaluator closure must not run until the integration
+- Documentation and cont-QA closure must not run until the integration
   steward reports `ready-for-doc-closure`.
 
 These defaults match the intended 0.5 operating model and keep the runtime
@@ -119,7 +126,7 @@ The migration assumes you preserve existing plans and waves. Do not wipe
 The most obvious config difference between the `slowfast.ai` baseline and the
 0.5 target is that 0.2 only models:
 
-- A0 evaluator
+- A0 cont-QA
 - A9 documentation steward
 - global executor defaults
 - validation thresholds
@@ -140,9 +147,9 @@ look like:
 ```json
 {
   "roles": {
-    "evaluatorAgentId": "A0",
+    "contQaAgentId": "A0",
     "documentationAgentId": "A9",
-    "evaluatorRolePromptPath": "docs/agents/wave-evaluator-role.md",
+    "contQaRolePromptPath": "docs/agents/wave-cont-qa-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
   },
   "executors": {
@@ -169,10 +176,10 @@ adds the missing surfaces:
 ```json
 {
   "roles": {
-    "evaluatorAgentId": "A0",
+    "contQaAgentId": "A0",
     "integrationAgentId": "A8",
     "documentationAgentId": "A9",
-    "evaluatorRolePromptPath": "docs/agents/wave-evaluator-role.md",
+    "contQaRolePromptPath": "docs/agents/wave-cont-qa-role.md",
     "integrationRolePromptPath": "docs/agents/wave-integration-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
   },
@@ -199,7 +206,7 @@ adds the missing surfaces:
           "implementation": "codex",
           "integration": "claude",
           "documentation": "claude",
-          "evaluator": "claude",
+          "cont-qa": "claude",
           "research": "opencode",
           "infra": "opencode",
           "deploy": "opencode"
@@ -227,7 +234,7 @@ adds the missing surfaces:
 Use four profiles first:
 
 - `implement-fast`: default implementation work
-- `deep-review`: integration, evaluator, and review-heavy work
+- `deep-review`: integration, cont-QA, and review-heavy work
 - `docs-pass`: documentation steward work
 - `ops-triage`: research, infra, and deployment triage work
 
@@ -253,16 +260,16 @@ What A8 does not own:
 
 - feature implementation
 - documentation closure
-- evaluator verdict
+- cont-QA verdict
 
-If your 0.2 repo used evaluator prose to absorb integration work implicitly,
+If your 0.2 repo used cont-QA prose to absorb integration work implicitly,
 move that responsibility out of A0 and into A8.
 
 ## Step 4: Migrate Wave Files
 
 The baseline `slowfast.ai` waves already have several good habits:
 
-- explicit A0 evaluator
+- explicit A0 cont-QA
 - explicit A9 documentation steward
 - Context7 declarations
 - component promotions
@@ -321,7 +328,7 @@ A minimal 0.5 upgrade looks like this:
 
 ### Prompt
 ```text
-Synthesize cross-agent state before documentation and evaluator closure.
+Synthesize cross-agent state before documentation and cont-QA closure.
 
 File ownership (only touch these paths):
 - .tmp/<lane>-wave-launcher/integration/wave-<n>.md
@@ -339,7 +346,7 @@ sections instead of relying on lane defaults:
 - fallbacks: claude, opencode
 ````
 
-For documentation or evaluator roles:
+For documentation or cont-QA roles:
 
 ````md
 ### Executor
@@ -358,7 +365,7 @@ Recommended first mapping:
 - implementation and test-fix roles: `codex`
 - integration steward: `claude`
 - documentation steward: `claude`
-- evaluator: `claude`
+- cont-QA: `claude`
 - infra or deploy roles: `opencode` or `codex`, chosen deliberately
 - research helpers: `opencode`
 
@@ -522,7 +529,7 @@ The 0.5 target adds more explicit acceptance state:
 - no unresolved high-priority blocker
 - runtime plan is within policy
 - documentation closure is explicit
-- evaluator verdict is explicit
+- cont-QA verdict is explicit
 - the ledger says the wave is actually complete
 - traces capture the final state for replay
 
@@ -537,7 +544,7 @@ Use this acceptance checklist after the migration:
 7. No resolved executor count exceeds lane mix targets.
 8. Clarification triage works without immediately creating human tickets for
    obvious ownership questions.
-9. Documentation and evaluator closure run only after the integration steward
+9. Documentation and cont-QA closure run only after the integration steward
    is ready.
 10. A live attempt writes a trace bundle with coordination, inbox, ledger,
     integration, structured signals, `run-metadata.json`, and cumulative

@@ -11,11 +11,13 @@ const REPO_ROOT = WORKSPACE_ROOT;
 
 export const DEFAULT_WAVE_CONFIG_PATH = path.join(REPO_ROOT, "wave.config.json");
 export const DEFAULT_WAVE_LANE = "main";
-export const DEFAULT_EVALUATOR_AGENT_ID = "A0";
+export const DEFAULT_CONT_QA_AGENT_ID = "A0";
+export const DEFAULT_CONT_EVAL_AGENT_ID = "E0";
 export const DEFAULT_INTEGRATION_AGENT_ID = "A8";
 export const DEFAULT_DOCUMENTATION_AGENT_ID = "A9";
 export const DEFAULT_ROLE_PROMPT_DIR = "docs/agents";
-export const DEFAULT_EVALUATOR_ROLE_PROMPT_PATH = "docs/agents/wave-evaluator-role.md";
+export const DEFAULT_CONT_QA_ROLE_PROMPT_PATH = "docs/agents/wave-cont-qa-role.md";
+export const DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH = "docs/agents/wave-cont-eval-role.md";
 export const DEFAULT_INTEGRATION_ROLE_PROMPT_PATH = "docs/agents/wave-integration-role.md";
 export const DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH =
   "docs/agents/wave-documentation-role.md";
@@ -24,6 +26,7 @@ export const DEFAULT_DOCS_DIR = "docs";
 export const DEFAULT_STATE_ROOT = ".tmp";
 export const DEFAULT_ORCHESTRATOR_STATE_DIR = ".tmp/wave-orchestrator";
 export const DEFAULT_CONTEXT7_BUNDLE_INDEX_PATH = "docs/context7/bundles.json";
+export const DEFAULT_BENCHMARK_CATALOG_PATH = "docs/evals/benchmark-catalog.json";
 export const DEFAULT_COMPONENT_CUTOVER_MATRIX_DOC_PATH = "docs/plans/component-cutover-matrix.md";
 export const DEFAULT_COMPONENT_CUTOVER_MATRIX_JSON_PATH = "docs/plans/component-cutover-matrix.json";
 export const DEFAULT_REQUIRED_PROMPT_REFERENCES = [
@@ -37,6 +40,10 @@ export const DEFAULT_CODEX_SANDBOX_MODE = "danger-full-access";
 export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
 export const DEFAULT_CLAUDE_COMMAND = "claude";
 export const DEFAULT_OPENCODE_COMMAND = "opencode";
+const LEGACY_EVALUATOR_ROLE_KEYS = new Map([
+  ["evaluatorAgentId", "contQaAgentId"],
+  ["evaluatorRolePromptPath", "contQaRolePromptPath"],
+]);
 
 export function normalizeExecutorMode(value, label = "executor") {
   const normalized = String(value || "")
@@ -253,20 +260,30 @@ function defaultSharedPlanDocs(plansDir) {
 }
 
 function normalizeRoles(rawRoles = {}) {
+  for (const [legacyKey, replacementKey] of LEGACY_EVALUATOR_ROLE_KEYS.entries()) {
+    if (Object.prototype.hasOwnProperty.call(rawRoles, legacyKey)) {
+      throw new Error(`roles.${legacyKey} was renamed to roles.${replacementKey}`);
+    }
+  }
   const rolePromptDir = normalizeRepoRelativePath(
     rawRoles.rolePromptDir || DEFAULT_ROLE_PROMPT_DIR,
     "roles.rolePromptDir",
   );
   return {
     rolePromptDir,
-    evaluatorAgentId: String(rawRoles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID).trim(),
+    contQaAgentId: String(rawRoles.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID).trim(),
+    contEvalAgentId: String(rawRoles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID).trim(),
     integrationAgentId: String(rawRoles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID).trim(),
     documentationAgentId: String(
       rawRoles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID,
     ).trim(),
-    evaluatorRolePromptPath: normalizeRepoRelativePath(
-      rawRoles.evaluatorRolePromptPath || DEFAULT_EVALUATOR_ROLE_PROMPT_PATH,
-      "roles.evaluatorRolePromptPath",
+    contQaRolePromptPath: normalizeRepoRelativePath(
+      rawRoles.contQaRolePromptPath || DEFAULT_CONT_QA_ROLE_PROMPT_PATH,
+      "roles.contQaRolePromptPath",
+    ),
+    contEvalRolePromptPath: normalizeRepoRelativePath(
+      rawRoles.contEvalRolePromptPath || DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH,
+      "roles.contEvalRolePromptPath",
     ),
     integrationRolePromptPath: normalizeRepoRelativePath(
       rawRoles.integrationRolePromptPath || DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
@@ -367,12 +384,18 @@ function normalizeDefaultExecutorByRole(rawDefaultExecutorByRole = {}) {
     return {};
   }
   return Object.fromEntries(
-    Object.entries(rawDefaultExecutorByRole).map(([role, executorId]) => [
-      String(role || "")
+    Object.entries(rawDefaultExecutorByRole).map(([role, executorId]) => {
+      const normalizedRole = String(role || "")
         .trim()
-        .toLowerCase(),
-      normalizeExecutorMode(executorId, `defaultExecutorByRole.${role}`),
-    ]),
+        .toLowerCase();
+      if (normalizedRole === "evaluator") {
+        throw new Error("defaultExecutorByRole.evaluator was renamed to defaultExecutorByRole.cont-qa");
+      }
+      return [
+        normalizedRole,
+        normalizeExecutorMode(executorId, `defaultExecutorByRole.${role}`),
+      ];
+    }),
   );
 }
 
@@ -732,6 +755,10 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
       rawConfig.paths?.context7BundleIndexPath || DEFAULT_CONTEXT7_BUNDLE_INDEX_PATH,
       "paths.context7BundleIndexPath",
     ),
+    benchmarkCatalogPath: normalizeRepoRelativePath(
+      rawConfig.paths?.benchmarkCatalogPath || DEFAULT_BENCHMARK_CATALOG_PATH,
+      "paths.benchmarkCatalogPath",
+    ),
     componentCutoverMatrixDocPath: normalizeRepoRelativePath(
       rawConfig.paths?.componentCutoverMatrixDocPath ||
         defaultComponentCutoverMatrixDocPath(defaultPlansDir(rawConfig.paths?.docsDir || DEFAULT_DOCS_DIR)),
@@ -847,6 +874,10 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
       context7BundleIndexPath: normalizeRepoRelativePath(
         laneConfig.context7BundleIndexPath || config.paths.context7BundleIndexPath,
         `${lane}.context7BundleIndexPath`,
+      ),
+      benchmarkCatalogPath: normalizeRepoRelativePath(
+        laneConfig.benchmarkCatalogPath || config.paths.benchmarkCatalogPath,
+        `${lane}.benchmarkCatalogPath`,
       ),
       componentCutoverMatrixDocPath: normalizeRepoRelativePath(
         laneConfig.componentCutoverMatrixDocPath ||

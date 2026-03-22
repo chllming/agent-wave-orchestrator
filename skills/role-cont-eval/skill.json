@@ -1,0 +1,5 @@
+{
+  "id": "role-cont-eval",
+  "title": "cont-EVAL Role",
+  "description": "Contract-driven eval tuning guidance for benchmark selection, rerun discipline, and regression accounting."
+}

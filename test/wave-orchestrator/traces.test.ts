@@ -43,14 +43,14 @@ function makeLanePaths(dir, componentMatrixJsonPath, componentMatrixDocPath) {
     runVariant: "live",
     componentCutoverMatrixJsonPath: componentMatrixJsonPath,
     componentCutoverMatrixDocPath: componentMatrixDocPath,
-    evaluatorAgentId: "A0",
+    contQaAgentId: "A0",
     integrationAgentId: "A8",
     documentationAgentId: "A9",
     requireIntegrationStewardFromWave: 0,
     requireComponentPromotionsFromWave: 0,
     laneProfile: {
       roles: {
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         documentationAgentId: "A9",
       },
@@ -170,7 +170,7 @@ function configureRepoExecutorsForLiveTrace(repoDir, options = {}) {
       implementation: options.defaultExecutorByRole?.implementation || "local",
       integration: options.defaultExecutorByRole?.integration || "local",
       documentation: options.defaultExecutorByRole?.documentation || "local",
-      evaluator: options.defaultExecutorByRole?.evaluator || "local",
+      "cont-qa": options.defaultExecutorByRole?.["cont-qa"] || "local",
       research: options.defaultExecutorByRole?.research || "local",
       infra: options.defaultExecutorByRole?.infra || "local",
       deploy: options.defaultExecutorByRole?.deploy || "local",
@@ -483,14 +483,14 @@ describe("trace bundles", () => {
         {
           agentId: "A0",
           slug: "0-a0",
-          title: "Evaluator",
+          title: "cont-QA",
           prompt: "Evaluate the wave.",
           ownedPaths: ["docs/plans/current-state.md"],
           components: [],
           executorResolved: {
             id: "claude",
             initialExecutorId: "claude",
-            role: "evaluator",
+            role: "cont-qa",
             profile: "eval-default",
             selectedBy: "lane-role-default",
             budget: { turns: 6, minutes: 10 },
@@ -636,7 +636,7 @@ describe("trace bundles", () => {
       integrationSummary,
       docsQueue,
       attempt: 2,
-      evaluatorAgentId: "A0",
+      contQaAgentId: "A0",
       integrationAgentId: "A8",
       documentationAgentId: "A9",
     });
@@ -661,13 +661,13 @@ describe("trace bundles", () => {
         {
           agentId: "A0",
           launchedInAttempt: true,
-          executor: { role: "evaluator", executorId: "claude" },
+          executor: { role: "cont-qa", executorId: "claude" },
         },
       ],
       gateSnapshot: {
         evaluatorGate: {
           ok: false,
-          statusCode: "evaluator-concerns",
+          statusCode: "cont-qa-concerns",
         },
       },
     });
@@ -771,7 +771,7 @@ describe("trace bundles", () => {
     expect(filesAfterReplay).toEqual(filesBeforeReplay);
     expect(replay.quality.relaunchCountByRole).toMatchObject({
       implementation: 1,
-      evaluator: 1,
+      "cont-qa": 1,
     });
     expect(replay.quality.relaunchCountByExecutor).toMatchObject({
       claude: 2,
@@ -780,7 +780,7 @@ describe("trace bundles", () => {
     expect(replay.quality.runtimeFallbackRate).toBeGreaterThan(0);
     expect(replay.quality.meanTimeToFirstAckMs).not.toBeNull();
     expect(replay.quality.meanTimeToBlockerResolutionMs).not.toBeNull();
-    expect(replay.quality.evaluatorReversal).toBe(true);
+    expect(replay.quality.contQaReversal).toBe(true);
 
     fs.rmSync(path.join(tracesDir, "wave-0", "attempt-1"), { recursive: true, force: true });
     fs.rmSync(sourceDir, { recursive: true, force: true });
@@ -827,7 +827,7 @@ describe("trace bundles", () => {
       replayContext: {
         lane: "main",
         roles: {
-          evaluatorAgentId: "A0",
+          contQaAgentId: "A0",
           integrationAgentId: "A8",
           documentationAgentId: "A9",
         },
@@ -904,7 +904,7 @@ describe("trace bundles", () => {
       replayContext: {
         lane: "main",
         roles: {
-          evaluatorAgentId: "A0",
+          contQaAgentId: "A0",
           integrationAgentId: "A8",
           documentationAgentId: "A9",
         },
@@ -1021,7 +1021,7 @@ describe("trace bundles", () => {
       replayContext: {
         lane: "main",
         roles: {
-          evaluatorAgentId: "A0",
+          contQaAgentId: "A0",
           integrationAgentId: "A8",
           documentationAgentId: "A9",
         },
@@ -1131,7 +1131,7 @@ describe("trace bundles", () => {
       wave: 0,
       lane: "main",
       roles: {
-        evaluatorAgentId: "A0",
+        contQaAgentId: "A0",
         integrationAgentId: "A8",
         documentationAgentId: "A9",
       },
@@ -1262,7 +1262,7 @@ describe("trace bundles", () => {
       expect(replay.bundle.metadata.artifacts.feedbackTriage.present).toBe(true);
 
       updateWaveConfig(repoDir, (config) => {
-        config.roles.evaluatorAgentId = "Z0";
+        config.roles.contQaAgentId = "Z0";
         config.validation.requireIntegrationStewardFromWave = 99;
         return config;
       });
@@ -1349,7 +1349,7 @@ describe("trace bundles", () => {
           implementation: "codex",
           integration: "local",
           documentation: "local",
-          evaluator: "local",
+          "cont-qa": "local",
           research: "local",
           infra: "local",
           deploy: "local",

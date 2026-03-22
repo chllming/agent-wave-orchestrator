@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { REPO_ROOT, ensureDirectory } from "./shared.mjs";
+import { isContEvalReportPath } from "./role-helpers.mjs";
 
 function titleFromPath(relPath) {
   return path
@@ -22,7 +23,8 @@ function extractAgentId(rawPrompt) {
 }
 
 function extractRoleAgentIds(rawPrompt) {
-  const evaluatorMatch = String(rawPrompt || "").match(/- Evaluator agent id:\s*([A-Za-z0-9.]+)/);
+  const contQaMatch = String(rawPrompt || "").match(/- cont-QA agent id:\s*([A-Za-z0-9.]+)/);
+  const contEvalMatch = String(rawPrompt || "").match(/- cont-EVAL agent id:\s*([A-Za-z0-9.]+)/);
   const integrationMatch = String(rawPrompt || "").match(
     /- Integration steward agent id:\s*([A-Za-z0-9.]+)/,
   );
@@ -30,7 +32,8 @@ function extractRoleAgentIds(rawPrompt) {
     /- Documentation steward agent id:\s*([A-Za-z0-9.]+)/,
   );
   return {
-    evaluatorAgentId: evaluatorMatch ? evaluatorMatch[1].trim() : "A0",
+    contQaAgentId: contQaMatch ? contQaMatch[1].trim() : "A0",
+    contEvalAgentId: contEvalMatch ? contEvalMatch[1].trim() : "E0",
     integrationAgentId: integrationMatch ? integrationMatch[1].trim() : "A8",
     documentationAgentId: documentationMatch ? documentationMatch[1].trim() : "A9",
   };
@@ -114,6 +117,62 @@ function extractDeliverables(rawPrompt, promptText) {
   return Array.from(new Set(out));
 }
 
+function extractFileOwnershipPaths(promptText) {
+  return Array.from(
+    new Set(extractDeliverablesFromList(promptText, /^\s*File ownership\b/i)),
+  );
+}
+
+function extractEvalMarkerPayload(rawPrompt) {
+  const lines = String(rawPrompt || "").split(/\r?\n/);
+  const targetIds = [];
+  const benchmarkIds = [];
+  let inTargets = false;
+  for (const line of lines) {
+    if (/^\s*Eval targets for this wave:\s*$/i.test(line)) {
+      inTargets = true;
+      continue;
+    }
+    if (inTargets && !line.trim()) {
+      break;
+    }
+    if (!inTargets) {
+      continue;
+    }
+    const match = line.match(/^\s*-\s+([a-z0-9._-]+):\s+(.+)\s*$/i);
+    if (!match) {
+      continue;
+    }
+    targetIds.push(match[1].toLowerCase());
+    const payload = match[2];
+    const benchmarkMatch =
+      payload.match(/\bbenchmarks=([a-z0-9._\-,\s]+)/i) ||
+      payload.match(/\ballowed-benchmarks=([a-z0-9._\-,\s]+)/i);
+    if (!benchmarkMatch) {
+      continue;
+    }
+    for (const benchmarkId of benchmarkMatch[1].split(",")) {
+      const normalized = benchmarkId.trim().toLowerCase();
+      if (normalized) {
+        benchmarkIds.push(normalized);
+      }
+    }
+  }
+  return {
+    targetIds: Array.from(new Set(targetIds)).sort(),
+    benchmarkIds: Array.from(new Set(benchmarkIds)).sort(),
+  };
+}
+
+function formatWaveEvalLine(evalMarker, detail) {
+  const targetIds = Array.isArray(evalMarker?.targetIds) ? evalMarker.targetIds : [];
+  const benchmarkIds = Array.isArray(evalMarker?.benchmarkIds) ? evalMarker.benchmarkIds : [];
+  const targetIdSegment = targetIds.length > 0 ? ` target_ids=${targetIds.join(",")}` : "";
+  const benchmarkIdSegment =
+    benchmarkIds.length > 0 ? ` benchmark_ids=${benchmarkIds.join(",")}` : "";
+  return `[wave-eval] state=satisfied targets=${targetIds.length} benchmarks=${benchmarkIds.length} regressions=0${targetIdSegment}${benchmarkIdSegment} detail=${detail}`;
+}
+
 export function resolveRepoOwnedDeliverablePath(relPath) {
   if (!relPath || path.isAbsolute(relPath)) {
     throw new Error(`Unsafe deliverable path: ${String(relPath || "")}`);
@@ -146,7 +205,7 @@ function markdownTemplate(relPath, promptText, options = {}) {
       ? requirements.map((item) => `- ${item}`)
       : ["- Derived from assigned wave prompt."]),
     "",
-    ...(options.evaluatorReport ? ["## Verdict", "Verdict: PASS", ""] : []),
+    ...(options.contQaReport ? ["## Verdict", "Verdict: PASS", ""] : []),
     "## Note",
     "- Replace this placeholder with real implementation work before relying on it.",
     "",
@@ -170,12 +229,12 @@ function writeDeliverable(relPath, promptText, options = {}) {
     return "exists";
   }
   if (/\.(md|mdx)$/i.test(absPath)) {
-    const evaluatorReport =
-      options.evaluatorAgent === true &&
-      /(?:^|\/)(?:reviews?|.*evaluator).*\.(md|mdx)$/i.test(relPath);
+    const contQaReport =
+      options.contQaAgent === true &&
+      /(?:^|\/)(?:reviews?|.*cont[-_]?qa).*\.(md|mdx)$/i.test(relPath);
     fs.writeFileSync(
       absPath,
-      `${markdownTemplate(relPath, promptText, { evaluatorReport })}\n`,
+      `${markdownTemplate(relPath, promptText, { contQaReport })}\n`,
       "utf8",
     );
     return "created";
@@ -213,19 +272,34 @@ export function runLocalExecutorCli(argv) {
   }
   const rawPrompt = fs.readFileSync(options.promptFile, "utf8");
   const agentId = extractAgentId(rawPrompt);
-  const { evaluatorAgentId, integrationAgentId, documentationAgentId } = extractRoleAgentIds(rawPrompt);
-  const evaluatorAgent = agentId === evaluatorAgentId;
+  const { contQaAgentId, contEvalAgentId, integrationAgentId, documentationAgentId } =
+    extractRoleAgentIds(rawPrompt);
+  const contQaAgent = agentId === contQaAgentId;
+  const contEvalAgent = agentId === contEvalAgentId;
   const integrationAgent = agentId === integrationAgentId;
   const ownedComponents = extractOwnedComponents(rawPrompt);
   const assignedPrompt = extractAssignedPrompt(rawPrompt);
+  const ownedPaths = extractFileOwnershipPaths(assignedPrompt);
   const deliverables = extractDeliverables(rawPrompt, assignedPrompt);
+  const evalMarker = extractEvalMarkerPayload(rawPrompt);
+  const contEvalImplementationOwning =
+    contEvalAgent &&
+    ownedPaths.some((ownedPath) => !isContEvalReportPath(ownedPath));
   if (deliverables.length === 0) {
     console.log("[local-executor] no deliverables detected; nothing to do.");
-    if (evaluatorAgent) {
+    if (contQaAgent) {
       console.log(
         "[wave-gate] architecture=pass integration=pass durability=pass live=pass docs=pass detail=local-executor-no-deliverables",
       );
       console.log("[wave-verdict] pass detail=local-executor-no-deliverables");
+    } else if (contEvalAgent) {
+      console.log(formatWaveEvalLine(evalMarker, "local-executor-no-deliverables"));
+      if (contEvalImplementationOwning) {
+        console.log(
+          "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-no-deliverables",
+        );
+        console.log("[wave-doc-delta] state=none detail=local-executor-no-deliverables");
+      }
     } else if (integrationAgent) {
       console.log(
         "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=local-executor-no-deliverables",
@@ -249,14 +323,27 @@ export function runLocalExecutorCli(argv) {
   console.log(`[local-executor] deliverables=${deliverables.join(", ")}`);
   for (const deliverable of deliverables) {
     console.log(
-      `[local-executor] ${writeDeliverable(deliverable, assignedPrompt, { evaluatorAgent })}: ${deliverable}`,
+      `[local-executor] ${writeDeliverable(deliverable, assignedPrompt, { contQaAgent })}: ${deliverable}`,
     );
   }
-  if (evaluatorAgent) {
+  if (contQaAgent) {
     console.log(
       "[wave-gate] architecture=pass integration=pass durability=pass live=pass docs=pass detail=local-executor-smoke",
     );
     console.log("[wave-verdict] pass detail=local-executor-smoke");
+  } else if (contEvalAgent) {
+    console.log(formatWaveEvalLine(evalMarker, "local-executor-smoke"));
+    if (contEvalImplementationOwning) {
+      console.log(
+        "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-smoke",
+      );
+      console.log("[wave-doc-delta] state=none detail=local-executor-smoke");
+      for (const component of ownedComponents) {
+        console.log(
+          `[wave-component] component=${component.componentId} level=${component.level || "repo-landed"} state=met detail=local-executor-smoke`,
+        );
+      }
+    }
   } else if (integrationAgent) {
     console.log(
       "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=local-executor-smoke",

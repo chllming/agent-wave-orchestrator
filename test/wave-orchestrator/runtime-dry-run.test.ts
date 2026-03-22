@@ -57,11 +57,11 @@ describe("runtime dry-run harness", () => {
 - bundle: node-typescript
 - query: "Node.js and TypeScript basics for orchestrator maintenance"
 
-## Agent A0: Running Evaluator
+## Agent A0: cont-QA
 
 ### Role prompts
 
-- docs/agents/wave-evaluator-role.md
+- docs/agents/wave-cont-qa-role.md
 
 ### Executor
 
@@ -88,7 +88,7 @@ Required context before coding:
 - Read docs/plans/master-plan.md, docs/plans/current-state.md, and docs/plans/migration.md.
 
 File ownership (only touch these paths):
-- docs/plans/waves/reviews/wave-0-evaluator.md
+- docs/plans/waves/reviews/wave-0-cont-qa.md
 \`\`\`
 
 ## Agent A8: Integration Steward
@@ -116,7 +116,7 @@ File ownership (only touch these paths):
 ### Prompt
 
 \`\`\`text
-Synthesize the wave before documentation and evaluator closure.
+Synthesize the wave before documentation and cont-qa closure.
 
 Required context before coding:
 - Read docs/reference/repository-guidance.md.

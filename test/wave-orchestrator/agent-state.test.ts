@@ -4,10 +4,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildAgentExecutionSummary,
+  validateContEvalSummary,
   validateDocumentationClosureSummary,
-  validateEvaluatorSummary,
+  validateContQaSummary,
   validateImplementationSummary,
 } from "../../scripts/wave-orchestrator/agent-state.mjs";
+import { REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
 
 const tempDirs = [];
 
@@ -19,6 +21,13 @@ afterEach(() => {
 
 function makeTempDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wave-agent-state-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function makeRepoTempDir() {
+  const dir = path.join(REPO_ROOT, ".tmp", `wave-agent-state-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  fs.mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
   return dir;
 }
@@ -120,6 +129,32 @@ describe("buildAgentExecutionSummary", () => {
 
     expect(summary.proof).toBeNull();
     expect(summary.docDelta).toBeNull();
+  });
+
+  it("parses cont-EVAL target_ids and benchmark_ids from the final eval marker", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "e0.log");
+    fs.writeFileSync(
+      logPath,
+      "[wave-eval] state=satisfied targets=2 benchmarks=2 regressions=0 target_ids=response-quality,startup-latency benchmark_ids=golden-response-smoke,http-latency-smoke detail=all-good\n",
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "E0" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary.eval).toMatchObject({
+      state: "satisfied",
+      targets: 2,
+      benchmarks: 2,
+      regressions: 0,
+      targetIds: ["response-quality", "startup-latency"],
+      benchmarkIds: ["golden-response-smoke", "http-latency-smoke"],
+      detail: "all-good",
+    });
   });
 });
 
@@ -335,10 +370,176 @@ describe("validateDocumentationClosureSummary", () => {
   });
 });
 
-describe("validateEvaluatorSummary", () => {
+describe("validateContEvalSummary", () => {
+  it("rejects cont-EVAL summaries that still need more work", () => {
+    expect(
+      validateContEvalSummary(
+        { agentId: "E0" },
+        {
+          eval: {
+            state: "needs-more-work",
+            detail: "Golden response smoke still drifts from target output.",
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "cont-eval-needs-more-work",
+    });
+  });
+
+  it("requires the owned cont-EVAL report when the summary references one", () => {
+    expect(
+      validateContEvalSummary(
+        { agentId: "E0" },
+        {
+          eval: {
+            state: "satisfied",
+            detail: "Targets satisfied.",
+          },
+          reportPath: "docs/plans/waves/reviews/missing-cont-eval.md",
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-cont-eval-report",
+    });
+  });
+
+  it("rejects live cont-EVAL summaries that do not enumerate the declared target ids", () => {
+    const repoDir = makeRepoTempDir();
+    const reportRelPath = path.relative(REPO_ROOT, path.join(repoDir, "wave-4-cont-eval.md")).replaceAll(path.sep, "/");
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# cont-EVAL\n", "utf8");
+
+    expect(
+      validateContEvalSummary(
+        { agentId: "E0" },
+        {
+          eval: {
+            state: "satisfied",
+            targets: 1,
+            benchmarks: 1,
+            regressions: 0,
+            targetIds: [],
+            benchmarkIds: ["golden-response-smoke"],
+          },
+          reportPath: reportRelPath,
+        },
+        {
+          mode: "live",
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+          ],
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-cont-eval-target-ids",
+    });
+  });
+
+  it("rejects live cont-EVAL summaries that still report regressions", () => {
+    const repoDir = makeRepoTempDir();
+    const reportRelPath = path.relative(REPO_ROOT, path.join(repoDir, "wave-4-cont-eval.md")).replaceAll(path.sep, "/");
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# cont-EVAL\n", "utf8");
+
+    expect(
+      validateContEvalSummary(
+        { agentId: "E0" },
+        {
+          eval: {
+            state: "satisfied",
+            targets: 1,
+            benchmarks: 1,
+            regressions: 1,
+            targetIds: ["response-quality"],
+            benchmarkIds: ["golden-response-smoke"],
+          },
+          reportPath: reportRelPath,
+        },
+        {
+          mode: "live",
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+          ],
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "cont-eval-regressions",
+    });
+  });
+
+  it("accepts live cont-EVAL summaries only when target and benchmark ids match the contract", () => {
+    const repoDir = makeRepoTempDir();
+    const reportRelPath = path.relative(REPO_ROOT, path.join(repoDir, "wave-4-cont-eval.md")).replaceAll(path.sep, "/");
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# cont-EVAL\n", "utf8");
+
+    expect(
+      validateContEvalSummary(
+        { agentId: "E0" },
+        {
+          eval: {
+            state: "satisfied",
+            targets: 2,
+            benchmarks: 2,
+            regressions: 0,
+            targetIds: ["response-quality", "startup-latency"],
+            benchmarkIds: ["golden-response-smoke", "http-latency-smoke"],
+            detail: "Targets satisfied.",
+          },
+          reportPath: reportRelPath,
+        },
+        {
+          mode: "live",
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+            {
+              id: "startup-latency",
+              selection: "pinned",
+              benchmarkFamily: "latency",
+              benchmarks: ["http-latency-smoke"],
+              objective: "Hold request latency",
+              threshold: "Latency remains acceptable",
+            },
+          ],
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+    });
+  });
+});
+
+describe("validateContQaSummary", () => {
   it("rejects final gates that still report concerns", () => {
     expect(
-      validateEvaluatorSummary(
+      validateContQaSummary(
         { agentId: "A0" },
         {
           verdict: { verdict: "pass", detail: "stale report text" },
@@ -354,6 +555,28 @@ describe("validateEvaluatorSummary", () => {
     ).toMatchObject({
       ok: false,
       statusCode: "gate-integration-concerns",
+    });
+  });
+
+  it("requires the owned cont-QA report for live validation", () => {
+    expect(
+      validateContQaSummary(
+        { agentId: "A0" },
+        {
+          verdict: { verdict: "pass", detail: "ready" },
+          gate: {
+            architecture: "pass",
+            integration: "pass",
+            durability: "pass",
+            live: "pass",
+            docs: "pass",
+          },
+        },
+        { mode: "live" },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-cont-qa-report",
     });
   });
 });

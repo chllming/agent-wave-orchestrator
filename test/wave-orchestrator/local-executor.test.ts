@@ -32,22 +32,22 @@ describe("resolveRepoOwnedDeliverablePath", () => {
 });
 
 describe("runLocalExecutorCli", () => {
-  it("writes evaluator placeholders with a verdict and emits a wave verdict marker", () => {
+  it("writes cont-qa placeholders with a verdict and emits a wave verdict marker", () => {
     const promptFile = registerTempPath(
       path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
     );
     const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
       .toString(16)
-      .slice(2)}/wave-0-evaluator.md`;
+      .slice(2)}/wave-0-cont-qa.md`;
     registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
 
     fs.writeFileSync(
       promptFile,
-      `You are the Wave executor running Wave 0 / Agent A0: Evaluator.
+      `You are the Wave executor running Wave 0 / Agent A0: cont-QA.
 
 Assigned implementation prompt:
 \`\`\`text
-You are the LEAP-Claw running evaluator for the current wave.
+You are the LEAP-Claw running cont-qa for the current wave.
 
 Primary goal:
 - Keep the wave coherent.
@@ -85,7 +85,7 @@ File ownership (only touch these paths):
       promptFile,
       `You are the Wave executor running Wave 0 / Agent A8: Integration Steward.
 
-- Evaluator agent id: A0
+- cont-QA agent id: A0
 - Integration steward agent id: A8
 - Documentation steward agent id: A9
 
@@ -112,6 +112,53 @@ File ownership (only touch these paths):
         ),
       ),
     ).toBe(true);
+  });
+
+  it("emits strict cont-EVAL markers with target_ids and benchmark_ids", () => {
+    const promptFile = registerTempPath(
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
+    );
+    const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}/wave-0-cont-eval.md`;
+    registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
+
+    fs.writeFileSync(
+      promptFile,
+      `You are the Wave executor running Wave 0 / Agent E0: cont-EVAL.
+
+- cont-QA agent id: A0
+- cont-EVAL agent id: E0
+- Integration steward agent id: A8
+- Documentation steward agent id: A9
+
+Eval targets for this wave:
+- response-quality: delegated family=service-output allowed-benchmarks=golden-response-smoke, manual-session-review objective=Tune response quality threshold=Golden response smoke passes
+
+Assigned implementation prompt:
+\`\`\`text
+File ownership (only touch these paths):
+- ${deliverable}
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const logs = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+
+    runLocalExecutorCli(["--prompt-file", promptFile]);
+
+    expect(
+      logs.some((line) =>
+        line.includes(
+          "[wave-eval] state=satisfied targets=1 benchmarks=2 regressions=0 target_ids=response-quality benchmark_ids=golden-response-smoke,manual-session-review",
+        ),
+      ),
+    ).toBe(true);
+    expect(logs.some((line) => line.includes("[wave-proof]"))).toBe(false);
   });
 
   it("emits component markers for owned components", () => {

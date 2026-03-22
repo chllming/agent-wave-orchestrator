@@ -19,13 +19,15 @@ export const STARTER_TEMPLATE_PATHS = [
   "wave.config.json",
   "docs/README.md",
   "docs/agents/wave-documentation-role.md",
-  "docs/agents/wave-evaluator-role.md",
+  "docs/agents/wave-cont-qa-role.md",
+  "docs/agents/wave-cont-eval-role.md",
   "docs/agents/wave-integration-role.md",
   "docs/concepts/context7-vs-skills.md",
   "docs/concepts/operating-modes.md",
   "docs/concepts/runtime-agnostic-orchestration.md",
   "docs/concepts/what-is-a-wave.md",
   "docs/context7/bundles.json",
+  "docs/evals/benchmark-catalog.json",
   "docs/guides/planner.md",
   "docs/guides/terminal-surfaces.md",
   "docs/plans/component-cutover-matrix.json",
@@ -265,9 +267,11 @@ export function runDoctor() {
         errors.push(`Missing shared plan doc: ${docPath}`);
       }
       for (const requiredPath of [
-        lanePaths.evaluatorRolePromptPath,
+        lanePaths.contQaRolePromptPath,
+        lanePaths.contEvalRolePromptPath,
         lanePaths.integrationRolePromptPath,
         lanePaths.documentationRolePromptPath,
+        lanePaths.benchmarkCatalogPath.replace(`${REPO_ROOT}${path.sep}`, ""),
         lanePaths.context7BundleIndexPath.replace(`${REPO_ROOT}${path.sep}`, ""),
       ]) {
         const relPath = path.isAbsolute(requiredPath)

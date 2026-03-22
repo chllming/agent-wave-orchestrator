@@ -22,19 +22,22 @@ function buildReplayLanePaths(metadata) {
       : null;
   const roles = replayContext?.roles || metadata?.roles || {};
   const validation = replayContext?.validation || metadata?.validation || {};
-  const evaluatorAgentId = roles.evaluatorAgentId || "A0";
+  const contQaAgentId = roles.contQaAgentId || roles.evaluatorAgentId || "A0";
+  const contEvalAgentId = roles.contEvalAgentId || "E0";
   const integrationAgentId = roles.integrationAgentId || "A8";
   const documentationAgentId = roles.documentationAgentId || "A9";
   return {
     lane: replayContext?.lane || metadata?.lane || "main",
-    evaluatorAgentId,
+    contQaAgentId,
+    contEvalAgentId,
     integrationAgentId,
     documentationAgentId,
     requireIntegrationStewardFromWave:
       validation.requireIntegrationStewardFromWave ?? null,
     laneProfile: {
       roles: {
-        evaluatorAgentId,
+        contQaAgentId,
+        contEvalAgentId,
         integrationAgentId,
         documentationAgentId,
       },

@@ -12,7 +12,7 @@ The repository already has the right runtime substrate:
 
 - lane-scoped state under `.tmp/`
 - wave parsing and validation
-- role-based execution with evaluator, integration, and documentation stewards
+- role-based execution with cont-qa, integration, and documentation stewards
 - executor profiles and lane runtime policy
 - compiled inboxes, ledgers, docs queues, dependency snapshots, and trace bundles
 - orchestrator-first clarification handling and human feedback workflows
@@ -81,7 +81,7 @@ Behavior:
 
 - accept one or more free-form task requests
 - normalize them into a single transient plan or spec
-- synthesize the worker roles needed for the request while still preserving evaluator, integration, and documentation closure when relevant
+- synthesize the worker roles needed for the request while still preserving cont-qa, integration, and documentation closure when relevant
 - run that transient plan through the existing launcher, coordination, inbox, ledger, docs queue, integration, and trace machinery
 - keep ad-hoc runs logged, inspectable, and replayable with the same basic operator surfaces as roadmap waves
 

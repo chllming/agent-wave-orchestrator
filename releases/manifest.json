@@ -24,7 +24,7 @@
       "date": "2026-03-22",
       "summary": "Closure-sweep launch ordering fix for implementation-first wave execution.",
       "features": [
-        "The launcher now starts only implementation agents in the initial wave pass when implementation work remains, deferring integration, documentation, and evaluator roles until closure sweep order.",
+        "The launcher now starts only implementation agents in the initial wave pass when implementation work remains, deferring integration, documentation, and cont-qa roles until closure sweep order.",
         "Wave waiting, dashboard progress refresh, and human-feedback monitoring now scope to the runs launched in the current pass so deferred closure agents no longer create false pending or missing-status failures.",
         "Regression coverage now exercises both mixed implementation/closure waves and closure-only retry waves directly."
       ],
@@ -136,7 +136,7 @@
       "features": [
         "Canonical coordination log materialization, generated board projection, compiled shared summary, per-agent inboxes, and a durable wave ledger.",
         "Planning-time executor profiles, lane runtime policy, hard runtime-mix enforcement, and retry fallback reassignment recorded into ledger, integration, and traces.",
-        "Orchestrator-first clarification triage, explicit integration summaries, and staged closure that runs integration before documentation and evaluator closure."
+        "Orchestrator-first clarification triage, explicit integration summaries, and staged closure that runs integration before documentation and cont-qa closure."
       ],
       "manualSteps": [
         "Run `pnpm exec wave init --adopt-existing` in older repos if they do not yet have the newer role prompts and docs surfaces.",

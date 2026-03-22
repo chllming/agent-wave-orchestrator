@@ -9,15 +9,18 @@
     "orchestratorStateDir": ".tmp/wave-orchestrator",
     "terminalsPath": ".vscode/terminals.json",
     "context7BundleIndexPath": "docs/context7/bundles.json",
+    "benchmarkCatalogPath": "docs/evals/benchmark-catalog.json",
     "componentCutoverMatrixDocPath": "docs/plans/component-cutover-matrix.md",
     "componentCutoverMatrixJsonPath": "docs/plans/component-cutover-matrix.json"
   },
   "roles": {
     "rolePromptDir": "docs/agents",
-    "evaluatorAgentId": "A0",
+    "contQaAgentId": "A0",
+    "contEvalAgentId": "E0",
     "integrationAgentId": "A8",
     "documentationAgentId": "A9",
-    "evaluatorRolePromptPath": "docs/agents/wave-evaluator-role.md",
+    "contQaRolePromptPath": "docs/agents/wave-cont-qa-role.md",
+    "contEvalRolePromptPath": "docs/agents/wave-cont-eval-role.md",
     "integrationRolePromptPath": "docs/agents/wave-integration-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md"
   },
@@ -38,6 +41,14 @@
         "budget": {
           "turns": 10,
           "minutes": 30
+        }
+      },
+      "eval-tuning": {
+        "id": "codex",
+        "tags": ["eval", "tuning"],
+        "budget": {
+          "turns": 14,
+          "minutes": 45
         }
       },
       "docs-pass": {
@@ -78,7 +89,8 @@
       "implementation": ["role-implementation"],
       "integration": ["role-integration"],
       "documentation": ["role-documentation"],
-      "evaluator": ["role-evaluator"],
+      "cont-qa": ["role-cont-qa"],
+      "cont-eval": ["role-cont-eval"],
       "infra": ["role-infra"],
       "deploy": ["role-deploy"],
       "research": ["role-research"]
@@ -130,7 +142,8 @@
           "implementation": "codex",
           "integration": "claude",
           "documentation": "claude",
-          "evaluator": "claude",
+          "cont-qa": "claude",
+          "cont-eval": "codex",
           "research": "opencode",
           "infra": "opencode",
           "deploy": "opencode"

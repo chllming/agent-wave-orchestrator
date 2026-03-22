@@ -3,10 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   DEFAULT_CODEX_SANDBOX_MODE,
+  DEFAULT_CONT_EVAL_AGENT_ID,
+  DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH,
+  DEFAULT_CONT_QA_AGENT_ID,
+  DEFAULT_CONT_QA_ROLE_PROMPT_PATH,
   DEFAULT_DOCUMENTATION_AGENT_ID,
   DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
-  DEFAULT_EVALUATOR_AGENT_ID,
-  DEFAULT_EVALUATOR_ROLE_PROMPT_PATH,
   DEFAULT_INTEGRATION_AGENT_ID,
   DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
   DEFAULT_WAVE_LANE,
@@ -35,17 +37,28 @@ import {
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
 import {
+  buildAgentExecutionSummary,
   normalizeExitContract,
   readAgentExecutionSummary,
+  validateContEvalSummary,
+  validateContQaSummary,
   validateDocumentationClosureSummary,
-  validateEvaluatorSummary,
   validateExitContractShape,
   validateIntegrationSummary,
   validateImplementationSummary,
+  writeAgentExecutionSummary,
 } from "./agent-state.mjs";
+import { parseEvalTargets, validateEvalTargets } from "./evals.mjs";
 import { normalizeSkillId, resolveAgentSkills } from "./skills.mjs";
+import {
+  isContEvalImplementationOwningAgent,
+  isContEvalReportOnlyAgent,
+  isContEvalReportPath,
+  isContQaReportPath,
+} from "./role-helpers.mjs";
 
-export const WAVE_EVALUATOR_ROLE_PROMPT_PATH = DEFAULT_EVALUATOR_ROLE_PROMPT_PATH;
+export const WAVE_CONT_QA_ROLE_PROMPT_PATH = DEFAULT_CONT_QA_ROLE_PROMPT_PATH;
+export const WAVE_CONT_EVAL_ROLE_PROMPT_PATH = DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH;
 export const WAVE_INTEGRATION_ROLE_PROMPT_PATH = DEFAULT_INTEGRATION_ROLE_PROMPT_PATH;
 export const WAVE_DOCUMENTATION_ROLE_PROMPT_PATH = DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH;
 export const SHARED_PLAN_DOC_PATHS = [
@@ -890,19 +903,76 @@ export function composeResolvedPrompt(rolePromptPaths, localPrompt, filePath, ag
     .join("\n\n");
 }
 
-export function resolveEvaluatorReportPath(wave, options = {}) {
-  const evaluatorAgentId = options.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
-  const evaluator = wave?.agents?.find((agent) => agent.agentId === evaluatorAgentId);
-  if (!evaluator) {
+function resolveAgentReportPath(wave, agentId, pattern) {
+  const agent = wave?.agents?.find((entry) => entry.agentId === agentId);
+  if (!agent) {
     return null;
   }
   return (
-    evaluator.ownedPaths.find((ownedPath) =>
-      /(?:^|\/)(?:reviews?|.*evaluator).*\.(?:md|txt)$/i.test(ownedPath),
+    agent.ownedPaths.find((ownedPath) =>
+      pattern.test(ownedPath),
     ) ??
-    evaluator.ownedPaths[0] ??
+    agent.ownedPaths[0] ??
     null
   );
+}
+
+export function resolveContQaReportPath(wave, options = {}) {
+  const contQaAgentId = options.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  return resolveAgentReportPath(
+    wave,
+    contQaAgentId,
+    { test: isContQaReportPath },
+  );
+}
+
+export function resolveContEvalReportPath(wave, options = {}) {
+  const contEvalAgentId = options.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
+  return resolveAgentReportPath(
+    wave,
+    contEvalAgentId,
+    { test: isContEvalReportPath },
+  );
+}
+
+function resolveAgentSummaryReportPath(wave, agentId, { contQaAgentId, contEvalAgentId } = {}) {
+  if (agentId === contQaAgentId && wave.contQaReportPath) {
+    return path.resolve(REPO_ROOT, wave.contQaReportPath);
+  }
+  if (agentId === contEvalAgentId && wave.contEvalReportPath) {
+    return path.resolve(REPO_ROOT, wave.contEvalReportPath);
+  }
+  return null;
+}
+
+function materializeLiveExecutionSummaryIfMissing({
+  wave,
+  agent,
+  statusPath,
+  statusRecord,
+  logsDir,
+  contQaAgentId,
+  contEvalAgentId,
+}) {
+  const existing = readAgentExecutionSummary(statusPath);
+  if (existing) {
+    return existing;
+  }
+  const logPath = logsDir ? path.join(logsDir, `wave-${wave.wave}-${agent.slug}.log`) : null;
+  if (!statusRecord || !logPath || !fs.existsSync(logPath)) {
+    return null;
+  }
+  const summary = buildAgentExecutionSummary({
+    agent,
+    statusRecord,
+    logPath,
+    reportPath: resolveAgentSummaryReportPath(wave, agent.agentId, {
+      contQaAgentId,
+      contEvalAgentId,
+    }),
+  });
+  writeAgentExecutionSummary(statusPath, summary);
+  return summary;
 }
 
 function normalizeMatrixStringArray(values, label, filePath) {
@@ -1049,7 +1119,8 @@ export function requiredDocumentationStewardPathsForWave(waveNumber, options = {
 export function validateWaveDefinition(wave, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const lane = laneProfile.lane;
-  const evaluatorAgentId = laneProfile.roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const contQaAgentId = laneProfile.roles.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  const contEvalAgentId = laneProfile.roles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
   const integrationAgentId =
     laneProfile.roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
@@ -1094,8 +1165,12 @@ export function validateWaveDefinition(wave, options = {}) {
   if (duplicateAgentIds.length > 0) {
     errors.push(`must not repeat agent ids (${Array.from(new Set(duplicateAgentIds)).join(", ")})`);
   }
-  if (!wave.agents.some((agent) => agent.agentId === evaluatorAgentId)) {
-    errors.push(`must include Agent ${evaluatorAgentId} as the running evaluator`);
+  const contEvalAgent = wave.agents.find((agent) => agent.agentId === contEvalAgentId) || null;
+  const contEvalImplementationOwning = contEvalAgent
+    ? isContEvalImplementationOwningAgent(contEvalAgent, { contEvalAgentId })
+    : false;
+  if (!wave.agents.some((agent) => agent.agentId === contQaAgentId)) {
+    errors.push(`must include Agent ${contQaAgentId} as the cont-QA closure role`);
   }
   if (componentPromotionRuleActive && promotedComponents.size === 0) {
     errors.push(
@@ -1203,7 +1278,10 @@ export function validateWaveDefinition(wave, options = {}) {
         );
       }
     }
-    if ([evaluatorAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId)) {
+    if (
+      [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
+      isContEvalReportOnlyAgent(agent, { contEvalAgentId })
+    ) {
       if (Array.isArray(agent.components) && agent.components.length > 0) {
         errors.push(`Agent ${agent.agentId} must not declare a ### Components section`);
       }
@@ -1230,7 +1308,10 @@ export function validateWaveDefinition(wave, options = {}) {
       }
     }
     if (exitContractThreshold !== null && wave.wave >= exitContractThreshold) {
-      if (![evaluatorAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId)) {
+      if (
+        ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
+        !isContEvalReportOnlyAgent(agent, { contEvalAgentId })
+      ) {
         if (!agent.exitContract) {
           errors.push(
             `Agent ${agent.agentId} must declare a ### Exit contract section in waves ${exitContractThreshold} and later`,
@@ -1253,14 +1334,37 @@ export function validateWaveDefinition(wave, options = {}) {
       }
     }
   }
-  const evaluator = wave.agents.find((agent) => agent.agentId === evaluatorAgentId);
-  if (!evaluator?.rolePromptPaths?.includes(laneProfile.roles.evaluatorRolePromptPath)) {
+  const contQaAgent = wave.agents.find((agent) => agent.agentId === contQaAgentId);
+  if (!contQaAgent?.rolePromptPaths?.includes(laneProfile.roles.contQaRolePromptPath)) {
     errors.push(
-      `Agent ${evaluatorAgentId} must import ${laneProfile.roles.evaluatorRolePromptPath}`,
+      `Agent ${contQaAgentId} must import ${laneProfile.roles.contQaRolePromptPath}`,
     );
   }
-  if (!resolveEvaluatorReportPath(wave, { evaluatorAgentId })) {
-    errors.push(`Agent ${evaluatorAgentId} must own an evaluator report path`);
+  if (!resolveContQaReportPath(wave, { contQaAgentId })) {
+    errors.push(`Agent ${contQaAgentId} must own a cont-QA report path`);
+  }
+  if (contEvalAgent) {
+    if (!contEvalAgent.rolePromptPaths?.includes(laneProfile.roles.contEvalRolePromptPath)) {
+      errors.push(
+        `Agent ${contEvalAgentId} must import ${laneProfile.roles.contEvalRolePromptPath}`,
+      );
+    }
+    if (!resolveContEvalReportPath(wave, { contEvalAgentId })) {
+      errors.push(`Agent ${contEvalAgentId} must own a cont-EVAL report path`);
+    }
+    if (!Array.isArray(wave.evalTargets) || wave.evalTargets.length === 0) {
+      errors.push(`Wave ${wave.wave} must declare a ## Eval targets section when ${contEvalAgentId} is present`);
+    } else {
+      try {
+        validateEvalTargets(wave.evalTargets, {
+          benchmarkCatalogPath: laneProfile.paths.benchmarkCatalogPath,
+        });
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+  } else if (Array.isArray(wave.evalTargets) && wave.evalTargets.length > 0) {
+    errors.push(`Wave ${wave.wave} declares ## Eval targets but does not include Agent ${contEvalAgentId}`);
   }
   if (integrationRuleActive) {
     const integrationStewards = wave.agents.filter((agent) =>
@@ -1317,8 +1421,13 @@ export function validateWaveDefinition(wave, options = {}) {
   }
   for (const [componentId, owners] of componentOwners.entries()) {
     if (owners.size === 0) {
+      const requiredOwnerIds = [
+        contQaAgentId,
+        ...(contEvalImplementationOwning ? [] : [contEvalAgentId]),
+        documentationAgentId,
+      ];
       errors.push(
-        `Wave ${wave.wave} must assign promoted component "${componentId}" to at least one non-${evaluatorAgentId}/${documentationAgentId} agent`,
+        `Wave ${wave.wave} must assign promoted component "${componentId}" to at least one non-${requiredOwnerIds.join("/")} agent`,
       );
     }
   }
@@ -1416,12 +1525,22 @@ export function parseWaveContent(content, filePath, options = {}) {
       }),
       filePath,
     ),
+    evalTargets: parseEvalTargets(
+      extractTopLevelSectionBody(content, "Eval targets", filePath, {
+        required: false,
+      }),
+      filePath,
+    ),
     context7Defaults: extractWaveContext7Defaults(content, filePath),
     componentPromotions,
     agents: agentsWithComponentTargets,
-    evaluatorReportPath: resolveEvaluatorReportPath(
+    contQaReportPath: resolveContQaReportPath(
       { agents: agentsWithComponentTargets },
-      { evaluatorAgentId: laneProfile.roles.evaluatorAgentId },
+      { contQaAgentId: laneProfile.roles.contQaAgentId },
+    ),
+    contEvalReportPath: resolveContEvalReportPath(
+      { agents: agentsWithComponentTargets },
+      { contEvalAgentId: laneProfile.roles.contEvalAgentId },
     ),
   };
 }
@@ -1459,8 +1578,11 @@ function mergeExecutorSections(baseSection, profileSection, inlineSection, array
 }
 
 function inferAgentRuntimeRole(agent, laneProfile) {
-  if (agent?.agentId === laneProfile.roles.evaluatorAgentId) {
-    return "evaluator";
+  if (agent?.agentId === laneProfile.roles.contQaAgentId) {
+    return "cont-qa";
+  }
+  if (agent?.agentId === laneProfile.roles.contEvalAgentId) {
+    return "cont-eval";
   }
   if (agent?.agentId === laneProfile.roles.integrationAgentId) {
     return "integration";
@@ -1771,12 +1893,16 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
     };
   }
   const roles = laneProfile.roles || {};
-  const evaluatorAgentId = roles.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const contQaAgentId = roles.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  const contEvalAgentId = roles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
   const documentationAgentId =
     roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const satisfied = new Set();
   for (const agent of wave.agents) {
-    if ([evaluatorAgentId, documentationAgentId].includes(agent.agentId)) {
+    if (
+      [contQaAgentId, documentationAgentId].includes(agent.agentId) ||
+      isContEvalReportOnlyAgent(agent, { contEvalAgentId })
+    ) {
       continue;
     }
     const summary = summariesByAgentId[agent.agentId] || null;
@@ -1924,52 +2050,51 @@ export function arraysEqual(a, b) {
   return true;
 }
 
-export function readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId } = {}) {
-  const resolvedEvaluatorAgentId = evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
-  const evaluator =
-    wave.agents.find((agent) => agent.agentId === resolvedEvaluatorAgentId) ?? null;
-  if (!evaluator) {
+export function readWaveContQaArtifacts(wave, { logsDir, contQaAgentId } = {}) {
+  const resolvedContQaAgentId = contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  const contQa = wave.agents.find((agent) => agent.agentId === resolvedContQaAgentId) ?? null;
+  if (!contQa) {
     return {
       ok: false,
-      statusCode: "missing-evaluator",
-      detail: `Agent ${resolvedEvaluatorAgentId} is missing.`,
+      statusCode: "missing-cont-qa",
+      detail: `Agent ${resolvedContQaAgentId} is missing.`,
     };
   }
-  const evaluatorReportPath = wave.evaluatorReportPath
-    ? path.resolve(REPO_ROOT, wave.evaluatorReportPath)
+  const contQaReportPath = wave.contQaReportPath
+    ? path.resolve(REPO_ROOT, wave.contQaReportPath)
     : null;
   const reportText =
-    evaluatorReportPath && fs.existsSync(evaluatorReportPath)
-      ? fs.readFileSync(evaluatorReportPath, "utf8")
+    contQaReportPath && fs.existsSync(contQaReportPath)
+      ? fs.readFileSync(contQaReportPath, "utf8")
       : "";
   const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
   if (reportVerdict.verdict) {
     return {
       ok: reportVerdict.verdict === "pass",
-      statusCode: reportVerdict.verdict === "pass" ? "pass" : `evaluator-${reportVerdict.verdict}`,
-      detail: reportVerdict.detail || "Verdict read from evaluator report.",
+      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
+      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
     };
   }
-  const evaluatorLogPath = logsDir
-    ? path.join(logsDir, `wave-${wave.wave}-${evaluator.slug}.log`)
+  const contQaLogPath = logsDir
+    ? path.join(logsDir, `wave-${wave.wave}-${contQa.slug}.log`)
     : null;
   const logVerdict = parseVerdictFromText(
-    evaluatorLogPath ? readFileTail(evaluatorLogPath, 30000) : "",
+    contQaLogPath ? readFileTail(contQaLogPath, 30000) : "",
     WAVE_VERDICT_REGEX,
   );
   if (logVerdict.verdict) {
     return {
       ok: logVerdict.verdict === "pass",
-      statusCode: logVerdict.verdict === "pass" ? "pass" : `evaluator-${logVerdict.verdict}`,
-      detail: logVerdict.detail || "Verdict read from evaluator log marker.",
+      statusCode: logVerdict.verdict === "pass" ? "pass" : `cont-qa-${logVerdict.verdict}`,
+      detail: logVerdict.detail || "Verdict read from cont-QA log marker.",
     };
   }
   return {
     ok: false,
-    statusCode: "missing-evaluator-verdict",
-    detail: evaluatorReportPath
-      ? `Missing evaluator verdict in ${path.relative(REPO_ROOT, evaluatorReportPath)}.`
-      : "Missing evaluator report path and evaluator log verdict.",
+    statusCode: "missing-cont-qa-verdict",
+    detail: contQaReportPath
+      ? `Missing cont-QA verdict in ${path.relative(REPO_ROOT, contQaReportPath)}.`
+      : "Missing cont-QA report path and cont-QA log verdict.",
   };
 }
 
@@ -1991,7 +2116,8 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
   const coordinationDir =
     options.coordinationDir || path.join(path.resolve(statusDir, ".."), "coordination");
-  const evaluatorAgentId = options.evaluatorAgentId || DEFAULT_EVALUATOR_AGENT_ID;
+  const contQaAgentId = options.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  const contEvalAgentId = options.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
   const integrationAgentId = options.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     options.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
@@ -2035,16 +2161,49 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       statusesReady = false;
       continue;
     }
-    const summary = readAgentExecutionSummary(statusPath);
+    const summary = materializeLiveExecutionSummaryIfMissing({
+      wave,
+      agent,
+      statusPath,
+      statusRecord,
+      logsDir,
+      contQaAgentId,
+      contEvalAgentId,
+    });
     summariesByAgentId[agent.agentId] = summary;
-    if (agent.agentId === evaluatorAgentId) {
-      if (summary) {
-        const validation = validateEvaluatorSummary(agent, summary);
-        if (!validation.ok) {
+    if (agent.agentId === contQaAgentId) {
+      const validation = validateContQaSummary(agent, summary, { mode: "live" });
+      if (!validation.ok) {
+        pushWaveCompletionReason(
+          reasons,
+          "invalid-cont-qa-summary",
+          `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+        );
+        statusesReady = false;
+      }
+      continue;
+    }
+    if (agent.agentId === contEvalAgentId) {
+      const evalValidation = validateContEvalSummary(agent, summary, {
+        mode: "live",
+        evalTargets: wave.evalTargets,
+        benchmarkCatalogPath: laneProfile.paths.benchmarkCatalogPath,
+      });
+      if (!evalValidation.ok) {
+        pushWaveCompletionReason(
+          reasons,
+          "invalid-cont-eval-summary",
+          `${agent.agentId}: ${evalValidation.statusCode}: ${evalValidation.detail}`,
+        );
+        statusesReady = false;
+      }
+      if (isContEvalImplementationOwningAgent(agent, { contEvalAgentId })) {
+        const implementationValidation = validateImplementationSummary(agent, summary);
+        if (!implementationValidation.ok) {
           pushWaveCompletionReason(
             reasons,
-            "invalid-evaluator-summary",
-            `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+            "invalid-cont-eval-implementation-summary",
+            `${agent.agentId}: ${implementationValidation.statusCode}: ${implementationValidation.detail}`,
           );
           statusesReady = false;
         }
@@ -2122,17 +2281,6 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
         "component-matrix-invalid",
         matrixValidation.detail,
       );
-      statusesReady = false;
-    }
-  }
-
-  if (statusesReady) {
-    const evaluatorArtifacts = readWaveEvaluatorArtifacts(wave, {
-      logsDir,
-      evaluatorAgentId,
-    });
-    if (!evaluatorArtifacts.ok) {
-      pushWaveCompletionReason(reasons, evaluatorArtifacts.statusCode, evaluatorArtifacts.detail);
       statusesReady = false;
     }
   }

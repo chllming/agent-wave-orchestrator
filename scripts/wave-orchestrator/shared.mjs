@@ -130,6 +130,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     terminalsPath: path.join(REPO_ROOT, laneProfile.paths.terminalsPath),
     skillsDir: path.join(REPO_ROOT, laneProfile.skills?.dir || "skills"),
     context7BundleIndexPath: path.join(REPO_ROOT, laneProfile.paths.context7BundleIndexPath),
+    benchmarkCatalogPath: path.join(REPO_ROOT, laneProfile.paths.benchmarkCatalogPath),
     componentCutoverMatrixDocPath: path.join(
       REPO_ROOT,
       laneProfile.paths.componentCutoverMatrixDocPath,
@@ -141,10 +142,12 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     sharedPlanDocs: laneProfile.sharedPlanDocs,
     requiredPromptReferences: laneProfile.validation.requiredPromptReferences,
     rolePromptDir: laneProfile.roles.rolePromptDir,
-    evaluatorAgentId: laneProfile.roles.evaluatorAgentId,
+    contQaAgentId: laneProfile.roles.contQaAgentId,
+    contEvalAgentId: laneProfile.roles.contEvalAgentId,
     integrationAgentId: laneProfile.roles.integrationAgentId,
     documentationAgentId: laneProfile.roles.documentationAgentId,
-    evaluatorRolePromptPath: laneProfile.roles.evaluatorRolePromptPath,
+    contQaRolePromptPath: laneProfile.roles.contQaRolePromptPath,
+    contEvalRolePromptPath: laneProfile.roles.contEvalRolePromptPath,
     integrationRolePromptPath: laneProfile.roles.integrationRolePromptPath,
     documentationRolePromptPath: laneProfile.roles.documentationRolePromptPath,
     requireDocumentationStewardFromWave:

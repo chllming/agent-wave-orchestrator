@@ -17,9 +17,9 @@ It includes:
 ## Quick Start
 
 Published package:
-- `@chllming/wave-orchestration@0.4.0`
+- `@chllming/wave-orchestration@0.5.0`
 - Registry: `https://npm.pkg.github.com`
-- Release: [v0.4.0](https://github.com/chllming/wave-orchestration/releases/tag/v0.4.0)
+- Release: [v0.5.0](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.0)
 
 Install:
 
@@ -37,12 +37,12 @@ If your repo already has Wave config, docs, or waves you want to keep:
 pnpm exec wave init --adopt-existing
 ```
 
-## New In 0.4.0
+## New In 0.5.0
 
-- Codex now supports richer non-interactive runtime control: model, CLI profile, inline config overrides, search, images, extra directories, JSON mode, and ephemeral sessions.
-- Claude Code can now merge per-run settings overlays from a base settings file plus inline settings JSON, hooks JSON, and allowed HTTP hook URLs.
-- OpenCode can now merge arbitrary config JSON into the generated `opencode.json` overlay and attach multiple files per run.
-- `wave launch --dry-run` now materializes prompts plus executor launch previews under `.tmp/.../dry-run/`, so runtime harness behavior is testable without launching the binaries.
+- Capability-targeted work is now first-class: open capability requests become explicit helper assignments with deterministic assignee resolution, ledger visibility, inbox coverage, and closure barriers.
+- Cross-lane work is now first-class too: `wave dep post|show|resolve|render` manages typed dependency tickets, and required inbound or outbound dependencies now surface directly in lane state and gating.
+- Hermetic replay acceptance is now stronger around the runtime-orchestration layer, with stored outcome snapshots and launcher-generated local trace fixtures covering fallback, clarification, and dependency paths.
+- The package now carries explicit repository metadata so GitHub Packages can link it back to this repo cleanly.
 
 ## Requirements
 
@@ -55,6 +55,8 @@ pnpm exec wave init --adopt-existing
 ## Install Into Another Repo
 
 1. Configure GitHub Packages auth as shown in [github-packages-setup.md](./docs/reference/github-packages-setup.md).
+
+   GitHub Packages npm installs still require authentication, even for public packages on `npm.pkg.github.com`.
 
 2. Add the package:
 
@@ -415,11 +417,11 @@ The launcher will not accept final completion until every promoted component has
 ## Executor Behavior
 
 - `codex`
-  The harness sends the generated task prompt through `codex exec` stdin. `--codex-sandbox` and `wave.config.json` `executors.codex.sandbox` control the default sandbox. `0.4.0` adds support for Codex CLI profile selection, inline `-c` overrides, search, images, extra directories, JSON mode, and ephemeral sessions.
+  The harness sends the generated task prompt through `codex exec` stdin. `--codex-sandbox` and `wave.config.json` `executors.codex.sandbox` control the default sandbox. Current runtime support includes CLI profile selection, inline `-c` overrides, search, images, extra directories, JSON mode, and ephemeral sessions.
 - `claude`
-  The harness launches `claude -p` headlessly. The generated task prompt becomes the run message, and a runtime overlay file is injected with `--append-system-prompt-file` by default. `0.4.0` adds merged per-run settings overlays from a base `claude.settings` file plus inline settings JSON, hooks JSON, and allowed HTTP hook URLs. Switch to full replacement in `wave.config.json` with `executors.claude.appendSystemPromptMode: "replace"`.
+  The harness launches `claude -p` headlessly. The generated task prompt becomes the run message, and a runtime overlay file is injected with `--append-system-prompt-file` by default. Current runtime support includes merged per-run settings overlays from a base `claude.settings` file plus inline settings JSON, hooks JSON, and allowed HTTP hook URLs. Switch to full replacement in `wave.config.json` with `executors.claude.appendSystemPromptMode: "replace"`.
 - `opencode`
-  The harness launches `opencode run` headlessly. The generated task prompt becomes the run message, and the harness writes an ignored runtime `opencode.json` plus a generated agent prompt under `.tmp/.../executors/`, then points `OPENCODE_CONFIG` at that overlay for the run. `0.4.0` adds merged config JSON support and repeated file attachments.
+  The harness launches `opencode run` headlessly. The generated task prompt becomes the run message, and the harness writes an ignored runtime `opencode.json` plus a generated agent prompt under `.tmp/.../executors/`, then points `OPENCODE_CONFIG` at that overlay for the run. Current runtime support includes merged config JSON and repeated file attachments.
 - `local`
   Smoke-test only. It creates placeholder deliverables and emits the expected Wave markers, but it is not a real agent runtime.
 

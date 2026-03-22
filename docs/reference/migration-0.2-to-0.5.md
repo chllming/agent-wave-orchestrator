@@ -15,9 +15,8 @@ It uses two concrete references:
 
 This is a migration guide for the current architecture described in
 [Roadmap](../roadmap.md), not just a changelog of whatever happens to be landed
-in one point-in-time package build. The package version may still be lower than
-`0.5.x`; this document is about the shipped runtime shape, not only the semver
-label.
+in one point-in-time package build. This document is about the shipped runtime
+shape, not only the semver label.
 
 ## Baseline And Target
 

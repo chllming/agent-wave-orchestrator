@@ -2,6 +2,8 @@
 
 Use this package through GitHub Packages under the `@chllming` scope.
 
+GitHub's npm registry still requires authentication for installs from `npm.pkg.github.com`, even when the package and backing repository are public.
+
 ## `.npmrc`
 
 Add a repository-local or user-level `.npmrc` entry like this:

@@ -1,6 +1,6 @@
 # Runtime Configuration Reference
 
-This directory is the canonical reference for executor configuration in Wave `0.4.x`.
+This directory is the canonical reference for executor configuration in Wave `0.5.x`.
 
 Use it when you need the full supported surface for:
 

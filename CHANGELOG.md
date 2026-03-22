@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 - 2026-03-22
+
+- Added Phase 4 runtime coordination: capability-targeted requests now become explicit helper assignments with deterministic assignee selection, assignment snapshots, ledger coverage, inbox visibility, and closure barriers.
+- Added typed cross-lane dependency workflows with `wave dep post|show|resolve|render`, per-wave inbound/outbound dependency projections, dependency-aware gating, and replay-visible dependency state.
+- Expanded hermetic trace and replay acceptance around the runtime-orchestration layer with stored outcome snapshots, launcher-generated local trace fixtures, and stronger replay comparison coverage for fallback, clarification, and dependency paths.
+- Added package repository metadata (`repository`, `homepage`, and `bugs`) so GitHub Packages can link the package back to the source repository more cleanly.
+
 ## 0.4.0 - 2026-03-21
 
 - Expanded the runtime surface across Codex, Claude Code, and OpenCode, including Codex `exec` model/profile/config/search/image/add-dir/JSON/ephemeral flags, Claude settings-overlay merging, and OpenCode merged config overlays plus multi-file attachments.

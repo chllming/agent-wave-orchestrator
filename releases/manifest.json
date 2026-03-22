@@ -3,6 +3,23 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.5.0",
+      "date": "2026-03-22",
+      "summary": "Phase 4 helper assignment routing, cross-lane dependency workflows, and publish-ready package metadata.",
+      "features": [
+        "Capability-targeted requests now become explicit helper assignments with deterministic assignee selection, assignment snapshots, ledger/task coverage, inbox visibility, and closure barriers.",
+        "Typed cross-lane dependency workflows now have `wave dep` operator commands, per-wave inbound/outbound dependency projections, dependency-aware gating, and replay-visible dependency state.",
+        "Phase 3 replay acceptance was tightened around the runtime-orchestration layer with stored outcome snapshots, launcher-generated local trace fixtures, and stronger replay comparison coverage.",
+        "The package now carries explicit `repository`, `homepage`, and `bugs` metadata for cleaner GitHub Packages linking."
+      ],
+      "manualSteps": [
+        "After upgrading, dry-run the target lane with `pnpm exec wave launch --lane main --dry-run --no-dashboard` to inspect helper-assignment and dependency projections before running real executors.",
+        "Use `pnpm exec wave dep show --lane <lane> --wave <n> --json` to inspect inbound and outbound dependency state when a lane appears blocked.",
+        "If you want helper-task routing beyond ownership defaults, add or refine `### Capabilities` blocks in your wave files and `capabilityRouting.preferredAgents` in `wave.config.json`."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.4.0",
       "date": "2026-03-21",
       "summary": "Runtime surface upgrade plus hermetic traces for Codex, Claude Code, and OpenCode.",

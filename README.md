@@ -533,17 +533,17 @@ pnpm exec wave changelog --since-installed
 
 ## Research Sources
 
-The repository only commits a source index. Hydrated paper or article caches should stay local and ignored under `docs/research/cache/` or `docs/research/agent-context-cache/`.
+The canonical source index is [docs/research/agent-context-sources.md](./docs/research/agent-context-sources.md). Hydrated paper or article caches should stay local and ignored under `docs/research/cache/` or `docs/research/agent-context-cache/`.
 
-- [Effective harnesses for long-running agents](./docs/research/agent-context-cache/articles/effective-harnesses-for-long-running-agents.md)
-- [Harness engineering: leveraging Codex in an agent-first world](./docs/research/agent-context-cache/articles/harness-engineering-leveraging-codex-in-an-agent-first-world.md)
-- [Unlocking the Codex harness: how we built the App Server](./docs/research/agent-context-cache/articles/unlocking-the-codex-harness-how-we-built-the-app-server.md)
-- [Building Effective AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned](./docs/research/agent-context-cache/papers/building-effective-ai-coding-agents-for-the-terminal-scaffolding-harness-context-engineering-and-lessons-learned.md)
-- [VeRO: An Evaluation Harness for Agents to Optimize Agents](./docs/research/agent-context-cache/papers/vero-an-evaluation-harness-for-agents-to-optimize-agents.md)
-- [EvoClaw: Evaluating AI Agents on Continuous Software Evolution](./docs/research/agent-context-cache/papers/evoclaw-evaluating-ai-agents-on-continuous-software-evolution.md)
-- [LLM-based Multi-Agent Blackboard System for Information Discovery in Data Science](./docs/research/agent-context-cache/papers/llm-based-multi-agent-blackboard-system-for-information-discovery-in-data-science.md)
-- [Exploring Advanced LLM Multi-Agent Systems Based on Blackboard Architecture](./docs/research/agent-context-cache/papers/exploring-advanced-llm-multi-agent-systems-based-on-blackboard-architecture.md)
-- [DOVA: Deliberation-First Multi-Agent Orchestration for Autonomous Research Automation](./docs/research/agent-context-cache/papers/dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation.md)
-- [Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems](./docs/research/agent-context-cache/papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md)
-- [SYMPHONY: Synergistic Multi-agent Planning with Heterogeneous Language Model Assembly](./docs/research/agent-context-cache/papers/symphony-synergistic-multi-agent-planning-with-heterogeneous-language-model-assembly.md)
-- [An Open Agent Architecture](./docs/research/agent-context-cache/papers/an-open-agent-architecture.md)
+- [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
+- [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)
+- [Unlocking the Codex harness: how we built the App Server](https://openai.com/index/unlocking-the-codex-harness/)
+- [Building Effective AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned](https://arxiv.org/abs/2603.05344)
+- [VeRO: An Evaluation Harness for Agents to Optimize Agents](https://arxiv.org/abs/2602.22480)
+- [EvoClaw: Evaluating AI Agents on Continuous Software Evolution](https://arxiv.org/abs/2603.13428)
+- [LLM-Based Multi-Agent Blackboard System for Information Discovery in Data Science](https://arxiv.org/abs/2510.01285)
+- [Exploring Advanced LLM Multi-Agent Systems Based on Blackboard Architecture](https://arxiv.org/abs/2507.01701)
+- [DOVA: Deliberation-First Multi-Agent Orchestration for Autonomous Research Automation](https://arxiv.org/abs/2603.13327)
+- [Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems](https://arxiv.org/abs/2603.01045)
+- [SYMPHONY: Synergistic Multi-agent Planning with Heterogeneous Language Model Assembly](https://arxiv.org/abs/2601.22623)
+- [An Open Agent Architecture](https://cdn.aaai.org/Symposia/Spring/1994/SS-94-03/SS94-03-001.pdf)

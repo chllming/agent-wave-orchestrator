@@ -3,6 +3,21 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.6.1",
+      "date": "2026-03-22",
+      "summary": "Patch release that aligns the published package with merged main and refreshed 0.6.1 release docs.",
+      "features": [
+        "The package version and release metadata now advertise `0.6.1` consistently across `package.json`, the shipped README, the changelog, and the release manifest.",
+        "Current-surface docs such as runtime configuration, sample waves, eval guidance, migration notes, and npm publishing instructions now point at the `0.6.1` release instead of the earlier `0.6.0` tag.",
+        "This patch release carries forward the `0.6.0` runtime behavior, including the workspace-scoped tmux resource isolation fix that unblocked publish-time CI."
+      ],
+      "manualSteps": [
+        "After upgrading, rerun `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` if you want to verify your repo against the same `0.6.1` package surface documented in this release.",
+        "If you pinned package docs or release references to `0.6.0`, update them to `0.6.1` so your operator guidance matches the published package tag."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.6.0",
       "date": "2026-03-22",
       "summary": "Closure-role split, benchmark-governed cont-EVAL, security review, ad-hoc runs, and expanded skills and docs.",

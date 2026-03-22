@@ -201,6 +201,49 @@ function parsePathList(blockText, filePath, label) {
   return paths;
 }
 
+function normalizeRepoRelativePath(relPath) {
+  return String(relPath || "")
+    .replaceAll("\\", "/")
+    .replace(/^\.\/+/, "")
+    .trim();
+}
+
+function isOwnedDirectoryPath(relPath) {
+  return normalizeRepoRelativePath(relPath).endsWith("/");
+}
+
+function deliverableIsOwned(deliverablePath, ownedPath) {
+  const deliverable = normalizeRepoRelativePath(deliverablePath);
+  const owned = normalizeRepoRelativePath(ownedPath);
+  if (!deliverable || !owned) {
+    return false;
+  }
+  if (isOwnedDirectoryPath(owned)) {
+    return deliverable.startsWith(owned);
+  }
+  return deliverable === owned;
+}
+
+function validateAgentDeliverables(deliverables, ownedPaths, filePath, agentId) {
+  if (!Array.isArray(deliverables) || deliverables.length === 0) {
+    return;
+  }
+  const owned = Array.isArray(ownedPaths) ? ownedPaths : [];
+  for (const deliverablePath of deliverables) {
+    const normalized = normalizeRepoRelativePath(deliverablePath);
+    if (normalized.endsWith("/")) {
+      throw new Error(
+        `Deliverable "${deliverablePath}" for agent ${agentId} in ${filePath} must be a file path, not a directory path`,
+      );
+    }
+    if (!owned.some((ownedPath) => deliverableIsOwned(normalized, ownedPath))) {
+      throw new Error(
+        `Deliverable "${deliverablePath}" for agent ${agentId} in ${filePath} must stay within the agent's declared file ownership`,
+      );
+    }
+  }
+}
+
 function extractFencedBlock(blockText, messagePrefix) {
   const fencedBlockMatch = String(blockText || "").match(
     /```(?:[a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)\r?\n```/,
@@ -1253,6 +1296,7 @@ export function parseWaveContent(content, filePath, options = {}) {
       },
     );
     const ownedPaths = extractOwnedPaths(promptOverlay);
+    validateAgentDeliverables(deliverables, ownedPaths, filePath, current.agentId);
     agents.push({
       agentId: current.agentId,
       title: current.title,

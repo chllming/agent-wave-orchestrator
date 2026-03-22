@@ -35,27 +35,58 @@ const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
 const WAVE_COMPONENT_REGEX =
   /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
+const STRUCTURED_SIGNAL_LINE_REGEX = /^\[wave-[^\]]+\].*$/;
+const WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX = /^`\[wave-[^`]+`$/;
 
 function normalizeStructuredSignalText(text) {
   if (!text) {
     return "";
   }
   const normalizedLines = [];
-  let inFence = false;
-  for (const rawLine of String(text).split(/\r?\n/)) {
+  let fenceLines = null;
+  for (const rawLine of String(text || "").split(/\r?\n/)) {
     const trimmed = rawLine.trim();
     if (/^```/.test(trimmed)) {
-      inFence = !inFence;
+      if (fenceLines === null) {
+        fenceLines = [];
+        continue;
+      }
+      const normalizedFenceLines = fenceLines
+        .map((line) => normalizeStructuredSignalLine(line))
+        .filter(Boolean);
+      if (normalizedFenceLines.length > 0 && normalizedFenceLines.length === fenceLines.length) {
+        normalizedLines.push(...normalizedFenceLines);
+      }
+      fenceLines = null;
       continue;
     }
-    let line = inFence ? trimmed : rawLine;
-    const wrappedMatch = String(line).trim().match(/^`(\[wave-[^`]+)`$/);
-    if (wrappedMatch) {
-      line = wrappedMatch[1];
+    if (fenceLines !== null) {
+      if (!trimmed) {
+        continue;
+      }
+      fenceLines.push(trimmed);
+      continue;
     }
-    normalizedLines.push(line);
+    const normalized = normalizeStructuredSignalLine(trimmed);
+    if (normalized) {
+      normalizedLines.push(normalized);
+    }
   }
   return normalizedLines.join("\n");
+}
+
+function normalizeStructuredSignalLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (STRUCTURED_SIGNAL_LINE_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+  if (WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX.test(trimmed)) {
+    return trimmed.slice(1, -1);
+  }
+  return null;
 }
 
 function cleanText(value) {

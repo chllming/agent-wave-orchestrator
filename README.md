@@ -358,7 +358,7 @@ File ownership (only touch these paths):
 
 `### Capabilities` is optional. It lets the coordination layer route targeted follow-up work to a capability rather than a single hard-coded agent.
 
-`### Deliverables` is also optional. When present, the launcher validates that each listed repo-relative path exists before the implementation agent can satisfy its exit contract.
+`### Deliverables` is also optional. When present, the launcher validates that each listed repo-relative file both exists and stays within the implementation agent's declared file ownership before the exit contract can pass.
 
 Open capability-targeted requests now become explicit helper assignments. The launcher resolves them deterministically, writes the assignment snapshot under `.tmp/`, mirrors the decision into the coordination log for the board and replay surface, and keeps the wave blocked until the linked follow-up resolves.
 

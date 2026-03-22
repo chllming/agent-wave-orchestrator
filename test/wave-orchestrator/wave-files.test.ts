@@ -214,6 +214,7 @@ Read docs/reference/repository-guidance.md.
 
 File ownership (only touch these paths):
 - src/
+- test/
 \`\`\`
 `,
       path.join(REPO_ROOT, "docs/plans/waves/wave-7.md"),
@@ -224,7 +225,108 @@ File ownership (only touch these paths):
       "src/example.ts",
       "test/example.test.ts",
     ]);
-    expect(wave.agents.find((agent) => agent.agentId === "A1")?.ownedPaths).toEqual(["src/"]);
+    expect(wave.agents.find((agent) => agent.agentId === "A1")?.ownedPaths).toEqual([
+      "src/",
+      "test/",
+    ]);
+  });
+
+  it("accepts deliverables that exactly match an owned file path", () => {
+    const wave = parseWaveContent(
+      `# Wave 7 - Sample
+
+**Commit message**: \`Test: deliverables\`
+
+## Agent A1: Worker
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Deliverables
+
+- README.md
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- README.md
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-7.md"),
+      { lane: "main" },
+    );
+
+    expect(wave.agents.find((agent) => agent.agentId === "A1")?.deliverables).toEqual([
+      "README.md",
+    ]);
+  });
+
+  it("rejects deliverables that escape the agent's owned paths", () => {
+    expect(() =>
+      parseWaveContent(
+        `# Wave 7 - Sample
+
+**Commit message**: \`Test: deliverables\`
+
+## Agent A1: Worker
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Deliverables
+
+- README.md
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- src/
+\`\`\`
+`,
+        path.join(REPO_ROOT, "docs/plans/waves/wave-7.md"),
+        { lane: "main" },
+      ),
+    ).toThrow(/must stay within the agent's declared file ownership/);
+  });
+
+  it("rejects directory-style deliverables", () => {
+    expect(() =>
+      parseWaveContent(
+        `# Wave 7 - Sample
+
+**Commit message**: \`Test: deliverables\`
+
+## Agent A1: Worker
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Deliverables
+
+- src/
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- src/
+\`\`\`
+`,
+        path.join(REPO_ROOT, "docs/plans/waves/wave-7.md"),
+        { lane: "main" },
+      ),
+    ).toThrow(/must be a file path, not a directory path/);
   });
 
   it("composes imported standing role prompts while keeping ownership local", () => {

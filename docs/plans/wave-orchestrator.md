@@ -179,7 +179,7 @@ pnpm exec wave changelog --since-installed
 - From the configured thresholds onward, declare `## Component promotions` and keep them aligned with the component cutover matrix.
 - From the configured thresholds onward, every non-A0/A8/A9 agent must declare `### Components` and emit `[wave-component]` markers for those components.
 - `### Capabilities` is optional and lets the scheduler route targeted follow-up work by capability.
-- `### Deliverables` is optional and lets a wave declare exact repo-relative outputs that must exist before an implementation agent can satisfy its exit contract.
+- `### Deliverables` is optional and lets a wave declare exact repo-relative file outputs that must exist, and that stay within the agent's declared file ownership, before an implementation agent can satisfy its exit contract.
 - `### Executor` can declare `profile`, `fallbacks`, `tags`, and runtime budgets in addition to vendor-specific overrides.
 - Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.

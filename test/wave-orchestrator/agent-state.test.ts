@@ -90,6 +90,37 @@ describe("buildAgentExecutionSummary", () => {
     });
     expect(summary.deliverables).toEqual([{ path: "README.md", exists: true }]);
   });
+
+  it("ignores fenced example markers that are mixed with prose", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "I still need to finish this work.",
+        "```text",
+        "Example output format:",
+        "[wave-proof] completion=contract durability=none proof=unit state=met detail=example-only",
+        "[wave-doc-delta] state=owned paths=docs/example.md detail=example-only",
+        "```",
+        "No actual closure markers yet.",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: {
+        agentId: "A1",
+      },
+      statusRecord: {
+        code: 1,
+      },
+      logPath,
+    });
+
+    expect(summary.proof).toBeNull();
+    expect(summary.docDelta).toBeNull();
+  });
 });
 
 describe("validateImplementationSummary", () => {
@@ -221,6 +252,51 @@ describe("validateImplementationSummary", () => {
     ).toMatchObject({
       ok: false,
       statusCode: "missing-deliverable",
+    });
+  });
+
+  it("rejects example markers that only appear inside a prose fence", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "The work is not complete yet.",
+        "```text",
+        "Example marker format:",
+        "[wave-proof] completion=contract durability=none proof=unit state=met detail=example-only",
+        "[wave-doc-delta] state=owned paths=docs/example.md detail=example-only",
+        "```",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: {
+        agentId: "A1",
+      },
+      statusRecord: {
+        code: 1,
+      },
+      logPath,
+    });
+
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        summary,
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-wave-proof",
     });
   });
 });

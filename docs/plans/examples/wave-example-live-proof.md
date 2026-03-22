@@ -1,19 +1,25 @@
-# Wave 14 - Example Proof-First Live Wave
+# Wave 14 - Example Full Modern Release Surface
 
 This is a showcase-first sample wave.
 
-Use it to see the proof-first authoring model for `pilot-live` and higher-maturity work:
+Use it as the single reference example for the current `0.6` Wave surface.
 
-- proof-bearing owner with `### Proof artifacts`
-- sticky retry policy
-- explicit operator command sequence
-- machine-visible local proof bundle
-- deploy environments and deploy-kind-aware skills
+It intentionally combines more sections than a normal production wave so one file can demonstrate:
+
+- standard closure roles (`A0`, `E0`, `A8`, `A9`)
+- `## Eval targets` with delegated and pinned benchmark selection
+- richer `### Executor` blocks, budgets, and sticky retry
+- `### Skills`
+- `### Capabilities`
+- `### Deliverables`
+- `### Exit contract`
+- proof-first live validation with `### Proof artifacts`
+- `## Deploy environments`
 - infra and deploy-verifier specialists
 
-This example is intentionally proof-centric rather than repo-centric.
+This example is intentionally denser than a launch-minimal wave. Its job is to teach the full authored surface in one place.
 
-**Commit message**: `Docs: add proof-first live wave sample`
+**Commit message**: `Docs: add full modern sample wave`
 
 ## Component promotions
 
@@ -25,9 +31,16 @@ This example is intentionally proof-centric rather than repo-centric.
 - prod: kubernetes default (primary production cluster)
 - staging: custom-deploy (manual preflight and recovery flow)
 
+## Eval targets
+
+- id: live-proof-fidelity | selection: delegated | benchmark-family: blackboard-fidelity | objective: Preserve machine-visible live proof through summaries, inboxes, and integration closure | threshold: Critical live-proof facts remain visible through final closure
+- id: contradiction-recovery | selection: pinned | benchmarks: claim-conflict-detection,evidence-based-repair | objective: Surface and repair conflicting live claims before PASS | threshold: Material contradictions become explicit repair work before final closure
+- id: silo-escape | selection: delegated | benchmark-family: silo-escape | objective: Reconstruct the correct global state from distributed live and repo evidence | threshold: Integration closure reflects the full cross-agent state instead of partial local views
+
 ## Context7 defaults
 
-- bundle: none
+- bundle: node-typescript
+- query: "Orchestration state machines, retry policy, summary fidelity, and durable validation for coding agents"
 
 ## Agent A0: cont-QA
 
@@ -66,6 +79,49 @@ File ownership (only touch these paths):
 - docs/plans/waves/reviews/wave-14-cont-qa.md
 ```
 
+## Agent E0: cont-EVAL
+
+### Role prompts
+
+- docs/agents/wave-cont-eval-role.md
+
+### Executor
+
+- id: claude
+- model: claude-sonnet-4-6
+- claude.allowed_tools: Read,Glob
+- claude.output_format: json
+
+### Context7
+
+- bundle: none
+
+### Skills
+
+- role-cont-eval
+
+### Prompt
+
+```text
+Primary goal:
+- Evaluate whether the wave actually preserves, integrates, and repairs distributed live-proof evidence before closure.
+
+Required context before coding:
+- Read docs/reference/repository-guidance.md.
+- Read docs/research/agent-context-sources.md.
+- Read docs/evals/README.md.
+- Read docs/reference/live-proof-waves.md.
+- Read docs/plans/master-plan.md, docs/plans/current-state.md, and docs/plans/migration.md.
+
+Specific expectations:
+- for delegated targets, choose the smallest benchmark set that genuinely exercises the failure mode
+- for pinned targets, run the exact benchmark ids named in the wave contract
+- record the exact selected target ids and benchmark ids in the append-only report
+
+File ownership (only touch these paths):
+- docs/plans/waves/reviews/wave-14-cont-eval.md
+```
+
 ## Agent A8: Integration Steward
 
 ### Role prompts
@@ -86,6 +142,7 @@ File ownership (only touch these paths):
 - integration
 - live-proof-reconciliation
 - contradiction-recovery
+- blackboard-fidelity
 
 ### Prompt
 
@@ -103,6 +160,7 @@ Specific expectations:
 - treat missing proof artifacts as blocking
 - prefer explicit follow-up requests over vague warnings
 - call out stale or contradictory live-proof claims
+- use the `cont-EVAL` report and exact benchmark ids as evidence, not as a suggestion
 
 File ownership (only touch these paths):
 - .tmp/main-wave-launcher/integration/wave-14.md
@@ -139,6 +197,80 @@ File ownership (only touch these paths):
 - docs/plans/current-state.md
 - docs/plans/master-plan.md
 - docs/plans/migration.md
+- docs/evals/README.md
+```
+
+## Agent A1: Runtime And Summary Hardening
+
+### Executor
+
+- profile: implement-fast
+- model: gpt-5-codex
+- codex.config: model_reasoning_effort=high
+- codex.search: true
+- codex.json: true
+- codex.add_dirs: docs,scripts,test
+- fallbacks: claude, opencode
+- budget.minutes: 45
+
+### Context7
+
+- bundle: node-typescript
+- query: "Retry orchestration, summary integrity, validation rules, and Vitest coverage for agent systems"
+
+### Skills
+
+- role-implementation
+- runtime-codex
+- repo-coding-rules
+
+### Components
+
+- executor-abstraction-and-prompt-transport
+
+### Capabilities
+
+- status-reconciliation
+- benchmark-integration
+- summary-fidelity
+
+### Exit contract
+
+- completion: integrated
+- durability: durable
+- proof: integration
+- doc-impact: owned
+
+### Deliverables
+
+- scripts/wave-orchestrator/launcher.mjs
+- scripts/wave-orchestrator/coordination-store.mjs
+- test/wave-orchestrator/launcher.test.ts
+- test/wave-orchestrator/coordination-store.test.ts
+
+### Prompt
+
+```text
+Primary goal:
+- Tighten the runtime's handling of retries, summaries, and benchmark-facing evidence so proof-centric closure stays machine-visible.
+
+Required context before coding:
+- Read docs/reference/repository-guidance.md.
+- Read docs/research/agent-context-sources.md.
+- Read docs/evals/README.md.
+- Read docs/reference/live-proof-waves.md.
+- Read docs/plans/current-state.md and docs/plans/wave-orchestrator.md.
+
+Specific expectations:
+- preserve prompt-hash-based reuse safety
+- keep distributed evidence visible through the shared summary and inbox layers
+- add or update regression coverage for any retry or summary behavior you change
+
+File ownership (only touch these paths):
+- scripts/wave-orchestrator/launcher.mjs
+- scripts/wave-orchestrator/coordination-store.mjs
+- test/wave-orchestrator/launcher.test.ts
+- test/wave-orchestrator/coordination-store.test.ts
 ```
 
 ## Agent A6: Learning Plane Live Validation
@@ -212,6 +344,7 @@ Specific expectations:
 - closure only counts when the declared proof artifacts exist locally
 - if live host state and cached state disagree, prefer current control-plane truth and log the discrepancy explicitly
 - if proof arrives after a failed attempt, expect a targeted rerun on the same executor instead of generic fallback
+- post exact artifact paths and machine-visible evidence through coordination instead of assuming closure agents will rediscover host state
 
 File ownership (only touch these paths):
 - .tmp/wave-14-learning-proof/

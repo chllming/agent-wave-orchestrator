@@ -1345,6 +1345,78 @@ describe("runClosureSweepPhase", () => {
     });
   });
 
+  it("validates closure against a wave-specific integration steward id", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const runLog = path.join(dir, "wave-0-i8.log");
+    const runStatus = path.join(dir, "wave-0-i8.status");
+    const closureRuns = [
+      {
+        agent: { agentId: "I8", title: "Integration" },
+        sessionName: "wave-i8",
+        promptPath: path.join(dir, "i8.prompt.md"),
+        logPath: runLog,
+        statusPath: runStatus,
+        messageBoardPath: path.join(dir, "board.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "i8.inbox.md"),
+        inboxText: "",
+      },
+    ];
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: { wave: 0, integrationAgentId: "I8" },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Integration is coherent.",
+        },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        fs.writeFileSync(
+          params.statusPath,
+          JSON.stringify({ code: 0, promptHash: "hash" }, null, 2),
+          "utf8",
+        );
+        fs.writeFileSync(
+          params.logPath,
+          "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=ready\n",
+          "utf8",
+        );
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual(["I8"]);
+    expect(result.failures).toEqual([]);
+  });
+
   it("runs security review after cont-EVAL and before integration", async () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);

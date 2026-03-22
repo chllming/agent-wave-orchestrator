@@ -5,6 +5,7 @@ import { hashText, REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs"
 import { hashAgentPromptFingerprint } from "../../scripts/wave-orchestrator/context7.mjs";
 import {
   completedWavesFromStatusFiles,
+  markWaveCompleted,
   normalizeCompletedWaves,
   parseWaveContent,
   parseWaveFiles,
@@ -2408,7 +2409,203 @@ describe("reconcileRunStateFromStatusFiles", () => {
 
     const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir);
     expect(reconciliation.completedFromStatus).toEqual([]);
-    expect(readRunState(runStatePath).completedWaves).toEqual([]);
+    expect(readRunState(runStatePath)).toMatchObject({
+      schemaVersion: 2,
+      kind: "wave-run-state",
+      completedWaves: [],
+    });
+  });
+
+  it("writes append-only run-state history with legacy normalization and blocker evidence", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-run-state-history`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    const assignmentsDir = path.join(tempRoot, "assignments");
+    const dependencySnapshotsDir = path.join(tempRoot, "dependencies");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+    fs.mkdirSync(assignmentsDir, { recursive: true });
+    fs.mkdirSync(dependencySnapshotsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(runStatePath),
+      JSON.stringify({ completedWaves: [7] }, null, 2),
+      "utf8",
+    );
+    expect(readRunState(runStatePath)).toMatchObject({
+      schemaVersion: 2,
+      kind: "wave-run-state",
+      completedWaves: [7],
+      waves: {
+        7: {
+          currentState: "completed",
+          lastSource: "legacy-run-state",
+        },
+      },
+      history: [],
+    });
+
+    const wave = makeReconcileWave(tempRoot);
+    fs.writeFileSync(
+      path.join(REPO_ROOT, wave.contQaReportPath),
+      "# cont-QA\n\nVerdict: PASS\n",
+      "utf8",
+    );
+    for (const agent of wave.agents) {
+      writeStatus(statusDir, agent, {
+        code: 0,
+        promptHash: hashAgentPromptFingerprint(agent),
+        completedAt: "2026-03-22T00:00:00.000Z",
+      });
+    }
+    writeSummary(statusDir, wave.agents[0], {
+      reportPath: wave.contQaReportPath,
+      verdict: { verdict: "pass", detail: "good" },
+      gate: {
+        architecture: "pass",
+        integration: "pass",
+        durability: "pass",
+        live: "pass",
+        docs: "pass",
+        detail: "all clear",
+      },
+    });
+    writeSummary(statusDir, wave.agents[1], {
+      proof: { completion: "contract", durability: "none", proof: "unit", state: "met" },
+      docDelta: { state: "owned", paths: [] },
+    });
+    writeSummary(statusDir, wave.agents[2], {
+      integration: { state: "ready-for-doc-closure", detail: "all lanes landed" },
+    });
+    writeSummary(statusDir, wave.agents[3], {
+      docClosure: { state: "closed", detail: "docs reconciled" },
+    });
+    fs.writeFileSync(path.join(coordinationDir, "wave-200.jsonl"), "", "utf8");
+
+    const completedState = markWaveCompleted(runStatePath, wave.wave, {
+      detail: "Wave 200 completed after 1 attempt(s).",
+      evidence: {
+        waveFileHash: "abc123",
+      },
+    });
+    expect(completedState).toMatchObject({
+      schemaVersion: 2,
+      kind: "wave-run-state",
+      completedWaves: [7, 200],
+      waves: {
+        200: {
+          currentState: "completed",
+          lastReasonCode: "wave-complete",
+        },
+      },
+    });
+    expect(completedState.history).toMatchObject([
+      {
+        wave: 200,
+        toState: "completed",
+        source: "live-launcher",
+        reasonCode: "wave-complete",
+        evidence: {
+          waveFileHash: "abc123",
+        },
+      },
+    ]);
+
+    fs.writeFileSync(
+      path.join(assignmentsDir, "wave-200.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          kind: "wave-assignment-snapshot",
+          lane: "research",
+          wave: 200,
+          assignments: [
+            {
+              id: "assignment:request-2",
+              requestId: "request-2",
+              assignedAgentId: "A1",
+              blocking: true,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(dependencySnapshotsDir, "wave-200.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          kind: "wave-dependency-snapshot",
+          lane: "research",
+          wave: 200,
+          requiredInbound: [{ id: "dep-2" }],
+          requiredOutbound: [],
+          unresolvedInboundAssignments: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      coordinationDir,
+      assignmentsDir,
+      dependencySnapshotsDir,
+      requireIntegrationStewardFromWave: 0,
+      laneProfile: {
+        validation: {
+          requireComponentPromotionsFromWave: null,
+          requireIntegrationStewardFromWave: 0,
+          requiredPromptReferences: [],
+        },
+        paths: {
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      },
+    });
+
+    expect(reconciliation.state.completedWaves).toEqual([7]);
+    expect(reconciliation.state.waves["200"]).toMatchObject({
+      currentState: "blocked",
+      lastSource: "status-reconcile",
+      lastReasonCode: "helper-assignment-open",
+    });
+    expect(reconciliation.state.history).toMatchObject([
+      {
+        wave: 200,
+        toState: "completed",
+        source: "live-launcher",
+      },
+      {
+        wave: 200,
+        fromState: "completed",
+        toState: "blocked",
+        source: "status-reconcile",
+        reasonCode: "helper-assignment-open",
+        evidence: {
+          blockedReasons: expect.arrayContaining([
+            {
+              code: "helper-assignment-open",
+              detail: "Helper assignments remain open (request-2).",
+            },
+            {
+              code: "dependency-open",
+              detail: "Open required dependencies remain (dep-2).",
+            },
+          ]),
+        },
+      },
+    ]);
   });
 
   it("reports missing closure-agent statuses as blocked-from-status reasons", () => {

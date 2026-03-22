@@ -3,8 +3,8 @@ import {
   appendDependencyTicket,
   materializeCoordinationState,
   readDependencyTickets,
-  writeJsonArtifact,
 } from "./coordination-store.mjs";
+import { writeDependencySnapshot } from "./artifact-schemas.mjs";
 import {
   buildDependencySnapshot,
   readAllDependencyTickets,
@@ -209,7 +209,10 @@ export async function runDependencyCli(argv) {
       capabilityRouting: lanePaths.capabilityRouting,
     });
     const markdownPath = dependencyMarkdownPath(lanePaths, lane);
-    writeJsonArtifact(path.join(lanePaths.crossLaneDependenciesDir, `${lane}.json`), snapshot);
+    writeDependencySnapshot(path.join(lanePaths.crossLaneDependenciesDir, `${lane}.json`), snapshot, {
+      lane,
+      wave: options.wave ?? 0,
+    });
     writeTextAtomic(markdownPath, `${renderDependencySnapshotMarkdown(snapshot)}\n`);
     console.log(JSON.stringify({ markdownPath, jsonPath: path.join(lanePaths.crossLaneDependenciesDir, `${lane}.json`) }, null, 2));
     return;

@@ -12,11 +12,13 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - supports standing role imports from `docs/agents/*.md`
 - seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
 - derives a per-wave ledger, security summary, docs queue, integration summary, and versioned per-attempt trace bundle
+- versions the runtime JSON surfaces that operators and replay tooling consume, including manifests, dashboards, relaunch plans, assignment snapshots, dependency snapshots, and run-state
 - validates Context7 declarations and exit contracts from configurable wave thresholds
 - validates component promotions and component-owned proof from configurable wave thresholds
 - writes prompts, logs, dashboards, coordination state, and status summaries under `.tmp/`
 - supports launcher-side Context7 prefetch and injection for headless runs
 - supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
+- can retry rate-limited `codex`, `claude`, and `opencode` launches with per-agent exponential backoff via `--agent-rate-limit-*`
 - supports a file-backed human feedback queue
 - performs a closure sweep so optional `cont-EVAL`, optional security review, integration, documentation, and cont-QA gates reflect final landed state
 
@@ -113,7 +115,7 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 
 ## Coordination Surfaces
 
-- `wave coord show` reads the materialized coordination state for a wave.
+- `wave coord show` is a read-only view of the materialized coordination state for a wave.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
 - `wave coord post` appends a structured record to the coordination log. This is the machine-readable path for blockers, handoffs, evidence, targeted requests, and clarification requests.
@@ -161,6 +163,7 @@ pnpm exec wave changelog --since-installed
 - prompts: `.tmp/<lane>-wave-launcher/prompts/`
 - logs: `.tmp/<lane>-wave-launcher/logs/`
 - status summaries: `.tmp/<lane>-wave-launcher/status/`
+  `run-state.json` keeps compatibility `completedWaves`, but now also stores per-wave current state plus append-only transition history and completion or blocker evidence. Relaunch plans in this directory are schema-versioned.
 - coordination logs: `.tmp/<lane>-wave-launcher/coordination/`
 - helper-assignment snapshots: `.tmp/<lane>-wave-launcher/assignments/`
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
@@ -175,6 +178,7 @@ pnpm exec wave changelog --since-installed
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
 - clarification triage: `.tmp/<lane>-wave-launcher/feedback/triage/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
+  Dashboard JSON is a versioned contract. `global.json` and `wave-<n>.json` now carry explicit `schemaVersion` and `kind` fields.
 - Context7 cache: `.tmp/<lane>-wave-launcher/context7-cache/`
 - executor overlays: `.tmp/<lane>-wave-launcher/executors/`
   Each agent overlay can include `skills.resolved.md`, `skills.metadata.json`, and `<runtime>-skills.txt` in addition to the runtime-specific executor files.
@@ -183,6 +187,8 @@ pnpm exec wave changelog --since-installed
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
 
 Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`, including dry-run previews at `.tmp/<lane>-wave-launcher/adhoc/<run-id>/dry-run/`. Their docs queue can still point at canonical shared-plan docs when the run reports a shared-plan delta.
+
+The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegates session launch or wait mechanics to `launcher-runtime.mjs` and closure-sweep sequencing to `launcher-closure.mjs`. The CLI and `traceVersion: 2` replay contract stay unchanged.
 
 ## Trace Contract
 

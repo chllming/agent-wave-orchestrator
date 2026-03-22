@@ -17,6 +17,10 @@ import {
   truncate,
   writeJsonAtomic,
 } from "./shared.mjs";
+import {
+  normalizeGlobalDashboardState,
+  normalizeWaveDashboardState,
+} from "./artifact-schemas.mjs";
 
 export function readStatusCodeIfPresent(statusPath) {
   return readStatusRecordIfPresent(statusPath)?.code ?? null;
@@ -130,7 +134,7 @@ export function buildWaveDashboardState({
   agentRuns,
 }) {
   const now = toIsoTimestamp();
-  return {
+  return normalizeWaveDashboardState({
     lane,
     wave,
     waveFile,
@@ -169,7 +173,7 @@ export function buildWaveDashboardState({
       detail: "",
     })),
     events: [],
-  };
+  });
 }
 
 export function buildGlobalDashboardState({
@@ -181,7 +185,7 @@ export function buildGlobalDashboardState({
   feedbackRequestsDir,
 }) {
   const now = toIsoTimestamp();
-  return {
+  return normalizeGlobalDashboardState({
     lane,
     runId: Math.random().toString(16).slice(2, 14),
     status: "running",
@@ -234,19 +238,27 @@ export function buildGlobalDashboardState({
       infraFindings: [],
     })),
     events: [],
-  };
+  });
 }
 
 export function writeWaveDashboard(dashboardPath, state) {
   ensureDirectory(path.dirname(dashboardPath));
-  state.updatedAt = toIsoTimestamp();
-  writeJsonAtomic(dashboardPath, state);
+  const normalized = normalizeWaveDashboardState({
+    ...state,
+    updatedAt: toIsoTimestamp(),
+  });
+  Object.assign(state, normalized);
+  writeJsonAtomic(dashboardPath, normalized);
 }
 
 export function writeGlobalDashboard(globalDashboardPath, state) {
   ensureDirectory(path.dirname(globalDashboardPath));
-  state.updatedAt = toIsoTimestamp();
-  writeJsonAtomic(globalDashboardPath, state);
+  const normalized = normalizeGlobalDashboardState({
+    ...state,
+    updatedAt: toIsoTimestamp(),
+  });
+  Object.assign(state, normalized);
+  writeJsonAtomic(globalDashboardPath, normalized);
 }
 
 export function recordWaveDashboardEvent(state, { level = "info", agentId = null, message }) {

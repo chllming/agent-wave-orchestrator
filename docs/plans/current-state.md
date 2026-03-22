@@ -29,14 +29,18 @@
   - a per-wave ledger
   - docs queues
   - explicit integration summaries with actionable claim, interface, proof, docs, and deploy-risk evidence
+  - versioned runtime artifact contracts for manifests, dashboards, relaunch plans, helper-assignment snapshots, dependency snapshots, and run-state
+  - append-only `run-state.json` history with per-wave current state, compatibility `completedWaves`, and causal completion or blocker evidence
   - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
   - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
+  - a thinner launcher entrypoint that now delegates session launch or wait and closure-sweep orchestration to dedicated modules while preserving the existing CLI surface
 - Runtime executor support now includes:
   - Codex `exec` profile, inline config, search, image, add-dir, JSON, and ephemeral flags
   - Claude settings overlay merging for inline settings and hooks
   - OpenCode merged config overlays plus multi-file attachments
+  - per-agent 429/rate-limit retries for Codex, Claude Code, and OpenCode via `--agent-rate-limit-*`
   - dry-run prompt and executor-preview materialization under `.tmp/<lane>-wave-launcher/dry-run/`
   - operator-selectable terminal surfaces: `vscode`, `tmux`, or `none` for dry-run only
 - Full runtime configuration reference pages now ship under `docs/reference/runtime-config/`.
@@ -51,7 +55,7 @@
   - open capability-targeted requests become explicit helper assignments
   - helper assignments are written into coordination state, the ledger, summaries, and traces
   - helper assignments remain blocking until the linked follow-up resolves
-- Closure now runs in staged order: implementation and proof, then optional `E0` cont-EVAL, then `A8` integration, then `A9` documentation, then `A0` cont-QA.
+- Closure now runs in staged order: implementation and proof, then optional `E0` cont-EVAL, then optional security review, then `A8` integration, then `A9` documentation, then `A0` cont-QA.
 - `E0` is hybrid: planner-generated waves keep it report-only, while hand-authored waves may assign explicit tuning files and thereby make `E0` participate in implementation proof gating.
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.
 - Proof-centric waves can now declare `### Proof artifacts`, and implementation proof validation can require those machine-visible local artifacts in addition to deliverables and structured proof markers.

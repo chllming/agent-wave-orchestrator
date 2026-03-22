@@ -11,7 +11,6 @@ import {
 } from "./config.mjs";
 import {
   appendOrchestratorBoardEntry,
-  buildExecutionPrompt,
   ensureOrchestratorBoard,
   feedbackStateSignature,
   readWaveHumanFeedbackRequests,
@@ -34,7 +33,6 @@ import {
   describeContext7Libraries,
   hashAgentPromptFingerprint,
   loadContext7BundleIndex,
-  prefetchContext7ForSelection,
 } from "./context7.mjs";
 import {
   buildGlobalDashboardState,
@@ -58,7 +56,6 @@ import {
   DEFAULT_AGENT_RATE_LIMIT_RETRIES,
   DEFAULT_MAX_RETRIES_PER_WAVE,
   DEFAULT_TIMEOUT_MINUTES,
-  DEFAULT_WAIT_PROGRESS_INTERVAL_MS,
   DEFAULT_WAVE_LANE,
   compactSingleLine,
   parseVerdictFromText,
@@ -97,12 +94,12 @@ import {
 } from "./terminals.mjs";
 import {
   buildCodexExecInvocation,
-  buildExecutorLaunchSpec,
   commandForExecutor,
   isExecutorCommandAvailable,
 } from "./executors.mjs";
 import {
   agentRequiresProofCentricValidation,
+  buildRunStateEvidence,
   buildManifest,
   applyExecutorSelectionsToWave,
   markWaveCompleted,
@@ -140,9 +137,7 @@ import {
   resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
 import {
-  resolveAgentSkills,
   summarizeResolvedSkills,
-  writeResolvedSkillArtifacts,
 } from "./skills.mjs";
 import {
   buildDependencySnapshot,
@@ -151,6 +146,22 @@ import {
   syncAssignmentRecords,
   writeDependencySnapshotMarkdown,
 } from "./routing-state.mjs";
+import {
+  readRelaunchPlan,
+  writeAssignmentSnapshot,
+  writeDependencySnapshot,
+  writeRelaunchPlan,
+} from "./artifact-schemas.mjs";
+import {
+  collectUnexpectedSessionFailures as collectUnexpectedSessionFailuresImpl,
+  launchAgentSession as launchAgentSessionImpl,
+  refreshResolvedSkillsForRun,
+  waitForWaveCompletion as waitForWaveCompletionImpl,
+} from "./launcher-runtime.mjs";
+import {
+  readWaveInfraGate as readWaveInfraGateImpl,
+  runClosureSweepPhase as runClosureSweepPhaseImpl,
+} from "./launcher-closure.mjs";
 export { CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE, normalizeCodexSandboxMode, buildCodexExecInvocation };
 
 export function formatReconcileBlockedWaveLine(blockedWave) {
@@ -586,13 +597,12 @@ function waveRelaunchPlanPath(lanePaths, waveNumber) {
 }
 
 function readWaveRelaunchPlan(lanePaths, waveNumber) {
-  const payload = readJsonOrNull(waveRelaunchPlanPath(lanePaths, waveNumber));
-  return payload && typeof payload === "object" ? payload : null;
+  return readRelaunchPlan(waveRelaunchPlanPath(lanePaths, waveNumber), { wave: waveNumber });
 }
 
 function writeWaveRelaunchPlan(lanePaths, waveNumber, payload) {
   const filePath = waveRelaunchPlanPath(lanePaths, waveNumber);
-  writeJsonAtomic(filePath, payload);
+  writeRelaunchPlan(filePath, payload, { wave: waveNumber });
   return filePath;
 }
 
@@ -1248,8 +1258,14 @@ function writeWaveDerivedState({
     ledger: existingLedger,
     capabilityRouting: lanePaths.capabilityRouting,
   });
-  writeJsonArtifact(waveAssignmentsPath(lanePaths, wave.wave), capabilityAssignments);
-  writeJsonArtifact(waveDependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot);
+  writeAssignmentSnapshot(waveAssignmentsPath(lanePaths, wave.wave), capabilityAssignments, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+  });
+  writeDependencySnapshot(waveDependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+  });
   writeDependencySnapshotMarkdown(
     waveDependencySnapshotMarkdownPath(lanePaths, wave.wave),
     dependencySnapshot,
@@ -1617,45 +1633,6 @@ export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, option
   return markerGate;
 }
 
-function failureResultFromGate(gate, fallbackLogPath) {
-  return {
-    failures: [
-      {
-        agentId: gate.agentId,
-        statusCode: gate.statusCode,
-        logPath: gate.logPath || fallbackLogPath,
-        detail: gate.detail,
-      },
-    ],
-    timedOut: false,
-  };
-}
-
-function recordClosureGateFailure({
-  wave,
-  lanePaths,
-  gate,
-  label,
-  recordCombinedEvent,
-  appendCoordination,
-  actionRequested,
-}) {
-  recordCombinedEvent({
-    level: "error",
-    agentId: gate.agentId,
-    message: `${label} blocked wave ${wave.wave}: ${gate.detail}`,
-  });
-  appendCoordination({
-    event: "wave_gate_blocked",
-    waves: [wave.wave],
-    status: "blocked",
-    details: `agent=${gate.agentId}; reason=${gate.statusCode}; ${gate.detail}`,
-    actionRequested:
-      actionRequested ||
-      `Lane ${lanePaths.lane} owners should resolve the ${label.toLowerCase()} before wave progression.`,
-  });
-}
-
 export async function runClosureSweepPhase({
   lanePaths,
   wave,
@@ -1671,205 +1648,33 @@ export async function runClosureSweepPhase({
   launchAgentSessionFn = launchAgentSession,
   waitForWaveCompletionFn = waitForWaveCompletion,
 }) {
-  const contQaAgentId = wave.contQaAgentId || "A0";
-  const contEvalAgentId = wave.contEvalAgentId || lanePaths.contEvalAgentId || "E0";
-  const integrationAgentId = wave.integrationAgentId || lanePaths.integrationAgentId || "A8";
-  const documentationAgentId = wave.documentationAgentId || "A9";
-  const stagedRuns = [
-    {
-      agentId: contEvalAgentId,
-      label: "cont-EVAL gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === contEvalAgentId),
-      validate: () =>
-        readWaveContEvalGate(wave, closureRuns, {
-          contEvalAgentId,
-          mode: "live",
-          evalTargets: wave.evalTargets,
-          benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
-        }),
-      actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve cont-EVAL tuning gaps before integration closure.`,
-    },
-    {
-      agentId: "security",
-      label: "Security review",
-      runs: closureRuns.filter((run) => isSecurityReviewAgent(run.agent)),
-      validate: () => readWaveSecurityGate(wave, closureRuns),
-      actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve blocked security findings or missing approvals before integration closure.`,
-    },
-    {
-      agentId: integrationAgentId,
-      label: "Integration gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === integrationAgentId),
-      validate: () =>
-        readWaveIntegrationBarrier(wave, closureRuns, refreshDerivedState?.(dashboardState?.attempt || 0), {
-          integrationAgentId: lanePaths.integrationAgentId,
-          requireIntegrationStewardFromWave: lanePaths.requireIntegrationStewardFromWave,
-        }),
-      actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before documentation and cont-QA closure.`,
-    },
-    {
-      agentId: documentationAgentId,
-      label: "Documentation closure",
-      runs: closureRuns.filter((run) => run.agent.agentId === documentationAgentId),
-      validate: () => {
-        const documentationGate = readWaveDocumentationGate(wave, closureRuns);
-        if (!documentationGate.ok) {
-          return documentationGate;
-        }
-        return readWaveComponentMatrixGate(wave, closureRuns, {
-          laneProfile: lanePaths.laneProfile,
-          documentationAgentId: lanePaths.documentationAgentId,
-        });
-      },
-      actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve the shared-plan or component-matrix closure state before cont-QA progression.`,
-    },
-    {
-      agentId: contQaAgentId,
-      label: "cont-QA gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === contQaAgentId),
-      validate: () => readWaveContQaGate(wave, closureRuns, { contQaAgentId, mode: "live" }),
-      actionRequested:
-        `Lane ${lanePaths.lane} owners should resolve the cont-QA gate before wave progression.`,
-    },
-  ];
-  for (const stage of stagedRuns) {
-    if (stage.runs.length === 0) {
-      continue;
-    }
-    for (const runInfo of stage.runs) {
-      const existing = dashboardState.agents.find((entry) => entry.agentId === runInfo.agent.agentId);
-      setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
-        state: "launching",
-        attempts: (existing?.attempts || 0) + 1,
-        startedAt: existing?.startedAt || toIsoTimestamp(),
-        completedAt: null,
-        exitCode: null,
-        detail: "Launching closure sweep",
-      });
-      flushDashboards();
-      const launchResult = await launchAgentSessionFn(lanePaths, {
-        wave: wave.wave,
-        waveDefinition: wave,
-        agent: runInfo.agent,
-        sessionName: runInfo.sessionName,
-        promptPath: runInfo.promptPath,
-        logPath: runInfo.logPath,
-        statusPath: runInfo.statusPath,
-        messageBoardPath: runInfo.messageBoardPath,
-        messageBoardSnapshot: runInfo.messageBoardSnapshot || "",
-        sharedSummaryPath: runInfo.sharedSummaryPath,
-        sharedSummaryText: runInfo.sharedSummaryText,
-        inboxPath: runInfo.inboxPath,
-        inboxText: runInfo.inboxText,
-        orchestratorId: options.orchestratorId,
-        executorMode: options.executorMode,
-        codexSandboxMode: options.codexSandboxMode,
-        agentRateLimitRetries: options.agentRateLimitRetries,
-        agentRateLimitBaseDelaySeconds: options.agentRateLimitBaseDelaySeconds,
-        agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
-        context7Enabled: options.context7Enabled,
-      });
-      runInfo.lastLaunchAttempt = dashboardState?.attempt || null;
-      runInfo.lastPromptHash = launchResult?.promptHash || null;
-      runInfo.lastContext7 = launchResult?.context7 || null;
-      runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
-      runInfo.lastSkillProjection =
-        launchResult?.skills || summarizeResolvedSkills(runInfo.agent.skillsResolved);
-      setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
-        state: "running",
-        detail: `Closure sweep launched${launchResult?.context7?.mode ? ` (${launchResult.context7.mode})` : ""}`,
-      });
-      recordCombinedEvent({
-        agentId: runInfo.agent.agentId,
-        message: `Closure sweep launched in tmux session ${runInfo.sessionName}`,
-      });
-      flushDashboards();
-      const result = await waitForWaveCompletionFn(
-        lanePaths,
-        [runInfo],
-        options.timeoutMinutes,
-        ({ pendingAgentIds }) => {
-          refreshWaveDashboardAgentStates(dashboardState, [runInfo], pendingAgentIds, (event) =>
-            recordCombinedEvent(event),
-          );
-          monitorWaveHumanFeedback({
-            lanePaths,
-            waveNumber: wave.wave,
-            agentRuns: [runInfo],
-            orchestratorId: options.orchestratorId,
-            coordinationLogPath,
-            feedbackStateByRequestId,
-            recordCombinedEvent,
-            appendCoordination,
-          });
-          updateWaveDashboardMessageBoard(dashboardState, runInfo.messageBoardPath);
-          flushDashboards();
-        },
-      );
-      materializeAgentExecutionSummaryForRun(wave, runInfo);
-      refreshDerivedState?.(dashboardState?.attempt || 0);
-      if (result.failures.length > 0) {
-        return result;
-      }
-    }
-    const gate = stage.validate();
-    if (!gate.ok) {
-      recordClosureGateFailure({
-        wave,
-        lanePaths,
-        gate,
-        label: stage.label,
-        recordCombinedEvent,
-        appendCoordination,
-        actionRequested: stage.actionRequested,
-      });
-      return failureResultFromGate(gate, stage.runs[0]?.logPath ? path.relative(REPO_ROOT, stage.runs[0].logPath) : null);
-    }
-  }
-  return { failures: [], timedOut: false };
+  return runClosureSweepPhaseImpl({
+    lanePaths,
+    wave,
+    closureRuns,
+    coordinationLogPath,
+    refreshDerivedState,
+    dashboardState,
+    recordCombinedEvent,
+    flushDashboards,
+    options,
+    feedbackStateByRequestId,
+    appendCoordination,
+    launchAgentSessionFn,
+    waitForWaveCompletionFn,
+    readWaveContEvalGateFn: readWaveContEvalGate,
+    readWaveSecurityGateFn: readWaveSecurityGate,
+    readWaveIntegrationBarrierFn: readWaveIntegrationBarrier,
+    readWaveDocumentationGateFn: readWaveDocumentationGate,
+    readWaveComponentMatrixGateFn: readWaveComponentMatrixGate,
+    readWaveContQaGateFn: readWaveContQaGate,
+    materializeAgentExecutionSummaryForRunFn: materializeAgentExecutionSummaryForRun,
+    monitorWaveHumanFeedbackFn: monitorWaveHumanFeedback,
+  });
 }
 
-const NON_BLOCKING_INFRA_SIGNAL_STATES = new Set([
-  "conformant",
-  "setup-required",
-  "setup-in-progress",
-  "action-required",
-  "action-approved",
-  "action-complete",
-]);
-
 export function readWaveInfraGate(agentRuns) {
-  for (const run of agentRuns) {
-    const signals = parseStructuredSignalsFromLog(run.logPath);
-    if (!signals?.infra) {
-      continue;
-    }
-    const infra = signals.infra;
-    const normalizedState = String(infra.state || "")
-      .trim()
-      .toLowerCase();
-    if (NON_BLOCKING_INFRA_SIGNAL_STATES.has(normalizedState)) {
-      continue;
-    }
-    return {
-      ok: false,
-      agentId: run.agent.agentId,
-      statusCode: `infra-${normalizedState || "blocked"}`,
-      detail: `Infra signal ${infra.kind || "unknown"} on ${infra.target || "unknown"} ended in state ${normalizedState || "unknown"}${infra.detail ? ` (${infra.detail})` : ""}.`,
-      logPath: path.relative(REPO_ROOT, run.logPath),
-    };
-  }
-  return {
-    ok: true,
-    agentId: null,
-    statusCode: "pass",
-    detail: "",
-    logPath: null,
-  };
+  return readWaveInfraGateImpl(agentRuns);
 }
 
 export function markLauncherFailed(
@@ -2125,23 +1930,9 @@ function cleanupLaneTmuxSessions(lanePaths, { excludeSessionNames = new Set() } 
 }
 
 export function collectUnexpectedSessionFailures(lanePaths, agentRuns, pendingAgentIds) {
-  const activeSessionNames = new Set(listLaneTmuxSessionNames(lanePaths));
-  const failures = [];
-  for (const run of agentRuns) {
-    if (!pendingAgentIds.has(run.agent.agentId) || fs.existsSync(run.statusPath)) {
-      continue;
-    }
-    if (activeSessionNames.has(run.sessionName)) {
-      continue;
-    }
-    failures.push({
-      agentId: run.agent.agentId,
-      statusCode: "session-missing",
-      logPath: path.relative(REPO_ROOT, run.logPath),
-      detail: `tmux session ${run.sessionName} disappeared before ${path.relative(REPO_ROOT, run.statusPath)} was written.`,
-    });
-  }
-  return failures;
+  return collectUnexpectedSessionFailuresImpl(lanePaths, agentRuns, pendingAgentIds, {
+    listLaneTmuxSessionNamesFn: listLaneTmuxSessionNames,
+  });
 }
 
 function launchWaveDashboardSession(lanePaths, { sessionName, dashboardPath, messageBoardPath }) {
@@ -2163,284 +1954,14 @@ function launchWaveDashboardSession(lanePaths, { sessionName, dashboardPath, mes
   );
 }
 
-function refreshResolvedSkillsForRun(runInfo, waveDefinition, lanePaths) {
-  runInfo.agent.skillsResolved = resolveAgentSkills(
-    runInfo.agent,
-    waveDefinition || { deployEnvironments: [] },
-    { laneProfile: lanePaths.laneProfile },
-  );
-  return runInfo.agent.skillsResolved;
-}
-
 async function launchAgentSession(lanePaths, params) {
-  const {
-    wave,
-    waveDefinition = null,
-    agent,
-    sessionName,
-    promptPath,
-    logPath,
-    statusPath,
-    messageBoardPath,
-    messageBoardSnapshot,
-    sharedSummaryPath,
-    sharedSummaryText,
-    inboxPath,
-    inboxText,
-    orchestratorId,
-    agentRateLimitRetries,
-    agentRateLimitBaseDelaySeconds,
-    agentRateLimitMaxDelaySeconds,
-    context7Enabled,
-    dryRun = false,
-  } = params;
-  ensureDirectory(path.dirname(promptPath));
-  ensureDirectory(path.dirname(logPath));
-  ensureDirectory(path.dirname(statusPath));
-  fs.rmSync(statusPath, { force: true });
-
-  const context7 = await prefetchContext7ForSelection(agent.context7Resolved, {
-    cacheDir: lanePaths.context7CacheDir,
-    disabled: !context7Enabled,
-  });
-  const overlayDir = path.join(lanePaths.executorOverlaysDir, `wave-${wave}`, agent.slug);
-  ensureDirectory(overlayDir);
-  const skillsResolved =
-    agent.skillsResolved || resolveAgentSkills(agent, waveDefinition || { deployEnvironments: [] }, {
-      laneProfile: lanePaths.laneProfile,
-    });
-  agent.skillsResolved = skillsResolved;
-  const skillArtifacts = writeResolvedSkillArtifacts(overlayDir, skillsResolved);
-  if (skillArtifacts) {
-    agent.skillsResolved = {
-      ...skillsResolved,
-      artifacts: skillArtifacts,
-    };
-  }
-  const prompt = buildExecutionPrompt({
-    lane: lanePaths.lane,
-    wave,
-    agent,
-    orchestratorId,
-    messageBoardPath,
-    messageBoardSnapshot,
-    sharedSummaryPath,
-    sharedSummaryText,
-    inboxPath,
-    inboxText,
-    context7,
-    componentPromotions: wave.componentPromotions,
-    evalTargets: wave.evalTargets,
-    benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
-    sharedPlanDocs: lanePaths.sharedPlanDocs,
-    contQaAgentId: lanePaths.contQaAgentId,
-    contEvalAgentId: lanePaths.contEvalAgentId,
-    integrationAgentId: lanePaths.integrationAgentId,
-    documentationAgentId: lanePaths.documentationAgentId,
-  });
-  const promptHash = hashAgentPromptFingerprint(agent);
-  fs.writeFileSync(promptPath, `${prompt}\n`, "utf8");
-  const launchSpec = buildExecutorLaunchSpec({
-    agent,
-    promptPath,
-    logPath,
-    overlayDir,
-    skillProjection: agent.skillsResolved,
-  });
-  const resolvedExecutorMode = launchSpec.executorId || agent.executorResolved?.id || "codex";
-  if (dryRun) {
-    writeJsonAtomic(path.join(overlayDir, "launch-preview.json"), {
-      executorId: resolvedExecutorMode,
-      command: launchSpec.command,
-      env: launchSpec.env || {},
-      useRateLimitRetries: launchSpec.useRateLimitRetries === true,
-      invocationLines: launchSpec.invocationLines,
-      skills: summarizeResolvedSkills(agent.skillsResolved),
-    });
-    return {
-      promptHash,
-      context7,
-      executorId: resolvedExecutorMode,
-      launchSpec,
-      dryRun: true,
-      skills: summarizeResolvedSkills(agent.skillsResolved),
-    };
-  }
-  killTmuxSessionIfExists(lanePaths.tmuxSocketName, sessionName);
-
-  const executionLines = [];
-  if (launchSpec.env) {
-    for (const [key, value] of Object.entries(launchSpec.env)) {
-      executionLines.push(`export ${key}=${shellQuote(value)}`);
-    }
-  }
-  if (!launchSpec.useRateLimitRetries) {
-    executionLines.push(...launchSpec.invocationLines);
-    executionLines.push("status=$?");
-  } else {
-    executionLines.push(`: > ${shellQuote(logPath)}`);
-    executionLines.push(
-      `max_rate_attempts=${Math.max(1, Number.parseInt(String(agentRateLimitRetries || 0), 10) + 1)}`,
-    );
-    executionLines.push(
-      `rate_delay_base=${Math.max(1, Number.parseInt(String(agentRateLimitBaseDelaySeconds || DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS), 10))}`,
-    );
-    executionLines.push(
-      `rate_delay_max=${Math.max(1, Number.parseInt(String(agentRateLimitMaxDelaySeconds || DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS), 10))}`,
-    );
-    executionLines.push("rate_attempt=1");
-    executionLines.push("status=1");
-    executionLines.push('while [ "$rate_attempt" -le "$max_rate_attempts" ]; do');
-    for (const line of launchSpec.invocationLines) {
-      executionLines.push(`  ${line}`);
-    }
-    executionLines.push("  status=$?");
-    executionLines.push('  if [ "$status" -eq 0 ]; then');
-    executionLines.push("    break");
-    executionLines.push("  fi");
-    executionLines.push('  if [ "$rate_attempt" -ge "$max_rate_attempts" ]; then');
-    executionLines.push("    break");
-    executionLines.push("  fi");
-    executionLines.push(
-      `  if tail -n 120 ${shellQuote(logPath)} | grep -Eqi '429 Too Many Requests|exceeded retry limit|last status: 429|rate limit'; then`,
-    );
-    executionLines.push("    sleep_seconds=$((rate_delay_base * (2 ** (rate_attempt - 1))))");
-    executionLines.push(
-      '    if [ "$sleep_seconds" -gt "$rate_delay_max" ]; then sleep_seconds=$rate_delay_max; fi',
-    );
-    executionLines.push("    jitter=$((RANDOM % 5))");
-    executionLines.push("    sleep_seconds=$((sleep_seconds + jitter))");
-    executionLines.push(
-      `    echo "[${lanePaths.lane}-wave-launcher] rate-limit detected for ${agent.agentId}; retry \${rate_attempt}/\${max_rate_attempts} after \${sleep_seconds}s" | tee -a ${shellQuote(logPath)}`,
-    );
-    executionLines.push('    sleep "$sleep_seconds"');
-    executionLines.push("    rate_attempt=$((rate_attempt + 1))");
-    executionLines.push("    continue");
-    executionLines.push("  fi");
-    executionLines.push("  break");
-    executionLines.push("done");
-  }
-
-  const command = [
-    `cd ${shellQuote(REPO_ROOT)}`,
-    "set -o pipefail",
-    `export WAVE_ORCHESTRATOR_ID=${shellQuote(orchestratorId || "")}`,
-    `export WAVE_EXECUTOR_MODE=${shellQuote(resolvedExecutorMode)}`,
-    ...executionLines,
-    `node -e ${shellQuote(
-      "const fs=require('node:fs'); const statusPath=process.argv[1]; const payload={code:Number(process.argv[2]),promptHash:process.argv[3]||null,orchestratorId:process.argv[4]||null,completedAt:new Date().toISOString()}; fs.writeFileSync(statusPath, JSON.stringify(payload, null, 2)+'\\n', 'utf8');",
-    )} ${shellQuote(statusPath)} "$status" ${shellQuote(promptHash)} ${shellQuote(orchestratorId || "")}`,
-    `echo "[${lanePaths.lane}-wave-launcher] ${sessionName} finished with code $status"`,
-    "exec bash -l",
-  ].join("\n");
-
-  runTmux(
-    lanePaths,
-    ["new-session", "-d", "-s", sessionName, `bash -lc ${shellQuote(command)}`],
-    `launch session ${sessionName}`,
-  );
-  return {
-    promptHash,
-    context7,
-    executorId: resolvedExecutorMode,
-    skills: summarizeResolvedSkills(agent.skillsResolved),
-  };
+  return launchAgentSessionImpl(lanePaths, params, { runTmuxFn: runTmux });
 }
 
 async function waitForWaveCompletion(lanePaths, agentRuns, timeoutMinutes, onProgress = null) {
-  const defaultTimeoutMs = timeoutMinutes * 60 * 1000;
-  const startedAt = Date.now();
-  const timeoutAtByAgentId = new Map(
-    agentRuns.map((run) => {
-      const budgetMinutes = Number(run.agent.executorResolved?.budget?.minutes || 0);
-      const effectiveBudgetMs =
-        Number.isFinite(budgetMinutes) && budgetMinutes > 0
-          ? Math.min(defaultTimeoutMs, budgetMinutes * 60 * 1000)
-          : defaultTimeoutMs;
-      return [run.agent.agentId, startedAt + effectiveBudgetMs];
-    }),
-  );
-  const pending = new Set(agentRuns.map((run) => run.agent.agentId));
-  const timedOutAgentIds = new Set();
-  let sessionFailures = [];
-
-  const refreshPending = () => {
-    for (const run of agentRuns) {
-      if (pending.has(run.agent.agentId) && fs.existsSync(run.statusPath)) {
-        pending.delete(run.agent.agentId);
-      }
-    }
-  };
-
-  await new Promise((resolve) => {
-    const interval = setInterval(() => {
-      refreshPending();
-      onProgress?.({ pendingAgentIds: new Set(pending), timedOut: false });
-      if (pending.size === 0) {
-        clearInterval(interval);
-        resolve();
-        return;
-      }
-      sessionFailures = collectUnexpectedSessionFailures(lanePaths, agentRuns, pending);
-      if (sessionFailures.length > 0) {
-        onProgress?.({
-          pendingAgentIds: new Set(pending),
-          timedOut: false,
-          failures: sessionFailures,
-        });
-        clearInterval(interval);
-        resolve();
-        return;
-      }
-      const now = Date.now();
-      for (const run of agentRuns) {
-        if (!pending.has(run.agent.agentId)) {
-          continue;
-        }
-        const deadline = timeoutAtByAgentId.get(run.agent.agentId) || startedAt + defaultTimeoutMs;
-        if (now <= deadline) {
-          continue;
-        }
-        timedOutAgentIds.add(run.agent.agentId);
-        pending.delete(run.agent.agentId);
-        killTmuxSessionIfExists(lanePaths.tmuxSocketName, run.sessionName);
-      }
-      if (pending.size === 0) {
-        clearInterval(interval);
-        resolve();
-      }
-    }, DEFAULT_WAIT_PROGRESS_INTERVAL_MS);
-    refreshPending();
-    onProgress?.({ pendingAgentIds: new Set(pending), timedOut: false });
+  return waitForWaveCompletionImpl(lanePaths, agentRuns, timeoutMinutes, onProgress, {
+    collectUnexpectedSessionFailuresFn: collectUnexpectedSessionFailures,
   });
-
-  if (sessionFailures.length > 0) {
-    onProgress?.({ pendingAgentIds: new Set(), timedOut: false, failures: sessionFailures });
-    return { failures: sessionFailures, timedOut: false };
-  }
-
-  const failures = [];
-  for (const run of agentRuns) {
-    const code = readStatusCodeIfPresent(run.statusPath);
-    if (code === 0) {
-      continue;
-    }
-    if (code === null || timedOutAgentIds.has(run.agent.agentId)) {
-      failures.push({
-        agentId: run.agent.agentId,
-        statusCode: timedOutAgentIds.has(run.agent.agentId) ? "timeout-no-status" : "missing-status",
-        logPath: path.relative(REPO_ROOT, run.logPath),
-      });
-      continue;
-    }
-    failures.push({
-      agentId: run.agent.agentId,
-      statusCode: String(code),
-      logPath: path.relative(REPO_ROOT, run.logPath),
-    });
-  }
-  onProgress?.({ pendingAgentIds: new Set(), timedOut: timedOutAgentIds.size > 0 });
-  return { failures, timedOut: timedOutAgentIds.size > 0 };
 }
 
 function monitorWaveHumanFeedback({
@@ -3766,6 +3287,8 @@ export async function runLauncherCli(argv) {
           persistedRuns.length > 0 ? persistedRuns : selectInitialWaveRuns(availableRuns, lanePaths);
         let attempt = 1;
         const feedbackStateByRequestId = new Map();
+        let completionGateSnapshot = null;
+        let completionTraceDir = null;
 
         while (attempt <= options.maxRetriesPerWave + 1) {
           refreshDerivedState(attempt - 1);
@@ -4327,6 +3850,7 @@ export async function runLauncherCli(argv) {
             lanePaths,
             validationMode: "live",
           });
+          completionGateSnapshot = gateSnapshot;
           const traceDir = writeTraceBundle({
             tracesDir: lanePaths.tracesDir,
             lanePaths,
@@ -4363,6 +3887,7 @@ export async function runLauncherCli(argv) {
               coordinationLogPath: derivedState.coordinationLogPath,
             }),
           });
+          completionTraceDir = traceDir;
 
           if (failures.length === 0) {
             dashboardState.status = "completed";
@@ -4488,7 +4013,20 @@ export async function runLauncherCli(argv) {
         }
 
         clearWaveRelaunchPlan(lanePaths, wave.wave);
-        const runState = markWaveCompleted(options.runStatePath, wave.wave);
+        const runState = markWaveCompleted(options.runStatePath, wave.wave, {
+          source: "live-launcher",
+          reasonCode: "wave-complete",
+          detail: `Wave ${wave.wave} completed after ${dashboardState?.attempt || 1} attempt(s).`,
+          evidence: buildRunStateEvidence({
+            wave,
+            agentRuns,
+            coordinationLogPath: derivedState.coordinationLogPath,
+            assignmentsPath: waveAssignmentsPath(lanePaths, wave.wave),
+            dependencySnapshotPath: waveDependencySnapshotPath(lanePaths, wave.wave),
+            gateSnapshot: completionGateSnapshot,
+            traceDir: completionTraceDir,
+          }),
+        });
         console.log(
           `[state] completed waves (${path.relative(REPO_ROOT, options.runStatePath)}): ${runState.completedWaves.join(", ") || "none"}`,
         );

@@ -29,6 +29,7 @@ import {
   REPORT_VERDICT_REGEX,
   WAVE_VERDICT_REGEX,
   walkFiles,
+  toIsoTimestamp,
   writeJsonAtomic,
 } from "./shared.mjs";
 import { normalizeContext7Config, hashAgentPromptFingerprint } from "./context7.mjs";
@@ -38,6 +39,7 @@ import {
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
 import {
+  agentSummaryPathFromStatusPath,
   buildAgentExecutionSummary,
   normalizeExitContract,
   readAgentExecutionSummary,
@@ -61,6 +63,13 @@ import {
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
+import {
+  RUN_STATE_KIND,
+  RUN_STATE_SCHEMA_VERSION,
+  normalizeManifest,
+  readAssignmentSnapshot,
+  readDependencySnapshot,
+} from "./artifact-schemas.mjs";
 
 export const WAVE_CONT_QA_ROLE_PROMPT_PATH = DEFAULT_CONT_QA_ROLE_PROMPT_PATH;
 export const WAVE_CONT_EVAL_ROLE_PROMPT_PATH = DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH;
@@ -2182,12 +2191,12 @@ export function buildManifest(lanePaths, waves) {
     })
     .toSorted((a, b) => a.path.localeCompare(b.path));
 
-  return {
+  return normalizeManifest({
     generatedAt: new Date().toISOString(),
     source: `${path.relative(REPO_ROOT, lanePaths.docsDir).replaceAll(path.sep, "/")}/**/*`,
     waves,
     docs,
-  };
+  });
 }
 
 export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, options = {}) {
@@ -2342,7 +2351,7 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
 }
 
 export function writeManifest(manifestPath, manifest) {
-  writeJsonAtomic(manifestPath, manifest);
+  writeJsonAtomic(manifestPath, normalizeManifest(manifest));
 }
 
 export function normalizeCompletedWaves(values) {
@@ -2358,28 +2367,253 @@ export function normalizeCompletedWaves(values) {
   ).toSorted((a, b) => a - b);
 }
 
-export function readRunState(runStatePath) {
-  const payload = readJsonOrNull(runStatePath);
+function fileHashOrNull(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+  return hashText(fs.readFileSync(filePath, "utf8"));
+}
+
+function relativeRepoPathOrNull(filePath) {
+  return filePath ? path.relative(REPO_ROOT, filePath) : null;
+}
+
+function normalizeRunStateWaveEntry(rawEntry, waveNumber) {
+  const source = rawEntry && typeof rawEntry === "object" && !Array.isArray(rawEntry) ? rawEntry : {};
+  const normalizedWave = normalizeCompletedWaves([waveNumber])[0] ?? normalizeCompletedWaves([source.wave])[0] ?? null;
   return {
-    completedWaves: normalizeCompletedWaves(payload?.completedWaves),
-    lastUpdatedAt: typeof payload?.lastUpdatedAt === "string" ? payload.lastUpdatedAt : undefined,
+    wave: normalizedWave,
+    currentState: String(source.currentState || "completed").trim().toLowerCase() || "completed",
+    lastTransitionAt:
+      typeof source.lastTransitionAt === "string"
+        ? source.lastTransitionAt
+        : typeof source.updatedAt === "string"
+          ? source.updatedAt
+          : typeof source.completedAt === "string"
+            ? source.completedAt
+            : null,
+    lastSource: typeof source.lastSource === "string" ? source.lastSource : null,
+    lastReasonCode: typeof source.lastReasonCode === "string" ? source.lastReasonCode : null,
+    lastDetail: typeof source.lastDetail === "string" ? source.lastDetail : "",
+    lastEvidence:
+      source.lastEvidence && typeof source.lastEvidence === "object" && !Array.isArray(source.lastEvidence)
+        ? source.lastEvidence
+        : null,
   };
+}
+
+function normalizeRunStateHistoryEntry(rawEntry, seqFallback) {
+  const source = rawEntry && typeof rawEntry === "object" && !Array.isArray(rawEntry) ? rawEntry : {};
+  return {
+    seq: normalizeCompletedWaves([source.seq])[0] ?? seqFallback,
+    at: typeof source.at === "string" ? source.at : toIsoTimestamp(),
+    wave: normalizeCompletedWaves([source.wave])[0] ?? null,
+    fromState: typeof source.fromState === "string" ? source.fromState : null,
+    toState: typeof source.toState === "string" ? source.toState : null,
+    source: typeof source.source === "string" ? source.source : null,
+    reasonCode: typeof source.reasonCode === "string" ? source.reasonCode : null,
+    detail: typeof source.detail === "string" ? source.detail : "",
+    evidence:
+      source.evidence && typeof source.evidence === "object" && !Array.isArray(source.evidence)
+        ? source.evidence
+        : null,
+  };
+}
+
+function completedWavesFromStateEntries(waves) {
+  return normalizeCompletedWaves(
+    Object.values(waves || {})
+      .filter((entry) => entry?.currentState === "completed")
+      .map((entry) => entry.wave),
+  );
+}
+
+function normalizeRunStateWaves(rawWaves, completedWaves, lastUpdatedAt) {
+  const normalized = {};
+  for (const waveNumber of completedWaves) {
+    normalized[String(waveNumber)] = {
+      wave: waveNumber,
+      currentState: "completed",
+      lastTransitionAt: lastUpdatedAt,
+      lastSource: "legacy-run-state",
+      lastReasonCode: "legacy-completed-wave",
+      lastDetail: "Imported from legacy completedWaves state.",
+      lastEvidence: null,
+    };
+  }
+  if (!rawWaves || typeof rawWaves !== "object" || Array.isArray(rawWaves)) {
+    return normalized;
+  }
+  for (const [waveKey, rawEntry] of Object.entries(rawWaves)) {
+    const waveNumber = normalizeCompletedWaves([waveKey])[0];
+    if (waveNumber === undefined) {
+      continue;
+    }
+    normalized[String(waveNumber)] = normalizeRunStateWaveEntry(rawEntry, waveNumber);
+  }
+  return normalized;
+}
+
+function normalizeRunStateInternal(payload) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const completedWaves = normalizeCompletedWaves(source.completedWaves);
+  const lastUpdatedAt = typeof source.lastUpdatedAt === "string" ? source.lastUpdatedAt : undefined;
+  const waves = normalizeRunStateWaves(source.waves, completedWaves, lastUpdatedAt);
+  const history = Array.isArray(source.history)
+    ? source.history
+        .map((entry, index) => normalizeRunStateHistoryEntry(entry, index + 1))
+        .filter((entry) => Number.isFinite(entry.seq) && entry.wave !== null)
+    : [];
+  return {
+    schemaVersion: RUN_STATE_SCHEMA_VERSION,
+    kind: RUN_STATE_KIND,
+    completedWaves: completedWavesFromStateEntries(waves),
+    lastUpdatedAt,
+    waves,
+    history,
+  };
+}
+
+export function readRunState(runStatePath) {
+  return normalizeRunStateInternal(readJsonOrNull(runStatePath));
 }
 
 export function writeRunState(runStatePath, state) {
   ensureDirectory(path.dirname(runStatePath));
+  const normalized = normalizeRunStateInternal(state);
   const payload = {
-    completedWaves: normalizeCompletedWaves(state.completedWaves),
+    ...normalized,
+    completedWaves: completedWavesFromStateEntries(normalized.waves),
     lastUpdatedAt: new Date().toISOString(),
   };
   writeJsonAtomic(runStatePath, payload);
   return payload;
 }
 
-export function markWaveCompleted(runStatePath, waveNumber) {
+function nextRunStateSequence(history) {
+  return (history || []).reduce((max, entry) => Math.max(max, Number(entry?.seq) || 0), 0) + 1;
+}
+
+function appendRunStateTransition(state, {
+  waveNumber,
+  toState,
+  source,
+  reasonCode,
+  detail,
+  evidence = null,
+  at = toIsoTimestamp(),
+}) {
+  const nextState = normalizeRunStateInternal(state);
+  const waveKey = String(waveNumber);
+  const previousEntry = nextState.waves[waveKey] || null;
+  const currentState = previousEntry?.currentState || null;
+  const currentEvidence = previousEntry?.lastEvidence || null;
+  const effectiveDetail = String(detail || "").trim();
+  const effectiveEvidence =
+    evidence && typeof evidence === "object" && !Array.isArray(evidence) ? evidence : null;
+  if (
+    previousEntry &&
+    currentState === toState &&
+    previousEntry.lastSource === source &&
+    previousEntry.lastReasonCode === reasonCode &&
+    previousEntry.lastDetail === effectiveDetail &&
+    JSON.stringify(currentEvidence || null) === JSON.stringify(effectiveEvidence || null)
+  ) {
+    return nextState;
+  }
+  const historyEntry = {
+    seq: nextRunStateSequence(nextState.history),
+    at,
+    wave: waveNumber,
+    fromState: currentState,
+    toState,
+    source,
+    reasonCode,
+    detail: effectiveDetail,
+    evidence: effectiveEvidence,
+  };
+  nextState.waves[waveKey] = {
+    wave: waveNumber,
+    currentState: toState,
+    lastTransitionAt: at,
+    lastSource: source,
+    lastReasonCode: reasonCode,
+    lastDetail: effectiveDetail,
+    lastEvidence: effectiveEvidence,
+  };
+  nextState.history = [...nextState.history, historyEntry];
+  nextState.completedWaves = completedWavesFromStateEntries(nextState.waves);
+  return nextState;
+}
+
+export function buildRunStateEvidence({
+  wave,
+  agentRuns = [],
+  statusEntries = [],
+  coordinationLogPath = null,
+  assignmentsPath = null,
+  dependencySnapshotPath = null,
+  gateSnapshot = null,
+  traceDir = null,
+  blockedReasons = [],
+}) {
+  const observations =
+    statusEntries.length > 0
+      ? statusEntries
+      : agentRuns.map((run) => ({
+          agentId: run.agent?.agentId || null,
+          statusPath: run.statusPath,
+          summaryPath: agentSummaryPathFromStatusPath(run.statusPath),
+          statusRecord: readStatusRecordIfPresent(run.statusPath),
+        }));
+  return {
+    waveFileHash: wave?.file ? fileHashOrNull(path.resolve(REPO_ROOT, wave.file)) : null,
+    traceDir: relativeRepoPathOrNull(traceDir),
+    statusFiles: observations
+      .filter((entry) => entry?.statusPath)
+      .map((entry) => ({
+        agentId: entry.agentId || null,
+        path: relativeRepoPathOrNull(entry.statusPath),
+        promptHash: entry.statusRecord?.promptHash || null,
+        code:
+          entry.statusRecord && Number.isFinite(Number(entry.statusRecord.code))
+            ? Number(entry.statusRecord.code)
+            : null,
+        completedAt: entry.statusRecord?.completedAt || null,
+        sha256: fileHashOrNull(entry.statusPath),
+      })),
+    summaryFiles: observations
+      .filter((entry) => entry?.summaryPath && fs.existsSync(entry.summaryPath))
+      .map((entry) => ({
+        agentId: entry.agentId || null,
+        path: relativeRepoPathOrNull(entry.summaryPath),
+        sha256: fileHashOrNull(entry.summaryPath),
+      })),
+    coordinationLogSha256: fileHashOrNull(coordinationLogPath),
+    assignmentsSha256: fileHashOrNull(assignmentsPath),
+    dependencySnapshotSha256: fileHashOrNull(dependencySnapshotPath),
+    gateSnapshotSha256: gateSnapshot ? hashText(JSON.stringify(gateSnapshot)) : null,
+    blockedReasons: Array.isArray(blockedReasons)
+      ? blockedReasons.map((reason) => ({
+          code: String(reason?.code || "").trim(),
+          detail: String(reason?.detail || "").trim(),
+        }))
+      : [],
+  };
+}
+
+export function markWaveCompleted(runStatePath, waveNumber, options = {}) {
   const state = readRunState(runStatePath);
-  state.completedWaves = normalizeCompletedWaves([...state.completedWaves, waveNumber]);
-  return writeRunState(runStatePath, state);
+  const nextState = appendRunStateTransition(state, {
+    waveNumber,
+    toState: "completed",
+    source: options.source || "live-launcher",
+    reasonCode: options.reasonCode || "wave-complete",
+    detail: options.detail || `Wave ${waveNumber} completed.`,
+    evidence: options.evidence || null,
+    at: options.at || toIsoTimestamp(),
+  });
+  return writeRunState(runStatePath, nextState);
 }
 
 export function resolveAutoNextWaveStart(allWaves, runStatePath) {
@@ -2490,8 +2724,12 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
 
   const reasons = [];
   const summariesByAgentId = {};
+  const statusEntries = [];
   const missingStatusAgents = [];
   let statusesReady = wave.agents.length > 0;
+  const coordinationLogPath = path.join(coordinationDir, `wave-${wave.wave}.jsonl`);
+  const assignmentsPath = path.join(assignmentsDir, `wave-${wave.wave}.json`);
+  const dependencySnapshotPath = path.join(dependencySnapshotsDir, `wave-${wave.wave}.json`);
 
   for (const agent of wave.agents) {
     const statusPath = path.join(statusDir, `wave-${wave.wave}-${agent.slug}.status`);
@@ -2501,6 +2739,13 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       statusesReady = false;
       continue;
     }
+    const summaryPath = agentSummaryPathFromStatusPath(statusPath);
+    statusEntries.push({
+      agentId: agent.agentId,
+      statusPath,
+      summaryPath,
+      statusRecord,
+    });
     const expectedPromptHash = hashAgentPromptFingerprint(agent);
     if (statusRecord.code !== 0) {
       pushWaveCompletionReason(
@@ -2657,7 +2902,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   }
 
   const coordinationState = readMaterializedCoordinationState(
-    path.join(coordinationDir, `wave-${wave.wave}.jsonl`),
+    coordinationLogPath,
   );
   const openClarificationIds = coordinationState.clarifications
     .filter((record) => isOpenCoordinationStatus(record.status))
@@ -2699,9 +2944,12 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       `Open human feedback records: ${openHumanFeedbackIds.join(", ")}.`,
     );
   }
-  const capabilityAssignments = readJsonOrNull(path.join(assignmentsDir, `wave-${wave.wave}.json`));
-  const blockingAssignments = Array.isArray(capabilityAssignments)
-    ? capabilityAssignments.filter((assignment) => assignment?.blocking)
+  const capabilityAssignments = readAssignmentSnapshot(assignmentsPath, {
+    lane: options.lane || null,
+    wave: wave.wave,
+  });
+  const blockingAssignments = Array.isArray(capabilityAssignments?.assignments)
+    ? capabilityAssignments.assignments.filter((assignment) => assignment?.blocking)
     : [];
   const unresolvedAssignments = blockingAssignments.filter((assignment) => !assignment?.assignedAgentId);
   if (unresolvedAssignments.length > 0) {
@@ -2717,9 +2965,10 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       `Helper assignments remain open (${blockingAssignments.map((assignment) => assignment.requestId || assignment.id).join(", ")}).`,
     );
   }
-  const dependencySnapshot = readJsonOrNull(
-    path.join(dependencySnapshotsDir, `wave-${wave.wave}.json`),
-  );
+  const dependencySnapshot = readDependencySnapshot(dependencySnapshotPath, {
+    lane: options.lane || null,
+    wave: wave.wave,
+  });
   const unresolvedInboundAssignments = Array.isArray(dependencySnapshot?.unresolvedInboundAssignments)
     ? dependencySnapshot.unresolvedInboundAssignments
     : [];
@@ -2747,6 +2996,14 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   return {
     ok: reasons.length === 0,
     reasons,
+    evidence: buildRunStateEvidence({
+      wave,
+      statusEntries,
+      coordinationLogPath,
+      assignmentsPath,
+      dependencySnapshotPath,
+      blockedReasons: reasons,
+    }),
   };
 }
 
@@ -2768,23 +3025,40 @@ export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusD
   const completedFromStatus = diagnostics
     .filter((diagnostic) => diagnostic.ok)
     .map((diagnostic) => diagnostic.wave);
-  const blockedWaveNumbers = new Set(
-    diagnostics.filter((diagnostic) => !diagnostic.ok).map((diagnostic) => diagnostic.wave),
-  );
   const before = readRunState(runStatePath);
-  const firstMerge = normalizeCompletedWaves([
-    ...before.completedWaves.filter((waveNumber) => !blockedWaveNumbers.has(waveNumber)),
-    ...completedFromStatus,
-  ]);
+  const firstMerge = normalizeCompletedWaves(
+    diagnostics
+      .filter((diagnostic) => diagnostic.ok)
+      .map((diagnostic) => diagnostic.wave)
+      .concat(
+        before.completedWaves.filter((waveNumber) => {
+          const diagnostic = diagnostics.find((entry) => entry.wave === waveNumber);
+          return !diagnostic || diagnostic.ok;
+        }),
+      ),
+  );
   const latest = readRunState(runStatePath);
-  const merged = normalizeCompletedWaves([
-    ...latest.completedWaves.filter((waveNumber) => !blockedWaveNumbers.has(waveNumber)),
-    ...completedFromStatus,
-  ]);
-  let state = latest;
-  if (!arraysEqual(merged, latest.completedWaves)) {
-    state = writeRunState(runStatePath, { completedWaves: merged });
+  let nextState = latest;
+  for (const diagnostic of diagnostics) {
+    const toState = diagnostic.ok ? "completed" : "blocked";
+    const reasonCode = diagnostic.ok
+      ? "status-reconcile-complete"
+      : diagnostic.reasons[0]?.code || "status-reconcile-blocked";
+    const detail = diagnostic.ok
+      ? `Wave ${diagnostic.wave} reconstructed as complete from status files.`
+      : diagnostic.reasons.map((reason) => reason.detail).filter(Boolean).join(" ");
+    nextState = appendRunStateTransition(nextState, {
+      waveNumber: diagnostic.wave,
+      toState,
+      source: "status-reconcile",
+      reasonCode,
+      detail,
+      evidence: diagnostic.evidence || null,
+      at: diagnostic.evidence?.statusFiles?.find((entry) => entry.completedAt)?.completedAt || toIsoTimestamp(),
+    });
   }
+  const state = writeRunState(runStatePath, nextState);
+  const merged = state.completedWaves;
   return {
     completedFromStatus,
     addedFromBefore: firstMerge.filter((waveNumber) => !before.completedWaves.includes(waveNumber)),

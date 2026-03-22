@@ -217,6 +217,13 @@ File ownership (only touch these paths):
     expect(dryRunResult.status).toBe(0);
 
     const dryRunRoot = path.join(repoDir, ".tmp", "main-wave-launcher", "dry-run");
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dryRunRoot, "waves.manifest.json"), "utf8"),
+    );
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      kind: "wave-manifest",
+    });
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a0.prompt.md"))).toBe(true);
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a8.prompt.md"))).toBe(true);
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a9.prompt.md"))).toBe(true);

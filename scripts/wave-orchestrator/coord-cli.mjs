@@ -18,6 +18,7 @@ import {
   writeCoordinationBoardProjection,
   writeJsonArtifact,
 } from "./coordination-store.mjs";
+import { writeAssignmentSnapshot, writeDependencySnapshot } from "./artifact-schemas.mjs";
 import {
   buildLanePaths,
   ensureDirectory,
@@ -156,14 +157,6 @@ export async function runCoordinationCli(argv) {
     runVariant: options.dryRun ? "dry-run" : undefined,
     adhocRunId: options.runId || null,
   });
-  ensureDirectory(lanePaths.coordinationDir);
-  ensureDirectory(lanePaths.assignmentsDir);
-  ensureDirectory(lanePaths.inboxesDir);
-  ensureDirectory(lanePaths.messageboardsDir);
-  ensureDirectory(lanePaths.docsQueueDir);
-  ensureDirectory(lanePaths.ledgerDir);
-  ensureDirectory(lanePaths.integrationDir);
-  ensureDirectory(lanePaths.dependencySnapshotsDir);
   if (options.wave === null && options.runId) {
     options.wave = 0;
   }
@@ -172,6 +165,25 @@ export async function runCoordinationCli(argv) {
   }
   const wave = loadWave(lanePaths, options.wave);
   const logPath = coordinationLogPath(lanePaths, wave.wave);
+  if (subcommand === "show") {
+    const state = readMaterializedCoordinationState(logPath);
+    if (options.json) {
+      console.log(JSON.stringify(serializeCoordinationState(state), null, 2));
+    } else {
+      for (const record of state.latestRecords) {
+        console.log(`${record.updatedAt} ${record.agentId} ${record.kind}/${record.status} ${record.summary}`);
+      }
+    }
+    return;
+  }
+  ensureDirectory(lanePaths.coordinationDir);
+  ensureDirectory(lanePaths.assignmentsDir);
+  ensureDirectory(lanePaths.inboxesDir);
+  ensureDirectory(lanePaths.messageboardsDir);
+  ensureDirectory(lanePaths.docsQueueDir);
+  ensureDirectory(lanePaths.ledgerDir);
+  ensureDirectory(lanePaths.integrationDir);
+  ensureDirectory(lanePaths.dependencySnapshotsDir);
   updateSeedRecords(logPath, {
     lane: lanePaths.lane,
     wave: wave.wave,
@@ -238,22 +250,18 @@ export async function runCoordinationCli(argv) {
     ledger,
     capabilityRouting: lanePaths.capabilityRouting,
   });
-  writeJsonArtifact(assignmentsPath(lanePaths, wave.wave), capabilityAssignments);
-  writeJsonArtifact(dependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot);
+  writeAssignmentSnapshot(assignmentsPath(lanePaths, wave.wave), capabilityAssignments, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+  });
+  writeDependencySnapshot(dependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+  });
   writeDependencySnapshotMarkdown(
     dependencySnapshotMarkdownPath(lanePaths, wave.wave),
     dependencySnapshot,
   );
-  if (subcommand === "show") {
-    if (options.json) {
-      console.log(JSON.stringify(serializeCoordinationState(state), null, 2));
-    } else {
-      for (const record of state.latestRecords) {
-        console.log(`${record.updatedAt} ${record.agentId} ${record.kind}/${record.status} ${record.summary}`);
-      }
-    }
-    return;
-  }
   if (subcommand === "render") {
     const boardPath = messageBoardPath(lanePaths, wave.wave);
     writeCoordinationBoardProjection(boardPath, {

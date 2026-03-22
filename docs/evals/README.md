@@ -14,7 +14,18 @@ It has two jobs:
 
 The catalog is reference metadata, not a run-history database. It tells the wave author and `cont-EVAL` what kinds of checks are allowed and what external benchmark or paper baseline those checks map to.
 
-For full authored wave examples that use these patterns, see [docs/reference/sample-waves.md](../reference/sample-waves.md), especially the `cont-EVAL` sample wave.
+For a full authored wave example that uses these patterns, see [docs/reference/sample-waves.md](../reference/sample-waves.md).
+
+## Migrating From Legacy Evaluator Waves
+
+If your `0.5.4`-era repo still talks about a single `evaluator` role, split that surface before adopting `0.6`:
+
+- keep `A0` as `cont-QA` for the final closure verdict and `[wave-gate]`
+- add `E0` only when the wave needs benchmark-driven tuning or service-output evaluation
+- treat `cont-EVAL` as report-only unless the wave explicitly gives `E0` owned implementation files
+- keep `## Eval targets` at the wave level so `cont-EVAL` has an exact contract to satisfy
+
+`cont-EVAL` is not a rename of `cont-QA`. In `0.6`, `E0` proves the eval contract before integration, while `A0` still owns the final release verdict after documentation closure.
 
 ## When To Use Delegated Vs Pinned Targets
 

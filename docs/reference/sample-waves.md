@@ -1,34 +1,38 @@
 ---
 title: "Sample Waves"
-summary: "Showcase-first example waves that demonstrate the modern Wave surface after 0.5.4."
+summary: "A showcase-first sample wave that demonstrates the current 0.6 Wave surface."
 ---
 
 # Sample Waves
 
-This guide points to a small set of showcase-first sample waves that demonstrate the modern Wave surface after `0.5.4`.
+This guide points to one showcase-first sample wave that demonstrates the current `0.6` authored Wave surface.
 
-These examples are intentionally denser than a typical production wave. Their job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready files.
+The example is intentionally denser than a typical production wave. Its job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready file.
 
-## Example Set
+## Canonical Example
 
-- [Implementation and coordination sample](../plans/examples/wave-example-implementation.md)
-  Shows the standard closure-role structure, executor profiles, cross-runtime skills, capabilities, deliverables, exit contracts, component ownership, and Context7 defaults.
-- [cont-EVAL and benchmarking sample](../plans/examples/wave-example-eval.md)
-  Shows `E0`, `## Eval targets`, delegated versus pinned benchmark selection, and the new coordination benchmark families.
-- [Proof-first live-wave sample](../plans/examples/wave-example-live-proof.md)
-  Shows `pilot-live` promotion, `### Proof artifacts`, sticky retry, operator command capture, deploy environments, and proof-centric closure expectations.
+- [Full modern sample wave](../plans/examples/wave-example-live-proof.md)
+  Shows the combined `0.6` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
 
-## What Each Example Teaches
+## What This Example Teaches
 
-| Example | Main focus | Best for learning |
-| --- | --- | --- |
-| `wave-example-implementation.md` | Modern baseline authored wave | executor blocks, skills, capabilities, deliverables, exit contracts, component promotions, closure roles |
-| `wave-example-eval.md` | `cont-EVAL` and benchmark authoring | `E0`, `## Eval targets`, delegated vs pinned benchmarks, coordination benchmark families |
-| `wave-example-live-proof.md` | Proof-first live validation | `### Proof artifacts`, sticky retry, operator evidence, deploy environments, infra/deploy verifier patterns |
+- the standard closure-role structure with `A0`, `E0`, `A8`, and `A9`
+- wave-level `## Eval targets`
+- delegated versus pinned benchmark selection
+- coordination benchmark families from `docs/evals/benchmark-catalog.json`
+- richer executor blocks, runtime budgets, and retry policy
+- cross-runtime `### Skills`
+- helper-routing hints via `### Capabilities`
+- `### Deliverables`
+- `### Exit contract`
+- proof-first `### Proof artifacts`
+- sticky retry for proof-bearing owners
+- deploy environments and provider-skill examples
+- infra and deploy-verifier specialist slices
 
 ## Feature Coverage Map
 
-Together these samples cover the main surfaces added or hardened after `0.5.4`:
+This sample covers the main surfaces added or hardened for `0.6`:
 
 - planner-era authored wave structure
 - cross-runtime `### Skills`
@@ -57,27 +61,27 @@ Adapt more aggressively when:
 - your repo has different role ids or role prompts
 - your component promotions and maturity levels differ
 - your runtime policy uses different executor profiles or runtime mix targets
-- your deploy environments or provider skills differ from the examples
+- your deploy environments or provider skills differ from the example
 
-## How These Samples Map To Other Docs
+## How This Example Maps To Other Docs
 
-- Use [docs/guides/planner.md](../guides/planner.md) for the planner-generated baseline, then use these samples to see how a human would enrich the generated draft.
-- Use [docs/evals/README.md](../evals/README.md) with the eval sample when you need to choose between delegated and pinned benchmark targets.
-- Use [docs/reference/live-proof-waves.md](./live-proof-waves.md) with the live-proof sample when you need proof-first authoring for `pilot-live` and above.
+- Use [docs/guides/planner.md](../guides/planner.md) for the planner-generated baseline, then use this sample to see how a human would enrich the generated draft.
+- Use [docs/evals/README.md](../evals/README.md) with this sample when you need to see delegated and pinned benchmark targets in a real wave.
+- Use [docs/reference/live-proof-waves.md](./live-proof-waves.md) with this sample when you need proof-first authoring for `pilot-live` and above.
 - Use [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md) for the operational runbook that explains how the launcher interprets these sections.
 
 ## Suggested Reading Order
 
-1. Start with [Implementation and coordination sample](../plans/examples/wave-example-implementation.md).
-2. Read [cont-EVAL and benchmarking sample](../plans/examples/wave-example-eval.md) next if the wave includes `E0`.
-3. Read [Proof-first live-wave sample](../plans/examples/wave-example-live-proof.md) whenever the wave claims `pilot-live` or above.
+1. Start with [Full modern sample wave](../plans/examples/wave-example-live-proof.md).
+2. Read [docs/evals/README.md](../evals/README.md) if you want more background on benchmark target selection.
+3. Read [docs/reference/live-proof-waves.md](./live-proof-waves.md) if you want more detail on proof-first `pilot-live` authoring.
 
-## Why These Are In `docs/plans/examples/`
+## Why This Example Lives In `docs/plans/examples/`
 
-The examples live outside `docs/plans/waves/` on purpose.
+The example lives outside `docs/plans/waves/` on purpose.
 
-That keeps them:
+That keeps it:
 
 - easy to browse as teaching material
 - clearly separate from the repo's real launcher-facing wave sequence
-- safe to evolve as reference material without implying that they are part of the current lane's actual plan history
+- safe to evolve as reference material without implying that it is part of the current lane's actual plan history

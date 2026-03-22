@@ -139,6 +139,7 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
       env: launchSpec.env || {},
       useRateLimitRetries: launchSpec.useRateLimitRetries === true,
       invocationLines: launchSpec.invocationLines,
+      limits: launchSpec.limits || null,
       skills: summarizeResolvedSkills(agent.skillsResolved),
     });
     return {

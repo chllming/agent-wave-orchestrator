@@ -846,6 +846,55 @@ describe("resolveRelaunchRuns", () => {
     expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A9"]);
   });
 
+  it("retries only waiting sibling owners for shared promoted components", () => {
+    const agentRuns = [
+      { agent: { agentId: "A1", capabilities: ["runtime"] } },
+      { agent: { agentId: "A2", capabilities: ["runtime"] } },
+      { agent: { agentId: "A3", capabilities: ["runtime"] } },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [
+        {
+          agentId: "A2",
+          statusCode: "shared-component-sibling-pending",
+          componentId: "rollout-cores-and-cluster-view",
+          satisfiedAgentIds: ["A1"],
+          waitingOnAgentIds: ["A2", "A3"],
+        },
+      ],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [],
+          requests: [],
+          blockers: [],
+        },
+        capabilityAssignments: [],
+        dependencySnapshot: {
+          openInbound: [],
+        },
+        ledger: { phase: "running", attempt: 1, tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+        integrationAgentId: "A8",
+        laneProfile: {
+          runtimePolicy: {
+            runtimeMixTargets: {},
+          },
+        },
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A2", "A3"]);
+  });
+
   it("switches failed agents to an allowed fallback executor on retry", () => {
     const agentRuns = [
       {
@@ -1639,6 +1688,159 @@ describe("readWaveComponentGate", () => {
       ok: false,
       statusCode: "component-promotion-gap",
       componentId: "wave-parser-and-launcher",
+    });
+  });
+
+  it("treats shared promoted components as waiting on sibling proof instead of blaming the landed owner", () => {
+    const dir = makeTempDir();
+    const a1StatusPath = path.join(dir, "wave-0-a1.status");
+    const a1SummaryPath = path.join(dir, "wave-0-a1.summary.json");
+    const a1LogPath = path.join(dir, "wave-0-a1.log");
+    const a2StatusPath = path.join(dir, "wave-0-a2.status");
+    const a2SummaryPath = path.join(dir, "wave-0-a2.summary.json");
+    const a2LogPath = path.join(dir, "wave-0-a2.log");
+
+    fs.writeFileSync(a1StatusPath, JSON.stringify({ code: 0, promptHash: "hash-a1" }, null, 2), "utf8");
+    fs.writeFileSync(a1LogPath, "", "utf8");
+    fs.writeFileSync(
+      a1SummaryPath,
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["src/a1.ts"],
+          },
+          components: [
+            {
+              componentId: "rollout-cores-and-cluster-view",
+              level: "repo-landed",
+              state: "met",
+            },
+          ],
+          logPath: a1LogPath,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    fs.writeFileSync(a2StatusPath, JSON.stringify({ code: 1, promptHash: "hash-a2" }, null, 2), "utf8");
+    fs.writeFileSync(a2LogPath, "", "utf8");
+    fs.writeFileSync(
+      a2SummaryPath,
+      JSON.stringify(
+        {
+          agentId: "A2",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["src/a2.ts"],
+          },
+          components: [],
+          logPath: a2LogPath,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      readWaveComponentGate(
+        {
+          wave: 0,
+          componentPromotions: [
+            {
+              componentId: "rollout-cores-and-cluster-view",
+              targetLevel: "repo-landed",
+            },
+          ],
+          agents: [
+            {
+              agentId: "A1",
+              components: ["rollout-cores-and-cluster-view"],
+              componentTargets: {
+                "rollout-cores-and-cluster-view": "repo-landed",
+              },
+              exitContract: {
+                completion: "contract",
+                durability: "none",
+                proof: "unit",
+                docImpact: "owned",
+              },
+            },
+            {
+              agentId: "A2",
+              components: ["rollout-cores-and-cluster-view"],
+              componentTargets: {
+                "rollout-cores-and-cluster-view": "repo-landed",
+              },
+              exitContract: {
+                completion: "contract",
+                durability: "none",
+                proof: "unit",
+                docImpact: "owned",
+              },
+            },
+          ],
+        },
+        [
+          {
+            agent: {
+              agentId: "A1",
+              components: ["rollout-cores-and-cluster-view"],
+              componentTargets: {
+                "rollout-cores-and-cluster-view": "repo-landed",
+              },
+              exitContract: {
+                completion: "contract",
+                durability: "none",
+                proof: "unit",
+                docImpact: "owned",
+              },
+            },
+            statusPath: a1StatusPath,
+            logPath: a1LogPath,
+          },
+          {
+            agent: {
+              agentId: "A2",
+              components: ["rollout-cores-and-cluster-view"],
+              componentTargets: {
+                "rollout-cores-and-cluster-view": "repo-landed",
+              },
+              exitContract: {
+                completion: "contract",
+                durability: "none",
+                proof: "unit",
+                docImpact: "owned",
+              },
+            },
+            statusPath: a2StatusPath,
+            logPath: a2LogPath,
+          },
+        ],
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "shared-component-sibling-pending",
+      agentId: "A2",
+      componentId: "rollout-cores-and-cluster-view",
+      satisfiedAgentIds: ["A1"],
+      waitingOnAgentIds: ["A2"],
     });
   });
 });

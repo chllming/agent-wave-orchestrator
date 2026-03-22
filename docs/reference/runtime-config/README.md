@@ -1,6 +1,6 @@
 # Runtime Configuration Reference
 
-This directory is the canonical reference for executor configuration in Wave `0.6.1`.
+This directory is the canonical reference for executor configuration in the packaged Wave release.
 
 Use it when you need the full supported surface for:
 
@@ -65,7 +65,7 @@ These fields are shared across runtimes:
 | Model | `model` in profile, `executors.claude.model`, `executors.opencode.model` | `model` | Codex uses shared `model` from profile or agent only |
 | Fallbacks | `fallbacks` in profile | `fallbacks` | Runtime ids used for retry-time reassignment |
 | Tags | `tags` in profile | `tags` | Stored in resolved executor state for policy and traces |
-| Budget turns | `budget.turns` in profile | `budget.turns` | Seeds Claude `maxTurns` and OpenCode `steps` when runtime-specific values are absent |
+| Budget turns | `budget.turns` in profile | `budget.turns` | Seeds Claude `maxTurns` and OpenCode `steps` when runtime-specific values are absent; it does not set a Codex turn limit |
 | Budget minutes | `budget.minutes` in profile | `budget.minutes` | Caps attempt timeout |
 
 ## Runtime Pages
@@ -83,7 +83,7 @@ Wave writes runtime artifacts here:
 
 Common files:
 
-- `launch-preview.json`: resolved invocation lines, env vars, and retry mode
+- `launch-preview.json`: resolved invocation lines, env vars, retry mode, and structured attempt/turn-limit metadata
 - `skills.resolved.md`: compact metadata-first skill catalog for the selected agent and runtime
 - `skills.expanded.md`: full canonical/debug skill payload with `SKILL.md` bodies and adapters
 - `skills.metadata.json`: resolved skill ids, activation metadata, permissions, hashes, and generated artifact paths
@@ -100,7 +100,7 @@ Runtime-specific delivery:
 - OpenCode injects the compact catalog into `opencode.json` and attaches `skill.json`, `SKILL.md`, the selected adapter, and recursive `references/**` files through `--file`.
 - Local keeps skills prompt-only.
 
-`launch-preview.json` also records the resolved skill metadata so dry-run can verify the exact runtime plus skill combination before any live launch.
+`launch-preview.json` also records the resolved skill metadata plus a `limits` section. For Claude and OpenCode, that section reports the known turn ceiling and whether it came from the runtime-specific setting or generic `budget.turns`. For Codex, it explicitly records that Wave emitted no turn-limit flag and that any effective ceiling may come from the selected Codex profile or upstream runtime.
 
 ## Recommended Validation Path
 

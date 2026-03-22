@@ -268,7 +268,7 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
 - Skills resolve only after that executor choice is known. Runtime-specific skill overlays are regenerated whenever retry-time fallback changes the selected executor.
 - Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
 - Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
-- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set.
+- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set; Codex turn ceilings remain external to Wave and show up in preview metadata as opaque when Wave cannot inspect them.
 - The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 Runtime authoring examples:
@@ -302,7 +302,7 @@ Runtime authoring examples:
 - opencode.config_json: {"instructions":["Keep shared-plan edits concise."]}
 ````
 
-Dry-run is the intended validation path for these runtime surfaces. `wave launch --dry-run --no-dashboard` now writes compiled prompts, merged runtime overlays, and `launch-preview.json` files under `.tmp/<lane>-wave-launcher/dry-run/` so the harness can verify invocation shape without requiring the executor binaries to run.
+Dry-run is the intended validation path for these runtime surfaces. `wave launch --dry-run --no-dashboard` now writes compiled prompts, merged runtime overlays, and `launch-preview.json` files under `.tmp/<lane>-wave-launcher/dry-run/` so the harness can verify invocation shape, attempt budgets, and known or opaque turn-limit metadata without requiring the executor binaries to run.
 
 ## Human Feedback Queue
 
@@ -316,7 +316,7 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. When present, `cont-EVAL` must satisfy its declared eval targets before integration can close. Optional security review then runs before integration so the reviewer can publish findings and approval-sensitive actions while the wave is still active. In the default planner shape `E0` is report-only; if a wave explicitly assigns `E0` non-report files, the launcher also applies the normal implementation proof gates to that role. Security reviewers stay report-only by default. Documentation and cont-QA closure only run after integration is explicitly ready for doc closure; if `cont-EVAL`, security review, or integration reports more work, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the relevant closure steward.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. When present, `cont-EVAL` must satisfy its declared eval targets before integration can close. Optional security review then runs before integration so the reviewer can publish findings and approval-sensitive actions while the wave is still active. In the default planner shape `E0` is report-only; if a wave explicitly assigns `E0` non-report files, the launcher also applies the normal implementation proof gates to that role. Security reviewers stay report-only by default. Documentation and cont-QA closure only run after integration is explicitly ready for doc closure; if `cont-EVAL`, security review, or integration reports more work, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the relevant closure steward. When multiple implementation agents share a promoted component, owners that already landed valid proof stay reusable while the launcher retries only the sibling owners that still owe closure evidence.
 
 Live closure is fail-closed:
 

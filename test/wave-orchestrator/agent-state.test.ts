@@ -452,6 +452,47 @@ describe("validateImplementationSummary", () => {
       statusCode: "missing-wave-proof",
     });
   });
+
+  it("adds Codex launch-preview guidance to max-turn termination hints", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1.log");
+    fs.writeFileSync(logPath, "Reached max turns (12)\n", "utf8");
+
+    const summary = buildAgentExecutionSummary({
+      agent: {
+        agentId: "A1",
+        executorResolved: {
+          id: "codex",
+          codex: {
+            profileName: "review",
+          },
+        },
+      },
+      statusRecord: {
+        code: 1,
+      },
+      logPath,
+    });
+
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        summary,
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-wave-proof",
+      detail: expect.stringContaining("Wave does not set a Codex turn-limit flag"),
+    });
+  });
 });
 
 describe("validateSecuritySummary", () => {

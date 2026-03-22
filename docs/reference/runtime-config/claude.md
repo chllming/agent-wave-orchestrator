@@ -12,6 +12,7 @@ Wave launches Claude headlessly with `claude -p --no-session-persistence`.
 | Prompt mode | `executors.claude.appendSystemPromptMode` | n/a | Uses `--append-system-prompt-file` or `--system-prompt-file` |
 | Permission mode | `executors.claude.permissionMode`, `executors.profiles.<name>.claude.permissionMode` | `claude.permission_mode` | Adds `--permission-mode <mode>` |
 | Permission prompt tool | `executors.claude.permissionPromptTool`, `executors.profiles.<name>.claude.permissionPromptTool` | `claude.permission_prompt_tool` | Adds `--permission-prompt-tool <tool>` |
+| Effort | `executors.claude.effort`, `executors.profiles.<name>.claude.effort` | `claude.effort` | Adds `--effort low|medium|high|max` |
 | Max turns | `executors.claude.maxTurns`, `executors.profiles.<name>.claude.maxTurns` | `claude.max_turns` | Adds `--max-turns <n>` |
 | MCP config | `executors.claude.mcpConfig`, `executors.profiles.<name>.claude.mcpConfig` | `claude.mcp_config` | Adds repeated `--mcp-config <path>` |
 | Strict MCP mode | `executors.claude.strictMcpConfig`, `executors.profiles.<name>.claude.strictMcpConfig` | n/a | Adds `--strict-mcp-config` |
@@ -26,6 +27,8 @@ Wave launches Claude headlessly with `claude -p --no-session-persistence`.
 ## Overlay Behavior
 
 Wave always writes `claude-system-prompt.txt` for the harness runtime instructions.
+
+Wave validates the effort enum only. Model-specific compatibility for values such as `max` remains enforced by Claude Code itself.
 
 Wave writes `claude-settings.json` only when at least one inline overlay input is present:
 
@@ -57,6 +60,7 @@ If no inline overlay data is present, Wave passes the base `claude.settings` fil
         },
         "claude": {
           "agent": "reviewer",
+          "effort": "high",
           "permissionMode": "plan",
           "allowedTools": ["Read"],
           "disallowedTools": ["Edit"]
@@ -84,6 +88,7 @@ If no inline overlay data is present, Wave passes the base `claude.settings` fil
 
 - id: claude
 - model: claude-sonnet-4-6
+- claude.effort: high
 - claude.permission_mode: plan
 - claude.max_turns: 4
 - claude.settings_json: {"permissions":{"allow":["Read"]}}
@@ -102,4 +107,4 @@ For a dry run, inspect:
 - `claude-settings.json`, when generated
 - `launch-preview.json`
 
-`launch-preview.json` shows the final `claude -p` invocation and whether `--settings`, `--allowedTools`, `--disallowedTools`, `--mcp-config`, or `--system-prompt-file` were included.
+`launch-preview.json` shows the final `claude -p` invocation, whether `--effort`, `--settings`, `--allowedTools`, `--disallowedTools`, `--mcp-config`, or `--system-prompt-file` were included, and the resolved `limits` block for attempt timeout plus known turn ceiling.

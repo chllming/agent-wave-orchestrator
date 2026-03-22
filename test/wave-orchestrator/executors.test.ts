@@ -128,6 +128,7 @@ describe("executor parsing and resolution", () => {
 - id: claude
 - model: claude-sonnet-4-6
 - claude.agent: reviewer
+- claude.effort: high
 - claude.permission_mode: plan
 - claude.max_turns: 4
 - claude.mcp_config: .tmp/mcp.json
@@ -172,6 +173,7 @@ File ownership (only touch these paths):
       codex: null,
       claude: {
         agent: "reviewer",
+        effort: "high",
         permissionMode: "plan",
         maxTurns: 4,
         mcpConfig: [".tmp/mcp.json"],
@@ -183,6 +185,7 @@ File ownership (only touch these paths):
       model: "claude-sonnet-4-6",
       claude: {
         agent: "reviewer",
+        effort: "high",
         permissionMode: "plan",
         maxTurns: 4,
         mcpConfig: [".tmp/mcp.json"],
@@ -391,6 +394,12 @@ describe("buildExecutorLaunchSpec", () => {
     expect(invocation).toContain("--add-dir '../shared'");
     expect(invocation).toContain("--json");
     expect(invocation).toContain("--ephemeral");
+    expect(spec.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: null,
+      turnLimitSource: "not-set-by-wave",
+    });
+    expect(spec.limits.notes[0]).toContain("Wave emits no Codex turn-limit flag");
   });
 
   it("writes a Claude overlay file and builds a headless invocation", () => {
@@ -430,9 +439,11 @@ describe("buildExecutorLaunchSpec", () => {
             model: "claude-sonnet-4-6",
             agent: "reviewer",
             appendSystemPromptMode: "append",
+            effort: "high",
             permissionMode: "plan",
             permissionPromptTool: null,
             maxTurns: 3,
+            maxTurnsSource: "claude.maxTurns",
             mcpConfig: [".tmp/mcp.json"],
             strictMcpConfig: true,
             settings: baseSettingsPath,
@@ -487,9 +498,15 @@ describe("buildExecutorLaunchSpec", () => {
     const invocation = spec.invocationLines.join("\n");
     expect(invocation).toContain("claude -p --no-session-persistence");
     expect(invocation).toContain("--append-system-prompt-file");
+    expect(invocation).toContain("--effort 'high'");
     expect(invocation).toContain(`--settings '${path.join(overlayDir, "claude-settings.json")}'`);
     expect(invocation).toContain("--max-turns '3'");
     expect(invocation).toContain("--strict-mcp-config");
+    expect(spec.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: 3,
+      turnLimitSource: "claude.maxTurns",
+    });
   });
 
   it("writes an OpenCode overlay config and builds a headless invocation", () => {
@@ -530,6 +547,7 @@ describe("buildExecutorLaunchSpec", () => {
             files: ["docs/runtime.md", "README.md"],
             format: "json",
             steps: 5,
+            stepsSource: "opencode.steps",
             instructions: ["docs/reference/repository-guidance.md"],
             permission: {
               edit: "ask",
@@ -577,5 +595,10 @@ describe("buildExecutorLaunchSpec", () => {
     expect(invocation).toContain("--file 'docs/runtime.md'");
     expect(invocation).toContain("--file 'README.md'");
     expect(invocation).toContain("--format 'json'");
+    expect(spec.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: 5,
+      turnLimitSource: "opencode.steps",
+    });
   });
 });

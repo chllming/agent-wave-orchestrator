@@ -3,6 +3,24 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.6.2",
+      "date": "2026-03-22",
+      "summary": "Runtime preview visibility, dashboard/operator UX fixes, dry-run cleanup, and safer shared-component retries.",
+      "features": [
+        "Claude runtime config now exposes first-class `claude.effort`, and runtime previews now include structured `limits` metadata for known attempt and turn ceilings.",
+        "Codex previews and docs now make turn-limit visibility explicit: Wave records when it emitted no Codex turn-limit flag and warns that any effective ceiling may come from the selected Codex profile or upstream runtime.",
+        "The dashboard surface now distinguishes done, active, pending, and failed counts, keeps a stable `Current Wave Dashboard` terminal target, and adds simple TTY color cues for faster scanning.",
+        "Dry-run executor preview directories are pruned when wave agent sets shrink, so stale overlay folders no longer linger under `.tmp/.../dry-run/executors/`.",
+        "Shared promoted-component retries now preserve already-landed owner slices and relaunch only the sibling owners still required for closure proof."
+      ],
+      "manualSteps": [
+        "After upgrading, rerun `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` to inspect the new preview `limits` metadata and confirm your repo runtime config still resolves as expected.",
+        "If you relied on a local Claude wrapper only to inject `--effort`, move that setting into `wave.config.json` or the agent `### Executor` block and retire the wrapper when convenient.",
+        "If you document Codex turn ceilings in repo-local guidance, update that guidance to reflect that Wave now reports Codex ceiling visibility as opaque unless the limit is surfaced by the selected Codex profile or runtime."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.6.1",
       "date": "2026-03-22",
       "summary": "Patch release that aligns the published package with merged main and refreshed 0.6.1 release docs.",

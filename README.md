@@ -75,17 +75,17 @@ Wave is built to mitigate those failures with canonical shared state, generated 
 
 Current release:
 
-- `@chllming/wave-orchestration@0.6.1`
-- Release tag: [`v0.6.1`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.1)
+- `@chllming/wave-orchestration@0.6.2`
+- Release tag: [`v0.6.2`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.2)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.6.1`:
+Highlights in `0.6.2`:
 
-- `cont-EVAL` (`E0`) is now a first-class optional eval stage before integration, separate from final `cont-QA` closure.
-- Optional security review now has a dedicated role, report path, and `[wave-security]` closure marker.
-- `wave adhoc plan|run|show|promote` now supports transient operator requests on the same launcher substrate.
-- Starter docs and skills now cover the current `0.6.1` closure, benchmark, security, and provider surfaces.
+- Runtime previews and docs now expose first-class Claude effort plus structured limit metadata, making known Claude/OpenCode ceilings explicit and Codex opacity explicit.
+- The global dashboard and VS Code terminal surfaces are easier to read: active vs pending counts are distinct, the current-wave dashboard keeps a stable terminal name, and TTY dashboards now use simple color cues.
+- Dry-run executor preview directories now prune stale agent folders when a wave shrinks.
+- Shared promoted-component retries now preserve already-landed owner slices and relaunch only the sibling owners still needed for closure.
 
 Requirements:
 

@@ -217,6 +217,7 @@ function buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
   appendSingleValueFlag(tokens, "--agent", executor.claude.agent);
   appendSingleValueFlag(tokens, "--permission-mode", executor.claude.permissionMode);
   appendSingleValueFlag(tokens, "--permission-prompt-tool", executor.claude.permissionPromptTool);
+  appendSingleValueFlag(tokens, "--effort", executor.claude.effort);
   appendSingleValueFlag(tokens, "--max-turns", executor.claude.maxTurns);
   appendRepeatedFlag(tokens, "--mcp-config", executor.claude.mcpConfig);
   appendSingleValueFlag(tokens, "--settings", settingsPath);
@@ -299,6 +300,55 @@ function buildLocalLaunchSpec({ promptPath, logPath }) {
   };
 }
 
+function buildLaunchLimitsMetadata(agent) {
+  const executor = agent?.executorResolved || {};
+  const executorId = normalizeExecutorMode(executor.id || DEFAULT_EXECUTOR_MODE);
+  const attemptTimeoutMinutes = executor?.budget?.minutes ?? null;
+  if (executorId === "claude") {
+    const source = executor?.claude?.maxTurnsSource || null;
+    return {
+      attemptTimeoutMinutes,
+      knownTurnLimit: executor?.claude?.maxTurns ?? null,
+      turnLimitSource: source,
+      notes:
+        source === "budget.turns"
+          ? ["Known turn limit was derived from generic budget.turns."]
+          : [],
+    };
+  }
+  if (executorId === "opencode") {
+    const source = executor?.opencode?.stepsSource || null;
+    return {
+      attemptTimeoutMinutes,
+      knownTurnLimit: executor?.opencode?.steps ?? null,
+      turnLimitSource: source,
+      notes:
+        source === "budget.turns"
+          ? ["Known turn limit was derived from generic budget.turns."]
+          : [],
+    };
+  }
+  if (executorId === "codex") {
+    const profileNote = executor?.codex?.profileName
+      ? ` via Codex profile ${executor.codex.profileName}`
+      : "";
+    return {
+      attemptTimeoutMinutes,
+      knownTurnLimit: null,
+      turnLimitSource: "not-set-by-wave",
+      notes: [
+        `Wave emits no Codex turn-limit flag; any effective ceiling may come from the selected Codex profile${profileNote} or the upstream Codex runtime.`,
+      ],
+    };
+  }
+  return {
+    attemptTimeoutMinutes,
+    knownTurnLimit: null,
+    turnLimitSource: "not-applicable",
+    notes: ["Local executor does not use model turn limits."],
+  };
+}
+
 function buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection }) {
   const executor = agent.executorResolved;
   return {
@@ -329,16 +379,29 @@ function buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection }) {
 export function buildExecutorLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection }) {
   const executorId = normalizeExecutorMode(agent?.executorResolved?.id || DEFAULT_EXECUTOR_MODE);
   ensureDirectory(overlayDir);
+  const limits = buildLaunchLimitsMetadata(agent);
   if (executorId === "local") {
-    return buildLocalLaunchSpec({ promptPath, logPath });
+    return {
+      ...buildLocalLaunchSpec({ promptPath, logPath }),
+      limits,
+    };
   }
   if (executorId === "claude") {
-    return buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection });
+    return {
+      ...buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection }),
+      limits,
+    };
   }
   if (executorId === "opencode") {
-    return buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection });
+    return {
+      ...buildOpenCodeLaunchSpec({ agent, promptPath, logPath, overlayDir, skillProjection }),
+      limits,
+    };
   }
-  return buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection });
+  return {
+    ...buildCodexLaunchSpec({ agent, promptPath, logPath, skillProjection }),
+    limits,
+  };
 }
 
 export function commandForExecutor(executor, executorId = executor?.id) {

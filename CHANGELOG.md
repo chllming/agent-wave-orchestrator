@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.6.2 - 2026-03-22
+
+- Added first-class `claude.effort` support across config profiles, lane overrides, and per-agent `### Executor` blocks, and now emit `--effort` in Claude launch previews and live runs.
+- Clarified operator runtime visibility with additive `launch-preview.json` `limits` metadata, including explicit known turn ceilings for Claude/OpenCode and explicit Codex opacity when Wave does not emit a turn-limit flag.
+- Clarified dashboard and terminal UX: global wave counts now distinguish done, active, pending, and failed agents; the current-wave dashboard keeps a stable terminal name; and TTY dashboards use simple color cues for faster scanning.
+- Pruned stale dry-run executor preview directories when wave agent sets shrink, so manual inspection of `.tmp/.../dry-run/executors/` matches the current manifest.
+- Preserved already-landed implementation slices for shared promoted components by retrying only the sibling owners that still owe closure proof instead of blindly replaying the landed owner.
+- Added release-surface alignment regression coverage and updated the shipped docs so README, runtime-config references, changelog, and release metadata match the `0.6.2` package surface.
+
 ## 0.6.1 - 2026-03-22
 
 - Published the post-merge `main` source as `0.6.1` so the default branch, tagged source, and package docs all agree on the current release.

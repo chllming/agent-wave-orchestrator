@@ -56,6 +56,7 @@ describe("runtime configuration normalization", () => {
                 },
                 claude: {
                   agent: "reviewer",
+                  effort: "high",
                   permissionMode: "plan",
                   permissionPromptTool: "wave-feedback",
                   maxTurns: 7,
@@ -92,6 +93,7 @@ describe("runtime configuration normalization", () => {
               model: "claude-sonnet-4-6",
               agent: "default-reviewer",
               appendSystemPromptMode: "replace",
+              effort: "medium",
               permissionMode: "plan",
               permissionPromptTool: "wave-feedback",
               maxTurns: 5,
@@ -141,6 +143,7 @@ describe("runtime configuration normalization", () => {
                   config: ["model_reasoning_effort=high"],
                 },
                 claude: {
+                  effort: "low",
                   allowedTools: ["Read", "Glob"],
                 },
                 opencode: {
@@ -174,6 +177,7 @@ describe("runtime configuration normalization", () => {
       command: "claude-beta",
       model: "claude-sonnet-4-6",
       appendSystemPromptMode: "replace",
+      effort: "low",
       permissionMode: "plan",
       permissionPromptTool: "wave-feedback",
       maxTurns: 5,
@@ -220,6 +224,7 @@ describe("runtime configuration normalization", () => {
       },
       claude: {
         agent: "reviewer",
+        effort: "high",
         permissionMode: "plan",
         permissionPromptTool: "wave-feedback",
         maxTurns: 7,

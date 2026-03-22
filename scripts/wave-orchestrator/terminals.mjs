@@ -61,9 +61,16 @@ export function writeTerminalsConfig(filePath, config) {
 function isLaneTemporaryTerminalName(name, lanePaths) {
   return (
     name === lanePaths.globalDashboardTerminalName ||
+    name === currentWaveDashboardTerminalName(lanePaths) ||
     name.startsWith(lanePaths.terminalNamePrefix) ||
     name.startsWith(lanePaths.dashboardTerminalNamePrefix)
   );
+}
+
+function currentWaveDashboardTerminalName(lanePaths) {
+  return lanePaths.lane === "main"
+    ? "Current Wave Dashboard"
+    : `Current Wave Dashboard (${lanePaths.lane})`;
 }
 
 function extractTmuxSessionName(command, socketName) {
@@ -131,6 +138,24 @@ export function createGlobalDashboardTerminalEntry(lanePaths, runTag) {
     sessionName,
     config: {
       name: lanePaths.globalDashboardTerminalName,
+      icon: DASHBOARD_TERMINAL_ICON,
+      color: DASHBOARD_TERMINAL_COLOR,
+      command: `TMUX= tmux -L ${lanePaths.tmuxSocketName} new -As ${sessionName}`,
+    },
+  };
+}
+
+export function createCurrentWaveDashboardTerminalEntry(lanePaths) {
+  const sessionName = `${lanePaths.tmuxDashboardSessionPrefix}_current`.replace(
+    /[^a-zA-Z0-9:_-]/g,
+    "_",
+  );
+  const terminalName = currentWaveDashboardTerminalName(lanePaths);
+  return {
+    terminalName,
+    sessionName,
+    config: {
+      name: terminalName,
       icon: DASHBOARD_TERMINAL_ICON,
       color: DASHBOARD_TERMINAL_COLOR,
       command: `TMUX= tmux -L ${lanePaths.tmuxSocketName} new -As ${sessionName}`,

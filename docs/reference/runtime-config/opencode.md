@@ -90,4 +90,4 @@ For a dry run, inspect:
 - `opencode.json`
 - `launch-preview.json`
 
-`launch-preview.json` shows the final `opencode run` command and the exported `OPENCODE_CONFIG` path.
+`launch-preview.json` shows the final `opencode run` command, the exported `OPENCODE_CONFIG` path, and the resolved `limits` block for attempt timeout plus known step ceiling.

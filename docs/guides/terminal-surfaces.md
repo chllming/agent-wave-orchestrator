@@ -45,6 +45,8 @@ Use `tmux` when:
 
 By default the launcher can start per-wave dashboard sessions in tmux.
 
+When `--terminal-surface vscode` is active, Wave also maintains a stable current-wave dashboard terminal entry instead of creating a new wave-numbered dashboard attach target for every wave transition.
+
 Important flags:
 
 - `--no-dashboard`

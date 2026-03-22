@@ -228,8 +228,10 @@ export function buildGlobalDashboardState({
       startedAt: null,
       completedAt: null,
       agentsTotal: wave.agents.length,
+      agentsActive: 0,
       agentsCompleted: 0,
       agentsFailed: 0,
+      agentsPending: wave.agents.length,
       helperAssignmentsOpen: 0,
       inboundDependenciesOpen: 0,
       outboundDependenciesOpen: 0,
@@ -306,10 +308,16 @@ export function syncGlobalWaveFromWaveDashboard(globalState, waveDashboard) {
   }
   const agents = Array.isArray(waveDashboard.agents) ? waveDashboard.agents : [];
   entry.agentsTotal = agents.length;
+  entry.agentsActive = agents.filter((agent) =>
+    ["launching", "running", "coding", "validating", "deploying", "finalizing"].includes(
+      agent.state,
+    ),
+  ).length;
   entry.agentsCompleted = agents.filter((agent) => agent.state === "completed").length;
   entry.agentsFailed = agents.filter(
     (agent) => agent.state === "failed" || agent.state === "timed_out",
   ).length;
+  entry.agentsPending = agents.filter((agent) => agent.state === "pending").length;
   const latestEvent = waveDashboard.events.at(-1);
   entry.lastMessage = latestEvent?.message || entry.lastMessage || "";
   entry.helperAssignmentsOpen = waveDashboard.helperAssignmentsOpen || 0;

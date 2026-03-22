@@ -100,6 +100,8 @@ File ownership (only touch these paths):
 ### Executor
 
 - id: claude
+- claude.effort: high
+- claude.max_turns: 4
 - claude.settings_json: {"permissions":{"allow":["Read"]}}
 - claude.hooks_json: {"Stop":[{"command":"echo stop"}]}
 - claude.allowed_http_hook_urls: https://example.com/hooks
@@ -137,6 +139,7 @@ File ownership (only touch these paths):
 ### Executor
 
 - id: opencode
+- opencode.steps: 5
 - opencode.files: docs/runtime.md,README.md
 - opencode.config_json: {"plugins":["./plugins/runtime.mjs"]}
 
@@ -237,6 +240,12 @@ File ownership (only touch these paths):
     expect(codexPreview.executorId).toBe("codex");
     expect(codexPreview.invocationLines.join("\n")).toContain("--profile 'review'");
     expect(codexPreview.invocationLines.join("\n")).toContain("--json");
+    expect(codexPreview.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: null,
+      turnLimitSource: "not-set-by-wave",
+    });
+    expect(codexPreview.limits.notes[0]).toContain("Wave emits no Codex turn-limit flag");
     expect(codexPreview.skills.ids).toContain("runtime-codex");
     expect(
       fs.existsSync(path.join(dryRunRoot, "executors", "wave-0", "0-a0", "skills.resolved.md")),
@@ -253,6 +262,12 @@ File ownership (only touch these paths):
     );
     expect(claudePreview.executorId).toBe("claude");
     expect(claudePreview.skills.ids).toContain("runtime-claude");
+    expect(claudePreview.invocationLines.join("\n")).toContain("--effort 'high'");
+    expect(claudePreview.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: 4,
+      turnLimitSource: "claude.maxTurns",
+    });
     expect(
       fs.existsSync(path.join(dryRunRoot, "executors", "wave-0", "0-a8", "claude-settings.json")),
     ).toBe(true);
@@ -284,6 +299,11 @@ File ownership (only touch these paths):
     expect(opencodePreview.executorId).toBe("opencode");
     expect(opencodePreview.skills.ids).toContain("runtime-opencode");
     expect(opencodePreview.invocationLines.join("\n")).toContain("--file 'docs/runtime.md'");
+    expect(opencodePreview.limits).toMatchObject({
+      attemptTimeoutMinutes: null,
+      knownTurnLimit: 5,
+      turnLimitSource: "opencode.steps",
+    });
     expect(opencodePreview.invocationLines.join("\n")).toContain(
       "skills/role-documentation/skill.json",
     );
@@ -298,5 +318,95 @@ File ownership (only touch these paths):
       ),
     );
     expect(opencodeConfig.plugins).toEqual(["./plugins/runtime.mjs"]);
+  });
+
+  it("prunes stale dry-run executor preview directories when a wave shrinks", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    const initResult = runWaveCli(["init"], repoDir);
+    expect(initResult.status).toBe(0);
+
+    const wavePath = path.join(repoDir, "docs", "plans", "waves", "wave-0.md");
+    fs.appendFileSync(
+      wavePath,
+      `
+
+## Agent A2: Extra Implementation Worker
+
+### Executor
+
+- id: codex
+- model: gpt-5-codex
+
+### Context7
+
+- bundle: node-typescript
+- query: "Node.js and TypeScript basics for orchestrator maintenance"
+
+### Components
+
+- wave-parser-and-launcher
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Prompt
+
+\`\`\`text
+Extend the starter runtime coverage.
+
+Required context before coding:
+- Read docs/reference/repository-guidance.md.
+- Read docs/research/agent-context-sources.md.
+
+File ownership (only touch these paths):
+- docs/README.md
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const firstDryRun = runWaveCli(
+      ["launch", "--lane", "main", "--start-wave", "0", "--end-wave", "0", "--dry-run", "--no-dashboard", "--no-context7"],
+      repoDir,
+    );
+    expect(firstDryRun.status).toBe(0);
+
+    const extraAgentDir = path.join(
+      repoDir,
+      ".tmp",
+      "main-wave-launcher",
+      "dry-run",
+      "executors",
+      "wave-0",
+      "0-a2",
+    );
+    expect(fs.existsSync(extraAgentDir)).toBe(true);
+
+    const trimmedWave = fs
+      .readFileSync(wavePath, "utf8")
+      .split("## Agent A2: Extra Implementation Worker")[0]
+      .trimEnd();
+    fs.writeFileSync(wavePath, `${trimmedWave}\n`, "utf8");
+
+    const secondDryRun = runWaveCli(
+      ["launch", "--lane", "main", "--start-wave", "0", "--end-wave", "0", "--dry-run", "--no-dashboard", "--no-context7"],
+      repoDir,
+    );
+    expect(secondDryRun.status).toBe(0);
+
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        path.join(repoDir, ".tmp", "main-wave-launcher", "dry-run", "waves.manifest.json"),
+        "utf8",
+      ),
+    );
+    expect(manifest.waves[0].agents.map((agent) => agent.agentId)).not.toContain("A2");
+    expect(fs.existsSync(extraAgentDir)).toBe(false);
   });
 });

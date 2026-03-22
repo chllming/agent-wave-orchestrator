@@ -183,7 +183,7 @@ function findLatestComponentMatches(text) {
   return Array.from(byComponent.values());
 }
 
-function detectTermination(logText, statusRecord) {
+function detectTermination(agent, logText, statusRecord) {
   const patterns = [
     { reason: "max-turns", regex: /(Reached max turns \(\d+\))/i },
     { reason: "timeout", regex: /(timed out(?: after [^\n.]+)?)/i },
@@ -192,9 +192,16 @@ function detectTermination(logText, statusRecord) {
   for (const pattern of patterns) {
     const match = String(logText || "").match(pattern.regex);
     if (match) {
+      const baseHint = cleanText(match[1] || match[0]);
+      if (pattern.reason === "max-turns" && agent?.executorResolved?.id === "codex") {
+        return {
+          reason: pattern.reason,
+          hint: `${baseHint}. Wave does not set a Codex turn-limit flag; inspect launch-preview.json limits for any profile or upstream-runtime ceiling notes.`,
+        };
+      }
       return {
         reason: pattern.reason,
-        hint: cleanText(match[1] || match[0]),
+        hint: baseHint,
       };
     }
   }
@@ -341,7 +348,7 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
   const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
   const logVerdict = parseVerdictFromText(signalText, WAVE_VERDICT_REGEX);
   const verdict = reportVerdict.verdict ? reportVerdict : logVerdict;
-  const termination = detectTermination(logText, statusRecord);
+  const termination = detectTermination(agent, logText, statusRecord);
   return {
     agentId: agent?.agentId || null,
     promptHash: statusRecord?.promptHash || null,

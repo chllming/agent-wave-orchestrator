@@ -81,6 +81,7 @@ import {
   writeTextAtomic,
 } from "./shared.mjs";
 import {
+  createCurrentWaveDashboardTerminalEntry,
   appendTerminalEntries,
   createGlobalDashboardTerminalEntry,
   createTemporaryTerminalEntries,
@@ -1449,11 +1450,94 @@ export function readWaveImplementationGate(wave, agentRuns) {
   };
 }
 
+function analyzePromotedComponentOwners(componentId, agentRuns, summariesByAgentId) {
+  const ownerRuns = (agentRuns || []).filter((runInfo) =>
+    runInfo.agent.components?.includes(componentId),
+  );
+  const ownerAgentIds = ownerRuns.map((runInfo) => runInfo.agent.agentId);
+  const satisfiedAgentIds = [];
+  const waitingOnAgentIds = [];
+  const failedOwnContractAgentIds = [];
+  for (const runInfo of ownerRuns) {
+    const summary = summariesByAgentId?.[runInfo.agent.agentId] || null;
+    const implementationValidation = validateImplementationSummary(runInfo.agent, summary);
+    const componentMarkers = new Map(
+      Array.isArray(summary?.components)
+        ? summary.components.map((component) => [component.componentId, component])
+        : [],
+    );
+    const marker = componentMarkers.get(componentId);
+    const expectedLevel = runInfo.agent.componentTargets?.[componentId] || null;
+    const componentSatisfied =
+      marker &&
+      marker.state === "met" &&
+      (!expectedLevel || marker.level === expectedLevel);
+    if (implementationValidation.ok && componentSatisfied) {
+      satisfiedAgentIds.push(runInfo.agent.agentId);
+      continue;
+    }
+    waitingOnAgentIds.push(runInfo.agent.agentId);
+    if (!implementationValidation.ok) {
+      failedOwnContractAgentIds.push(runInfo.agent.agentId);
+    }
+  }
+  return {
+    componentId,
+    ownerRuns,
+    ownerAgentIds,
+    satisfiedAgentIds,
+    waitingOnAgentIds,
+    failedOwnContractAgentIds,
+  };
+}
+
+function buildSharedComponentSiblingPendingFailure(componentState) {
+  if (
+    !componentState ||
+    componentState.satisfiedAgentIds.length === 0 ||
+    componentState.waitingOnAgentIds.length === 0
+  ) {
+    return null;
+  }
+  const landedSummary =
+    componentState.satisfiedAgentIds.length === 1
+      ? `${componentState.satisfiedAgentIds[0]} desired-state slice landed`
+      : `${componentState.satisfiedAgentIds.join(", ")} desired-state slices landed`;
+  const ownerRun =
+    componentState.ownerRuns.find((runInfo) =>
+      componentState.waitingOnAgentIds.includes(runInfo.agent.agentId),
+    ) ||
+    componentState.ownerRuns[0] ||
+    null;
+  return {
+    ok: false,
+    agentId: componentState.waitingOnAgentIds[0] || ownerRun?.agent?.agentId || null,
+    componentId: componentState.componentId || null,
+    statusCode: "shared-component-sibling-pending",
+    detail: `${landedSummary}; shared component closure still depends on ${componentState.waitingOnAgentIds.join("/")}.`,
+    logPath: ownerRun ? path.relative(REPO_ROOT, ownerRun.logPath) : null,
+    ownerAgentIds: componentState.ownerAgentIds,
+    satisfiedAgentIds: componentState.satisfiedAgentIds,
+    waitingOnAgentIds: componentState.waitingOnAgentIds,
+    failedOwnContractAgentIds: componentState.failedOwnContractAgentIds,
+  };
+}
+
 export function readWaveComponentGate(wave, agentRuns, options = {}) {
   const summariesByAgentId = Object.fromEntries(
     agentRuns.map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo, wave)]),
   );
   const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
+  const sharedPending = (wave.componentPromotions || [])
+    .map((promotion) =>
+      buildSharedComponentSiblingPendingFailure(
+        analyzePromotedComponentOwners(promotion.componentId, agentRuns, summariesByAgentId),
+      ),
+    )
+    .find(Boolean);
+  if (sharedPending) {
+    return sharedPending;
+  }
   if (validation.ok) {
     return {
       ok: true,
@@ -1464,8 +1548,12 @@ export function readWaveComponentGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const ownerRun =
-    agentRuns.find((runInfo) => runInfo.agent.components?.includes(validation.componentId)) ?? null;
+  const componentState = analyzePromotedComponentOwners(
+    validation.componentId,
+    agentRuns,
+    summariesByAgentId,
+  );
+  const ownerRun = componentState.ownerRuns[0] ?? null;
   return {
     ok: false,
     agentId: ownerRun?.agent?.agentId || null,
@@ -1473,6 +1561,10 @@ export function readWaveComponentGate(wave, agentRuns, options = {}) {
     statusCode: validation.statusCode,
     detail: validation.detail,
     logPath: ownerRun ? path.relative(REPO_ROOT, ownerRun.logPath) : null,
+    ownerAgentIds: componentState.ownerAgentIds,
+    satisfiedAgentIds: componentState.satisfiedAgentIds,
+    waitingOnAgentIds: componentState.waitingOnAgentIds,
+    failedOwnContractAgentIds: componentState.failedOwnContractAgentIds,
   };
 }
 
@@ -1797,6 +1889,38 @@ function removeOrphanWaveDashboards(lanePaths, activeSessionNames) {
     removedDashboardPaths.push(path.relative(REPO_ROOT, dashboardPath));
   }
   return removedDashboardPaths;
+}
+
+function pruneDryRunExecutorPreviewDirs(lanePaths, waves) {
+  if (!fs.existsSync(lanePaths.executorOverlaysDir)) {
+    return [];
+  }
+  const expectedSlugsByWave = new Map(
+    (waves || []).map((wave) => [wave.wave, new Set((wave.agents || []).map((agent) => agent.slug))]),
+  );
+  const removedPaths = [];
+  for (const entry of fs.readdirSync(lanePaths.executorOverlaysDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^wave-\d+$/.test(entry.name)) {
+      continue;
+    }
+    const waveNumber = Number.parseInt(entry.name.slice("wave-".length), 10);
+    const waveDir = path.join(lanePaths.executorOverlaysDir, entry.name);
+    const expectedSlugs = expectedSlugsByWave.get(waveNumber);
+    if (!expectedSlugs) {
+      fs.rmSync(waveDir, { recursive: true, force: true });
+      removedPaths.push(path.relative(REPO_ROOT, waveDir));
+      continue;
+    }
+    for (const child of fs.readdirSync(waveDir, { withFileTypes: true })) {
+      if (!child.isDirectory() || expectedSlugs.has(child.name)) {
+        continue;
+      }
+      const childPath = path.join(waveDir, child.name);
+      fs.rmSync(childPath, { recursive: true, force: true });
+      removedPaths.push(path.relative(REPO_ROOT, childPath));
+    }
+  }
+  return removedPaths.toSorted();
 }
 
 export function reconcileStaleLauncherArtifacts(lanePaths, options = {}) {
@@ -2162,7 +2286,61 @@ function relaunchReasonBuckets(runs, failures, derivedState) {
     closureGate: (failures || []).some(
       (failure) => failure.agentId && selectedAgentIds.has(failure.agentId),
     ),
+    sharedComponentSiblingWait: (failures || []).some(
+      (failure) =>
+        failure.statusCode === "shared-component-sibling-pending" &&
+        (failure.waitingOnAgentIds || []).some((agentId) => selectedAgentIds.has(agentId)),
+    ),
   };
+}
+
+function applySharedComponentWaitStateToDashboard(componentGate, dashboardState) {
+  const waitingSummary = (componentGate?.waitingOnAgentIds || []).join("/");
+  if (!waitingSummary) {
+    return;
+  }
+  for (const agentId of componentGate?.satisfiedAgentIds || []) {
+    setWaveDashboardAgent(dashboardState, agentId, {
+      state: "completed",
+      detail: `Desired-state slice landed; waiting on ${waitingSummary} for shared component closure`,
+    });
+  }
+}
+
+function reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures) {
+  if (!Array.isArray(failures) || failures.length === 0) {
+    return failures;
+  }
+  const summariesByAgentId = Object.fromEntries(
+    (agentRuns || []).map((runInfo) => [runInfo.agent.agentId, readRunExecutionSummary(runInfo, wave)]),
+  );
+  const failureAgentIds = new Set(failures.map((failure) => failure.agentId).filter(Boolean));
+  const consumedSatisfiedAgentIds = new Set();
+  const synthesizedFailures = [];
+  for (const promotion of wave?.componentPromotions || []) {
+    const componentState = analyzePromotedComponentOwners(
+      promotion.componentId,
+      agentRuns,
+      summariesByAgentId,
+    );
+    if (
+      componentState.satisfiedAgentIds.length === 0 ||
+      componentState.waitingOnAgentIds.length === 0 ||
+      !componentState.satisfiedAgentIds.some((agentId) => failureAgentIds.has(agentId))
+    ) {
+      continue;
+    }
+    for (const agentId of componentState.satisfiedAgentIds) {
+      if (failureAgentIds.has(agentId)) {
+        consumedSatisfiedAgentIds.add(agentId);
+      }
+    }
+    synthesizedFailures.push(buildSharedComponentSiblingPendingFailure(componentState));
+  }
+  return [
+    ...synthesizedFailures.filter(Boolean),
+    ...failures.filter((failure) => !consumedSatisfiedAgentIds.has(failure.agentId)),
+  ];
 }
 
 export function hasReusableSuccessStatus(agent, statusPath, options = {}) {
@@ -2272,7 +2450,11 @@ function buildFallbackExecutorState(executorState, executorId, attempt, reason) 
 }
 
 function applyRetryFallbacks(agentRuns, failures, lanePaths, attemptNumber, waveDefinition = null) {
-  const failedAgentIds = new Set(failures.map((failure) => failure.agentId));
+  const failedAgentIds = new Set(
+    failures
+      .filter((failure) => failure.statusCode !== "shared-component-sibling-pending")
+      .map((failure) => failure.agentId),
+  );
   let changed = false;
   const outcomes = new Map();
   for (const run of agentRuns) {
@@ -2733,6 +2915,20 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
       barrier: null,
     };
   }
+  const sharedComponentWaitingAgentIds = new Set(
+    (failures || [])
+      .filter((failure) => failure.statusCode === "shared-component-sibling-pending")
+      .flatMap((failure) => failure.waitingOnAgentIds || [])
+      .filter((agentId) => runsByAgentId.has(agentId)),
+  );
+  if (sharedComponentWaitingAgentIds.size > 0) {
+    return {
+      runs: Array.from(sharedComponentWaitingAgentIds)
+        .map((agentId) => runsByAgentId.get(agentId))
+        .filter(Boolean),
+      barrier: null,
+    };
+  }
   const failedAgentIds = new Set(failures.map((failure) => failure.agentId));
   return {
     runs: agentRuns.filter((run) => failedAgentIds.has(run.agent.agentId)),
@@ -2779,6 +2975,8 @@ export async function runLauncherCli(argv) {
   let globalDashboard = null;
   let globalDashboardTerminalEntry = null;
   let globalDashboardTerminalAppended = false;
+  let currentWaveDashboardTerminalEntry = null;
+  let currentWaveDashboardTerminalAppended = false;
   let selectedWavesForCoordination = [];
 
   const appendCoordination = ({
@@ -2976,6 +3174,7 @@ export async function runLauncherCli(argv) {
     });
 
     if (options.dryRun) {
+      pruneDryRunExecutorPreviewDirs(lanePaths, allWaves);
       for (const wave of filteredWaves) {
         const derivedState = writeWaveDerivedState({
           lanePaths,
@@ -3072,9 +3271,14 @@ export async function runLauncherCli(argv) {
         lanePaths,
         globalDashboard.runId || "global",
       );
+      currentWaveDashboardTerminalEntry = createCurrentWaveDashboardTerminalEntry(lanePaths);
       if (terminalRegistryEnabled) {
-        appendTerminalEntries(lanePaths.terminalsPath, [globalDashboardTerminalEntry]);
+        appendTerminalEntries(lanePaths.terminalsPath, [
+          globalDashboardTerminalEntry,
+          currentWaveDashboardTerminalEntry,
+        ]);
         globalDashboardTerminalAppended = true;
+        currentWaveDashboardTerminalAppended = true;
       }
       launchWaveDashboardSession(lanePaths, {
         sessionName: globalDashboardTerminalEntry.sessionName,
@@ -3152,7 +3356,7 @@ export async function runLauncherCli(argv) {
           wave.wave,
           wave.agents,
           runTag,
-          options.dashboard,
+          false,
         );
         if (terminalRegistryEnabled) {
           appendTerminalEntries(lanePaths.terminalsPath, terminalEntries);
@@ -3265,12 +3469,9 @@ export async function runLauncherCli(argv) {
         }
         flushDashboards();
 
-        const dashboardEntry = terminalEntries.find(
-          (entry) => entry.terminalName === `${lanePaths.dashboardTerminalNamePrefix}${wave.wave}`,
-        );
-        if (options.dashboard && dashboardEntry) {
+        if (options.dashboard && currentWaveDashboardTerminalEntry) {
           launchWaveDashboardSession(lanePaths, {
-            sessionName: dashboardEntry.sessionName,
+            sessionName: currentWaveDashboardTerminalEntry.sessionName,
             dashboardPath,
             messageBoardPath,
           });
@@ -3442,6 +3643,12 @@ export async function runLauncherCli(argv) {
 
           materializeAgentExecutionSummaries(wave, agentRuns);
           refreshDerivedState(attempt);
+          failures = reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures);
+          for (const failure of failures) {
+            if (failure.statusCode === "shared-component-sibling-pending") {
+              applySharedComponentWaitStateToDashboard(failure, dashboardState);
+            }
+          }
 
           if (failures.length > 0) {
             for (const failure of failures) {
@@ -3483,12 +3690,20 @@ export async function runLauncherCli(argv) {
                 laneProfile: lanePaths.laneProfile,
               });
               if (!componentGate.ok) {
+                if (componentGate.statusCode === "shared-component-sibling-pending") {
+                  applySharedComponentWaitStateToDashboard(componentGate, dashboardState);
+                }
                 failures = [
                   {
                     agentId: componentGate.agentId,
                     statusCode: componentGate.statusCode,
                     logPath:
                       componentGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                    detail: componentGate.detail,
+                    ownerAgentIds: componentGate.ownerAgentIds || [],
+                    satisfiedAgentIds: componentGate.satisfiedAgentIds || [],
+                    waitingOnAgentIds: componentGate.waitingOnAgentIds || [],
+                    failedOwnContractAgentIds: componentGate.failedOwnContractAgentIds || [],
                   },
                 ];
                 recordCombinedEvent({
@@ -4045,6 +4260,9 @@ export async function runLauncherCli(argv) {
           if (globalDashboardTerminalEntry) {
             excludeSessionNames.add(globalDashboardTerminalEntry.sessionName);
           }
+          if (currentWaveDashboardTerminalEntry) {
+            excludeSessionNames.add(currentWaveDashboardTerminalEntry.sessionName);
+          }
           cleanupLaneTmuxSessions(lanePaths, { excludeSessionNames });
         }
         if (globalWave && globalWave.status === "running") {
@@ -4079,9 +4297,26 @@ export async function runLauncherCli(argv) {
     if (globalDashboardTerminalAppended && globalDashboardTerminalEntry && !options.keepTerminals) {
       removeTerminalEntries(lanePaths.terminalsPath, [globalDashboardTerminalEntry]);
     }
+    if (
+      currentWaveDashboardTerminalAppended &&
+      currentWaveDashboardTerminalEntry &&
+      !options.keepTerminals
+    ) {
+      removeTerminalEntries(lanePaths.terminalsPath, [currentWaveDashboardTerminalEntry]);
+    }
     if (options.cleanupSessions && globalDashboardTerminalEntry) {
       try {
         killTmuxSessionIfExists(lanePaths.tmuxSocketName, globalDashboardTerminalEntry.sessionName);
+      } catch {
+        // no-op
+      }
+    }
+    if (options.cleanupSessions && currentWaveDashboardTerminalEntry) {
+      try {
+        killTmuxSessionIfExists(
+          lanePaths.tmuxSocketName,
+          currentWaveDashboardTerminalEntry.sessionName,
+        );
       } catch {
         // no-op
       }

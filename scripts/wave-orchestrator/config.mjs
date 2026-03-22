@@ -445,6 +445,19 @@ function normalizeClaudeOutputFormat(value, label = "executors.claude.outputForm
   return normalized;
 }
 
+export function normalizeClaudeEffort(value, label = "executors.claude.effort", fallback = null) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+  if (!["low", "medium", "high", "max"].includes(normalized)) {
+    throw new Error(`${label} must be one of: low, medium, high, max`);
+  }
+  return normalized;
+}
+
 function normalizeOpenCodeFormat(value, label = "executors.opencode.format") {
   const normalized = String(value || "default")
     .trim()
@@ -517,6 +530,11 @@ function normalizeExecutorProfile(rawProfile = {}, label = "executors.profiles.<
           ),
           permissionPromptTool: normalizeOptionalString(
             rawProfile.claude.permissionPromptTool,
+            null,
+          ),
+          effort: normalizeClaudeEffort(
+            rawProfile.claude.effort,
+            `${label}.claude.effort`,
             null,
           ),
           maxTurns: normalizeOptionalPositiveInt(
@@ -685,6 +703,7 @@ function normalizeExecutors(rawExecutors = {}) {
         executors.claude?.permissionPromptTool,
         null,
       ),
+      effort: normalizeClaudeEffort(executors.claude?.effort, "executors.claude.effort", null),
       maxTurns: normalizeOptionalPositiveInt(executors.claude?.maxTurns, "executors.claude.maxTurns"),
       mcpConfig: normalizeOptionalStringOrStringArray(
         executors.claude?.mcpConfig,

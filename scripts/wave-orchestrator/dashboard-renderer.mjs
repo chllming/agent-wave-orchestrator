@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { analyzeMessageBoardCommunication } from "./coordination.mjs";
-import { commsAgeSummary, deploymentSummary, renderCountsByState } from "./dashboard-state.mjs";
+import { commsAgeSummary, deploymentSummary } from "./dashboard-state.mjs";
 import {
   DEFAULT_REFRESH_MS,
   DEFAULT_WAVE_LANE,
@@ -81,20 +81,125 @@ function isGlobalDashboardState(state) {
   return Boolean(state && Array.isArray(state.waves) && !Array.isArray(state.agents));
 }
 
-function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane }) {
+const ANSI = {
+  reset: "\u001b[0m",
+  dim: "\u001b[2m",
+  red: "\u001b[31m",
+  green: "\u001b[32m",
+  yellow: "\u001b[33m",
+  blue: "\u001b[34m",
+  magenta: "\u001b[35m",
+  cyan: "\u001b[36m",
+};
+
+function paint(text, color, colorize = false) {
+  if (!colorize || !color) {
+    return text;
+  }
+  return `${color}${text}${ANSI.reset}`;
+}
+
+function paintState(text, state, colorize = false) {
+  const normalized = String(state || "").trim().toLowerCase();
+  const color =
+    normalized === "completed"
+      ? ANSI.green
+      : normalized === "failed" || normalized === "timed_out"
+        ? ANSI.red
+        : normalized === "deploying" || normalized === "finalizing" || normalized === "validating"
+          ? ANSI.yellow
+          : normalized === "running" || normalized === "coding" || normalized === "launching"
+            ? ANSI.cyan
+            : normalized === "pending"
+              ? ANSI.dim
+              : normalized === "dry-run"
+                ? ANSI.magenta
+                : null;
+  return paint(text, color, colorize);
+}
+
+function paintLevel(text, level, colorize = false) {
+  const normalized = String(level || "").trim().toLowerCase();
+  const color =
+    normalized === "error"
+      ? ANSI.red
+      : normalized === "warn"
+        ? ANSI.yellow
+        : normalized === "info"
+          ? ANSI.blue
+          : null;
+  return paint(text, color, colorize);
+}
+
+function paintExitCode(text, exitCode, colorize = false) {
+  if (exitCode === 0 || exitCode === "0") {
+    return paint(text, ANSI.green, colorize);
+  }
+  if (exitCode === null || exitCode === undefined || exitCode === "-") {
+    return text;
+  }
+  return paint(text, ANSI.red, colorize);
+}
+
+function paintDeploymentSummary(text, deploymentState, colorize = false) {
+  const normalized = String(deploymentState || "").trim().toLowerCase();
+  const color =
+    normalized === "healthy"
+      ? ANSI.green
+      : normalized === "failed"
+        ? ANSI.red
+        : normalized === "deploying" || normalized === "rolledover"
+          ? ANSI.yellow
+          : null;
+  return paint(text, color, colorize);
+}
+
+function renderColoredCountsByState(agents, colorize = false) {
+  const counts = new Map();
+  for (const agent of agents || []) {
+    const key = agent?.state || "unknown";
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .toSorted((a, b) => a[0].localeCompare(b[0]))
+    .map(([state, count]) => `${paintState(state, state, colorize)}:${count}`)
+    .join("  ");
+}
+
+function paintWaveAgentSummary(summary, wave, colorize = false) {
+  const failed = Number(wave?.agentsFailed ?? 0) || 0;
+  const active = Number(wave?.agentsActive ?? 0) || 0;
+  const total = Number(wave?.agentsTotal ?? 0) || 0;
+  const completed = Number(wave?.agentsCompleted ?? 0) || 0;
+  const color =
+    failed > 0
+      ? ANSI.red
+      : active > 0
+        ? ANSI.cyan
+        : total > 0 && completed >= total
+          ? ANSI.green
+          : ANSI.dim;
+  return paint(summary, color, colorize);
+}
+
+function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane, colorize = false }) {
   if (!state) {
     return `Dashboard file not found or invalid: ${dashboardPath}`;
   }
   const lines = [];
   const laneName = String(state?.lane || lane || "").trim() || DEFAULT_WAVE_LANE;
   lines.push(
-    `${laneName} Wave Dashboard | wave=${state.wave ?? "?"} | status=${state.status ?? "unknown"} | attempt=${state.attempt ?? "?"}/${state.maxAttempts ?? "?"}`,
+    `${laneName} Wave Dashboard | wave=${state.wave ?? "?"} | status=${paintState(
+      state.status ?? "unknown",
+      state.status,
+      colorize,
+    )} | attempt=${state.attempt ?? "?"}/${state.maxAttempts ?? "?"}`,
   );
   lines.push(
     `Updated ${formatAgeFromTimestamp(Date.parse(state.updatedAt || ""))} | Started ${state.startedAt || "n/a"} | Elapsed ${formatElapsed(state.startedAt)}`,
   );
   lines.push(`Run tag: ${state.runTag || "n/a"} | Wave file: ${state.waveFile || "n/a"}`);
-  lines.push(`Counts: ${renderCountsByState(state.agents || []) || "none"}`);
+  lines.push(`Counts: ${renderColoredCountsByState(state.agents || [], colorize) || "none"}`);
   const comms = analyzeMessageBoardCommunication(messageBoardPath);
   if (!comms.available) {
     lines.push(`Comms: unavailable ${comms.reason || ""}`.trim());
@@ -116,10 +221,19 @@ function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane }) {
   );
   for (const agent of state.agents || []) {
     lines.push(
-      `${pad(agent.agentId || "-", 8)} ${pad(agent.state || "-", 12)} ${pad(agent.attempts ?? 0, 8)} ${pad(
-        agent.exitCode ?? "-",
-        6,
-      )} ${pad(deploymentSummary({ service: agent.deploymentService, state: agent.deploymentState }), 24)} ${pad(
+      `${pad(agent.agentId || "-", 8)} ${paintState(
+        pad(agent.state || "-", 12),
+        agent.state,
+        colorize,
+      )} ${pad(agent.attempts ?? 0, 8)} ${paintExitCode(
+        pad(agent.exitCode ?? "-", 6),
+        agent.exitCode,
+        colorize,
+      )} ${paintDeploymentSummary(
+        pad(deploymentSummary({ service: agent.deploymentService, state: agent.deploymentState }), 24),
+        agent.deploymentState,
+        colorize,
+      )} ${pad(
         formatAgeFromTimestamp(Date.parse(agent.lastUpdateAt || "")),
         12,
       )} ${truncate(agent.detail || "", 72)}`,
@@ -130,7 +244,7 @@ function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane }) {
   for (const event of (state.events || []).slice(-12)) {
     const prefix = event.agentId ? `[${event.agentId}]` : "[wave]";
     lines.push(
-      `${event.at || "n/a"} ${pad(event.level || "info", 5)} ${prefix} ${event.message || ""}`,
+      `${event.at || "n/a"} ${paintLevel(pad(event.level || "info", 5), event.level, colorize)} ${prefix} ${event.message || ""}`,
     );
   }
   if ((state.events || []).length === 0) {
@@ -143,14 +257,29 @@ function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane }) {
   return lines.join("\n");
 }
 
-function renderGlobalDashboard({ state, dashboardPath, lane }) {
+function renderGlobalDashboard({ state, dashboardPath, lane, colorize = false }) {
   if (!state) {
     return `Dashboard file not found or invalid: ${dashboardPath}`;
   }
+  const formatGlobalWaveAgentSummary = (wave) => {
+    const total = Number(wave?.agentsTotal ?? 0) || 0;
+    const completed = Number(wave?.agentsCompleted ?? 0) || 0;
+    const failed = Number(wave?.agentsFailed ?? 0) || 0;
+    const active = Number(wave?.agentsActive ?? 0) || 0;
+    const pending =
+      wave?.agentsPending === undefined || wave?.agentsPending === null
+        ? Math.max(0, total - completed - failed - active)
+        : Number(wave.agentsPending ?? 0) || 0;
+    return `done ${completed}/${total} active ${active} pending ${pending} fail ${failed}`;
+  };
   const lines = [];
   const laneName = String(state?.lane || lane || "").trim() || DEFAULT_WAVE_LANE;
   lines.push(
-    `${laneName} Wave Global Dashboard | run=${state.runId || "n/a"} | status=${state.status || "unknown"}`,
+    `${laneName} Wave Global Dashboard | run=${state.runId || "n/a"} | status=${paintState(
+      state.status || "unknown",
+      state.status,
+      colorize,
+    )}`,
   );
   lines.push(
     `Updated ${formatAgeFromTimestamp(Date.parse(state.updatedAt || ""))} | Started ${state.startedAt || "n/a"} | Elapsed ${formatElapsed(state.startedAt)}`,
@@ -161,18 +290,18 @@ function renderGlobalDashboard({ state, dashboardPath, lane }) {
   lines.push("");
   lines.push("Waves:");
   lines.push(
-    `${pad("Wave", 6)} ${pad("Status", 10)} ${pad("Attempt", 9)} ${pad("Agents", 16)} ${pad("Started", 12)} ${pad("Last Message", 70)}`,
+    `${pad("Wave", 6)} ${pad("Status", 10)} ${pad("Attempt", 9)} ${pad("Agents", 36)} ${pad("Started", 12)} ${pad("Last Message", 70)}`,
   );
   lines.push(
-    `${"-".repeat(6)} ${"-".repeat(10)} ${"-".repeat(9)} ${"-".repeat(16)} ${"-".repeat(12)} ${"-".repeat(70)}`,
+    `${"-".repeat(6)} ${"-".repeat(10)} ${"-".repeat(9)} ${"-".repeat(36)} ${"-".repeat(12)} ${"-".repeat(70)}`,
   );
   for (const wave of state.waves || []) {
-    const agents = `${wave.agentsCompleted ?? 0}/${wave.agentsTotal ?? 0} ok, ${wave.agentsFailed ?? 0} fail`;
+    const agents = formatGlobalWaveAgentSummary(wave);
     lines.push(
-      `${pad(wave.wave ?? "-", 6)} ${pad(wave.status || "-", 10)} ${pad(
+      `${pad(wave.wave ?? "-", 6)} ${paintState(pad(wave.status || "-", 10), wave.status, colorize)} ${pad(
         `${wave.attempt ?? 0}/${wave.maxAttempts ?? 0}`,
         9,
-      )} ${pad(agents, 16)} ${pad(
+      )} ${paintWaveAgentSummary(pad(agents, 36), wave, colorize)} ${pad(
         formatAgeFromTimestamp(Date.parse(wave.startedAt || "")),
         12,
       )} ${truncate(wave.lastMessage || "", 70)}`,
@@ -191,7 +320,7 @@ function renderGlobalDashboard({ state, dashboardPath, lane }) {
   for (const event of (state.events || []).slice(-16)) {
     const waveTag = event.wave ? `wave:${event.wave}` : "wave:-";
     lines.push(
-      `${event.at || "n/a"} ${pad(event.level || "info", 5)} [${waveTag}] ${event.message || ""}`,
+      `${event.at || "n/a"} ${paintLevel(pad(event.level || "info", 5), event.level, colorize)} [${waveTag}] ${event.message || ""}`,
     );
   }
   if ((state.events || []).length === 0) {
@@ -200,10 +329,10 @@ function renderGlobalDashboard({ state, dashboardPath, lane }) {
   return lines.join("\n");
 }
 
-export function renderDashboard({ state, dashboardPath, messageBoardPath, lane }) {
+export function renderDashboard({ state, dashboardPath, messageBoardPath, lane, colorize = false }) {
   return isGlobalDashboardState(state)
-    ? renderGlobalDashboard({ state, dashboardPath, lane })
-    : renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane });
+    ? renderGlobalDashboard({ state, dashboardPath, lane, colorize })
+    : renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane, colorize });
 }
 
 export async function runDashboardCli(argv) {
@@ -232,6 +361,7 @@ Options:
       dashboardPath: options.dashboardFile,
       messageBoardPath: boardPath,
       lane: options.lane,
+      colorize: process.stdout.isTTY,
     });
     if (process.stdout.isTTY) {
       process.stdout.write("\u001bc");

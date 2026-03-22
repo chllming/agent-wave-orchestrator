@@ -213,8 +213,9 @@ What happens next:
 
 1. the launcher triages the clarification from repo policy, ownership, prior decisions, and routing context
 2. if it can answer inside the wave, it writes the resolution back into coordination state
-3. if it cannot, it creates human feedback or escalation artifacts
-4. until that chain is resolved, clarification remains a closure barrier
+3. if another owner can answer it, the launcher opens a targeted follow-up request and keeps the clarification chain blocking
+4. only after policy and routed follow-up paths are exhausted does it create human feedback or escalation artifacts
+5. until that chain is resolved, clarification remains a closure barrier and any routed follow-up also remains blocking helper work
 
 Important implication:
 
@@ -370,6 +371,7 @@ When closure fails, the launcher does not always relaunch the entire wave.
 It tries to relaunch only the implicated owners:
 
 - agents named by the failure
+- sibling owners that still owe shared promoted-component proof after a landed owner already passed its slice
 - helper assignees
 - dependency owners where relevant
 - the closure stewards needed after that state changes

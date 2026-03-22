@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed executor-profile inheritance so a Claude profile that only overrides `claude.effort` or other scalar runtime fields now keeps the inherited global Claude command and runtime settings instead of nulling them out.
+- Fixed shared promoted-component retries so landed owners stay reusable, stale relaunch plans are invalidated against current sibling ownership, and continuation can advance to the remaining owners without burning another retry on the already-clean agent.
+- Fixed clarification triage so routed follow-up work supersedes stale human escalations, keeps the routed chain blocking through the linked request, and only opens human escalation after orchestrator-side routing is actually exhausted.
+- Added regression coverage for Claude scalar inheritance, sibling-owner shared-component continuation, stale relaunch-plan invalidation, and launcher-generated routed-clarification trace replay.
+
 ## 0.6.3 - 2026-03-22
 
 - Added a best-effort npmjs update notice on `wave launch`, `wave autonomous`, and `wave adhoc run`, with cached lookup state under `.wave/package-update-check.json` and opt-out via `WAVE_SKIP_UPDATE_CHECK=1`.
@@ -15,7 +20,7 @@
 - Clarified operator runtime visibility with additive `launch-preview.json` `limits` metadata, including explicit known turn ceilings for Claude/OpenCode and explicit Codex opacity when Wave does not emit a turn-limit flag.
 - Clarified dashboard and terminal UX: global wave counts now distinguish done, active, pending, and failed agents; the current-wave dashboard keeps a stable terminal name; and TTY dashboards use simple color cues for faster scanning.
 - Pruned stale dry-run executor preview directories when wave agent sets shrink, so manual inspection of `.tmp/.../dry-run/executors/` matches the current manifest.
-- Preserved already-landed implementation slices for shared promoted components by retrying only the sibling owners that still owe closure proof instead of blindly replaying the landed owner.
+- Improved shared promoted-component retry selection so common sibling-owned closure cases avoid immediately replaying the already-landed owner.
 - Added release-surface alignment regression coverage and updated the shipped docs so README, runtime-config references, changelog, and release metadata match the `0.6.2` package surface.
 
 ## 0.6.1 - 2026-03-22

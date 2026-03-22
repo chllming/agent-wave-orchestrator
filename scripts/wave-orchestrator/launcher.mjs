@@ -2238,6 +2238,33 @@ function proofCentricReuseBlocked(derivedState) {
   );
 }
 
+function sameAgentIdSet(left = [], right = []) {
+  const leftIds = Array.from(new Set((left || []).filter(Boolean))).toSorted();
+  const rightIds = Array.from(new Set((right || []).filter(Boolean))).toSorted();
+  return leftIds.length === rightIds.length && leftIds.every((agentId, index) => agentId === rightIds[index]);
+}
+
+export function persistedRelaunchPlanMatchesCurrentState(
+  agentRuns,
+  persistedPlan,
+  lanePaths,
+  waveDefinition,
+) {
+  if (!persistedPlan || !Array.isArray(persistedPlan.selectedAgentIds)) {
+    return false;
+  }
+  const componentGate = readWaveComponentGate(waveDefinition, agentRuns, {
+    laneProfile: lanePaths?.laneProfile,
+  });
+  if (componentGate?.statusCode !== "shared-component-sibling-pending") {
+    return true;
+  }
+  return sameAgentIdSet(
+    persistedPlan.selectedAgentIds,
+    componentGate.waitingOnAgentIds || [],
+  );
+}
+
 function applyPersistedRelaunchPlan(agentRuns, persistedPlan, lanePaths, waveDefinition) {
   if (!persistedPlan || !Array.isArray(persistedPlan.selectedAgentIds)) {
     return [];
@@ -2254,6 +2281,42 @@ function applyPersistedRelaunchPlan(agentRuns, persistedPlan, lanePaths, waveDef
   return persistedPlan.selectedAgentIds
     .map((agentId) => runsByAgentId.get(agentId))
     .filter(Boolean);
+}
+
+export function resolveSharedComponentContinuationRuns(
+  currentRuns,
+  agentRuns,
+  failures,
+  derivedState,
+  lanePaths,
+  waveDefinition = null,
+) {
+  if (!Array.isArray(currentRuns) || currentRuns.length === 0 || !Array.isArray(failures) || failures.length === 0) {
+    return [];
+  }
+  if (!failures.every((failure) => failure.statusCode === "shared-component-sibling-pending")) {
+    return [];
+  }
+  const currentRunIds = new Set(currentRuns.map((run) => run.agent.agentId));
+  const waitingAgentIds = new Set(
+    failures.flatMap((failure) => failure.waitingOnAgentIds || []).filter(Boolean),
+  );
+  if (Array.from(currentRunIds).some((agentId) => waitingAgentIds.has(agentId))) {
+    return [];
+  }
+  const relaunchResolution = resolveRelaunchRuns(
+    agentRuns,
+    failures,
+    derivedState,
+    lanePaths,
+    waveDefinition,
+  );
+  if (relaunchResolution.barrier || relaunchResolution.runs.length === 0) {
+    return [];
+  }
+  return relaunchResolution.runs.some((run) => !currentRunIds.has(run.agent.agentId))
+    ? relaunchResolution.runs
+    : [];
 }
 
 function relaunchReasonBuckets(runs, failures, derivedState) {
@@ -3425,7 +3488,7 @@ export async function runLauncherCli(argv) {
         };
 
         refreshDerivedState(0);
-        const persistedRelaunchPlan = readWaveRelaunchPlan(lanePaths, wave.wave);
+        let persistedRelaunchPlan = readWaveRelaunchPlan(lanePaths, wave.wave);
 
         dashboardState = buildWaveDashboardState({
           lane: lanePaths.lane,
@@ -3482,6 +3545,18 @@ export async function runLauncherCli(argv) {
         }
 
         const availableRuns = agentRuns.filter((run) => !preCompletedAgentIds.has(run.agent.agentId));
+        if (
+          persistedRelaunchPlan &&
+          !persistedRelaunchPlanMatchesCurrentState(
+            agentRuns,
+            persistedRelaunchPlan,
+            lanePaths,
+            wave,
+          )
+        ) {
+          clearWaveRelaunchPlan(lanePaths, wave.wave);
+          persistedRelaunchPlan = null;
+        }
         const persistedRuns = applyPersistedRelaunchPlan(
           availableRuns,
           persistedRelaunchPlan,
@@ -3491,6 +3566,7 @@ export async function runLauncherCli(argv) {
         let runsToLaunch =
           persistedRuns.length > 0 ? persistedRuns : selectInitialWaveRuns(availableRuns, lanePaths);
         let attempt = 1;
+        let traceAttempt = 1;
         const feedbackStateByRequestId = new Map();
         let completionGateSnapshot = null;
         let completionTraceDir = null;
@@ -4075,7 +4151,7 @@ export async function runLauncherCli(argv) {
             lanePaths,
             launcherOptions: options,
             wave,
-            attempt,
+            attempt: traceAttempt,
             manifest: buildManifest(lanePaths, [wave]),
             coordinationLogPath: derivedState.coordinationLogPath,
             coordinationState: derivedState.coordinationState,
@@ -4102,11 +4178,61 @@ export async function runLauncherCli(argv) {
               summariesByAgentId,
               agentRuns,
               gateSnapshot,
-              attempt,
+              attempt: traceAttempt,
               coordinationLogPath: derivedState.coordinationLogPath,
             }),
           });
           completionTraceDir = traceDir;
+
+          const sharedComponentContinuationRuns = resolveSharedComponentContinuationRuns(
+            runsToLaunch,
+            agentRuns,
+            failures,
+            derivedState,
+            lanePaths,
+            wave,
+          );
+          if (sharedComponentContinuationRuns.length > 0) {
+            runsToLaunch = sharedComponentContinuationRuns;
+            const nextAgentIds = runsToLaunch.map((run) => run.agent.agentId);
+            const nextAgentSummary = nextAgentIds.join(", ");
+            recordCombinedEvent({
+              message: `Shared component closure now depends on sibling owners: ${nextAgentSummary}.`,
+            });
+            appendCoordination({
+              event: "wave_shared_component_continue",
+              waves: [wave.wave],
+              status: "running",
+              details: `attempt=${attempt}/${options.maxRetriesPerWave + 1}; next_agents=${nextAgentSummary}`,
+              actionRequested: `Lane ${lanePaths.lane} owners should let the remaining shared-component owners finish their proof before further retries.`,
+            });
+            for (const run of runsToLaunch) {
+              setWaveDashboardAgent(dashboardState, run.agent.agentId, {
+                state: "pending",
+                detail: "Queued for shared component closure",
+              });
+            }
+            writeWaveRelaunchPlan(lanePaths, wave.wave, {
+              wave: wave.wave,
+              attempt,
+              phase: derivedState?.ledger?.phase || null,
+              selectedAgentIds: nextAgentIds,
+              reasonBuckets: relaunchReasonBuckets(runsToLaunch, failures, derivedState),
+              executorStates: Object.fromEntries(
+                runsToLaunch.map((run) => [run.agent.agentId, run.agent.executorResolved || null]),
+              ),
+              fallbackHistory: Object.fromEntries(
+                runsToLaunch.map((run) => [
+                  run.agent.agentId,
+                  run.agent.executorResolved?.executorHistory || [],
+                ]),
+              ),
+              createdAt: toIsoTimestamp(),
+            });
+            flushDashboards();
+            traceAttempt += 1;
+            continue;
+          }
 
           if (failures.length === 0) {
             dashboardState.status = "completed";
@@ -4229,6 +4355,7 @@ export async function runLauncherCli(argv) {
           });
           flushDashboards();
           attempt += 1;
+          traceAttempt += 1;
         }
 
         clearWaveRelaunchPlan(lanePaths, wave.wave);

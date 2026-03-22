@@ -326,6 +326,23 @@ function supersedeOpenRequests(coordinationLogPath, requests, attempt) {
   }
 }
 
+function supersedeOpenEscalations(triagePath, coordinationLogPath, escalations, attempt, detail) {
+  for (const escalation of escalations) {
+    if (!isOpenCoordinationStatus(escalation.status)) {
+      continue;
+    }
+    const nextRecord = {
+      ...escalation,
+      status: "superseded",
+      detail,
+      attempt,
+      updatedAt: undefined,
+    };
+    appendTriageRecord(triagePath, nextRecord);
+    appendCoordinationRecord(coordinationLogPath, nextRecord);
+  }
+}
+
 function createClarificationRoute({
   triagePath,
   coordinationLogPath,
@@ -457,7 +474,21 @@ export function triageClarificationRequests({
       ["resolved", "closed"].includes(entry.status),
     );
     const resolvedEscalation = resolvedEscalationForClarification(coordinationState, record.id);
+    const openEscalations = (coordinationState?.humanEscalations || []).filter(
+      (entry) =>
+        entry.closureCondition === clarificationClosureCondition(record.id) &&
+        isOpenCoordinationStatus(entry.status),
+    );
     if (resolvedLinkedRequest || resolvedEscalation) {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded because clarification ${record.id} was already resolved.`,
+        );
+      }
       updateClarificationRecord(
         coordinationLogPath,
         record,
@@ -476,6 +507,15 @@ export function triageClarificationRequests({
       coordinationState,
     });
     if (resolution?.type === "policy") {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded by policy resolution for clarification ${record.id}.`,
+        );
+      }
       updateClarificationRecord(coordinationLogPath, record, "resolved", resolution.guidance, attempt);
       appendTriageRecord(triagePath, {
         id: `triage-${record.id}-policy`,
@@ -512,6 +552,16 @@ export function triageClarificationRequests({
     }
 
     if (resolution?.type === "route") {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded by routed clarification follow-up for ${record.id}.`,
+        );
+        changed = true;
+      }
       const routeCycles = linkedRequests.length;
       const lastRouteAttempt = latestRouteAttempt(linkedRequests);
       if (openLinkedRequests.length === 0) {
@@ -546,7 +596,7 @@ export function triageClarificationRequests({
         continue;
       }
       if (attempt > lastRouteAttempt && routeCycles >= MAX_ROUTED_CLARIFICATION_CYCLES) {
-        if (openEscalationForClarification(coordinationState, record.id)) {
+        if (openEscalations.length > 0 || openEscalationForClarification(coordinationState, record.id)) {
           continue;
         }
         const escalationRecord = escalateClarificationToHuman({

@@ -19,7 +19,9 @@ import {
   readWaveSecurityGate,
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
+  persistedRelaunchPlanMatchesCurrentState,
   resolveRelaunchRuns,
+  resolveSharedComponentContinuationRuns,
   runClosureSweepPhase,
   selectInitialWaveRuns,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
@@ -893,6 +895,196 @@ describe("resolveRelaunchRuns", () => {
 
     expect(selected.barrier).toBe(null);
     expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A2", "A3"]);
+  });
+
+  it("continues shared-component closure with sibling owners without retrying the landed owner", () => {
+    const currentRuns = [{ agent: { agentId: "A1", capabilities: ["runtime"] } }];
+    const agentRuns = [
+      ...currentRuns,
+      { agent: { agentId: "A2", capabilities: ["runtime"] } },
+      { agent: { agentId: "A7", capabilities: ["runtime"] } },
+    ];
+
+    const selected = resolveSharedComponentContinuationRuns(
+      currentRuns,
+      agentRuns,
+      [
+        {
+          agentId: "A2",
+          statusCode: "shared-component-sibling-pending",
+          componentId: "pilot-live",
+          satisfiedAgentIds: ["A1"],
+          waitingOnAgentIds: ["A2", "A7"],
+          failedOwnContractAgentIds: ["A2", "A7"],
+        },
+      ],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [],
+          requests: [],
+          blockers: [],
+        },
+        capabilityAssignments: [],
+        dependencySnapshot: {
+          openInbound: [],
+        },
+        ledger: { phase: "running", attempt: 1, tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+        integrationAgentId: "A8",
+        laneProfile: {
+          runtimePolicy: {
+            runtimeMixTargets: {},
+          },
+        },
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.map((run) => run.agent.agentId)).toEqual(["A2", "A7"]);
+  });
+
+  it("invalidates a persisted relaunch plan when shared-component ownership now waits on different agents", () => {
+    const dir = makeTempDir();
+    const a1StatusPath = path.join(dir, "wave-10-a1.status");
+    const a1SummaryPath = path.join(dir, "wave-10-a1.summary.json");
+    const a1LogPath = path.join(dir, "wave-10-a1.log");
+    const a2StatusPath = path.join(dir, "wave-10-a2.status");
+    const a2LogPath = path.join(dir, "wave-10-a2.log");
+    const a7StatusPath = path.join(dir, "wave-10-a7.status");
+    const a7LogPath = path.join(dir, "wave-10-a7.log");
+
+    fs.writeFileSync(a1StatusPath, JSON.stringify({ code: 0, promptHash: "hash-a1" }, null, 2), "utf8");
+    fs.writeFileSync(a1LogPath, "", "utf8");
+    fs.writeFileSync(
+      a1SummaryPath,
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["src/a1.ts"],
+          },
+          components: [
+            {
+              componentId: "pilot-live",
+              level: "pilot-live",
+              state: "met",
+            },
+          ],
+          logPath: a1LogPath,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    fs.writeFileSync(a2StatusPath, JSON.stringify({ code: 0, promptHash: "stale-a2" }, null, 2), "utf8");
+    fs.writeFileSync(a2LogPath, "", "utf8");
+    fs.writeFileSync(a7StatusPath, JSON.stringify({ code: 0, promptHash: "stale-a7" }, null, 2), "utf8");
+    fs.writeFileSync(a7LogPath, "", "utf8");
+
+    const wave = {
+      wave: 10,
+      componentPromotions: [
+        {
+          componentId: "pilot-live",
+          targetLevel: "pilot-live",
+        },
+      ],
+      agents: [
+        {
+          agentId: "A1",
+          components: ["pilot-live"],
+          componentTargets: {
+            "pilot-live": "pilot-live",
+          },
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        {
+          agentId: "A2",
+          components: ["pilot-live"],
+          componentTargets: {
+            "pilot-live": "pilot-live",
+          },
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        {
+          agentId: "A7",
+          components: ["pilot-live"],
+          componentTargets: {
+            "pilot-live": "pilot-live",
+          },
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+      ],
+    };
+    const agentRuns = [
+      {
+        agent: wave.agents[0],
+        statusPath: a1StatusPath,
+        logPath: a1LogPath,
+      },
+      {
+        agent: wave.agents[1],
+        statusPath: a2StatusPath,
+        logPath: a2LogPath,
+      },
+      {
+        agent: wave.agents[2],
+        statusPath: a7StatusPath,
+        logPath: a7LogPath,
+      },
+    ];
+
+    expect(
+      persistedRelaunchPlanMatchesCurrentState(
+        agentRuns,
+        {
+          selectedAgentIds: ["A1"],
+        },
+        {
+          laneProfile: {
+            validation: {
+              requireComponentPromotionsFromWave: 0,
+            },
+            roles: {
+              contQaAgentId: "A0",
+              contEvalAgentId: "E0",
+              integrationAgentId: "A8",
+              documentationAgentId: "A9",
+            },
+          },
+        },
+        wave,
+      ),
+    ).toBe(false);
   });
 
   it("switches failed agents to an allowed fallback executor on retry", () => {

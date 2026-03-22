@@ -21,6 +21,7 @@ Published package:
 - Primary public registry: `https://registry.npmjs.org`
 - Release: [v0.5.2](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.2)
 - npmjs publish workflow: [publish-npm.yml](./.github/workflows/publish-npm.yml)
+- npmjs install is now live for `0.5.2`; GitHub Packages is the authenticated fallback path only.
 
 Install from npmjs:
 
@@ -43,6 +44,7 @@ pnpm exec wave init --adopt-existing
 - Example `[wave-*]` markers inside fenced snippets or prose no longer satisfy closure; only real standalone structured signals count.
 - `### Deliverables` is now enforced as an ownership-scoped file contract, so declared outputs must stay inside that agent's `File ownership` block.
 - Regression coverage now includes both of those failure paths directly.
+- The npmjs package release is now live, so `pnpm add -D @chllming/wave-orchestration` works from the public registry without the older GitHub Packages auth setup.
 
 ## New In 0.5.1
 

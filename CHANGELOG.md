@@ -5,6 +5,7 @@
 - Hardened structured closure marker parsing so fenced or prose example `[wave-*]` lines no longer satisfy implementation, integration, documentation, or evaluator gates.
 - Hardened `### Deliverables` so declared outputs must remain repo-relative file paths inside the implementation agent's declared file ownership before the exit contract can pass.
 - Added regression coverage for the fenced-marker false-positive path and for deliverables that escape ownership boundaries.
+- Published `@chllming/wave-orchestration@0.5.2` successfully to npmjs, making npmjs the working public install path instead of a pending rollout target.
 
 ## 0.5.1 - 2026-03-22
 

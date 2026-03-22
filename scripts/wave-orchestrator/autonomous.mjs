@@ -233,6 +233,27 @@ function pendingHumanItemsForWave(lanePaths, wave) {
   ];
 }
 
+function pendingHumanItemsForLane(lanePaths) {
+  if (!fs.existsSync(lanePaths.ledgerDir)) {
+    return [];
+  }
+  return fs
+    .readdirSync(lanePaths.ledgerDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^wave-\d+\.json$/i.test(entry.name))
+    .map((entry) => ({
+      entry,
+      wave: Number.parseInt(entry.name.replace(/^wave-|\.json$/gi, ""), 10),
+    }))
+    .filter((item) => Number.isFinite(item.wave))
+    .sort((left, right) => left.wave - right.wave)
+    .flatMap((item) =>
+      pendingHumanItemsForWave(lanePaths, item.wave).map((id) => ({
+        wave: item.wave,
+        id,
+      })),
+    );
+}
+
 export function readAutonomousBarrier(lanePaths, lane, wave = null) {
   const dependencyBlockers = requiredInboundDependenciesOpen(lanePaths, lane);
   if (dependencyBlockers.length > 0) {
@@ -247,6 +268,15 @@ export function readAutonomousBarrier(lanePaths, lane, wave = null) {
     };
   }
   if (wave === null) {
+    const pendingHumanEntries = pendingHumanItemsForLane(lanePaths);
+    if (pendingHumanEntries.length > 0) {
+      return {
+        kind: "human-input",
+        dependencyBlockers: [],
+        pendingHumanItems: pendingHumanEntries.map((entry) => entry.id),
+        message: `Stopping finalization for lane ${lane}: pending human input remains (${pendingHumanEntries.map((entry) => `wave ${entry.wave}: ${entry.id}`).join(", ")}).`,
+      };
+    }
     return null;
   }
   const pendingHumanItems = pendingHumanItemsForWave(lanePaths, wave);

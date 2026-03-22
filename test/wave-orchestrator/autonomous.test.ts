@@ -79,6 +79,35 @@ describe("readAutonomousBarrier", () => {
     );
   });
 
+  it("blocks finalization when any completed wave still has pending human input", () => {
+    const dir = makeTempDir();
+    const lanePaths = {
+      crossLaneDependenciesDir: path.join(dir, "dependencies"),
+      ledgerDir: path.join(dir, "ledger"),
+    };
+    fs.mkdirSync(lanePaths.ledgerDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(lanePaths.ledgerDir, "wave-2.json"),
+      JSON.stringify(
+        {
+          humanFeedback: ["feedback-1"],
+          humanEscalations: ["escalation-1"],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const barrier = readAutonomousBarrier(lanePaths, "main");
+    expect(barrier).toMatchObject({
+      kind: "human-input",
+      pendingHumanItems: ["feedback-1", "escalation-1"],
+    });
+    expect(barrier.message).toContain("Stopping finalization for lane main");
+    expect(barrier.message).toContain("wave 2: feedback-1");
+  });
+
   it("blocks the next wave when pending human input remains in the ledger", () => {
     const dir = makeTempDir();
     const lanePaths = {

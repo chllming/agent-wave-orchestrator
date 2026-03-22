@@ -114,6 +114,33 @@ function updateWaveConfig(repoDir, mutate) {
   return next;
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceAgentExecutorBlock(markdown, agentId, blockLines) {
+  const pattern = new RegExp(
+    `(## Agent ${escapeRegex(agentId)}:[\\s\\S]*?### Executor\\n\\n)[\\s\\S]*?(?=\\n### )`,
+  );
+  if (!pattern.test(markdown)) {
+    throw new Error(`Unable to locate executor block for ${agentId}`);
+  }
+  return markdown.replace(pattern, `$1${blockLines.join("\n")}\n`);
+}
+
+function configureWaveExecutorsForLiveTrace(repoDir, options = {}) {
+  const wavePath = path.join(repoDir, "docs", "plans", "waves", "wave-0.md");
+  const current = fs.readFileSync(wavePath, "utf8");
+  const implementationBlock = options.implementationExecutorBlock || ["- profile: implement-fast"];
+  const next = [
+    ["A0", options.evaluatorExecutorBlock || ["- id: local"]],
+    ["A8", options.integrationExecutorBlock || ["- id: local"]],
+    ["A9", options.documentationExecutorBlock || ["- id: local"]],
+    ["A1", implementationBlock],
+  ].reduce((markdown, [agentId, lines]) => replaceAgentExecutorBlock(markdown, agentId, lines), current);
+  fs.writeFileSync(wavePath, next, "utf8");
+}
+
 function configureRepoExecutorsForLiveTrace(repoDir, options = {}) {
   const updated = updateWaveConfig(repoDir, (config) => {
     config.executors.default = options.defaultExecutor || "local";
@@ -1142,6 +1169,7 @@ describe("trace bundles", () => {
       const initResult = runWaveCli(["init"], repoDir);
       expect(initResult.status).toBe(0);
       configureRepoExecutorsForLiveTrace(repoDir);
+      configureWaveExecutorsForLiveTrace(repoDir);
       seedCoordinationRecord(repoDir, {
         id: "decision-doc-owner",
         lane: "main",
@@ -1231,6 +1259,7 @@ describe("trace bundles", () => {
       const initResult = runWaveCli(["init"], repoDir);
       expect(initResult.status).toBe(0);
       configureRepoExecutorsForLiveTrace(repoDir);
+      configureWaveExecutorsForLiveTrace(repoDir);
 
       seedCoordinationRecord(repoDir, {
         id: "clarify-product-name",
@@ -1301,6 +1330,7 @@ describe("trace bundles", () => {
         },
         fallbackExecutorOrder: ["local"],
       });
+      configureWaveExecutorsForLiveTrace(repoDir);
 
       const launchResult = runWaveCli(
         [

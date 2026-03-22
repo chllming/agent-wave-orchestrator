@@ -3,6 +3,21 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.5.3",
+      "date": "2026-03-22",
+      "summary": "Closure-sweep launch ordering fix for implementation-first wave execution.",
+      "features": [
+        "The launcher now starts only implementation agents in the initial wave pass when implementation work remains, deferring integration, documentation, and evaluator roles until closure sweep order.",
+        "Wave waiting, dashboard progress refresh, and human-feedback monitoring now scope to the runs launched in the current pass so deferred closure agents no longer create false pending or missing-status failures.",
+        "Regression coverage now exercises both mixed implementation/closure waves and closure-only retry waves directly."
+      ],
+      "manualSteps": [
+        "After upgrading, rerun `pnpm exec wave launch --lane main --dry-run --no-dashboard` on active lanes to confirm only implementation agents appear in the initial pass.",
+        "If a lane is mid-run, relaunch from the upgraded package so closure agents pick up the corrected launch ordering and wait behavior."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.5.2",
       "date": "2026-03-22",
       "summary": "Closure-marker and deliverable-ownership hardening for wave exit validation.",

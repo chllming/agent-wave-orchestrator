@@ -17,11 +17,11 @@ It includes:
 ## Quick Start
 
 Published package:
-- `@chllming/wave-orchestration@0.5.2`
+- `@chllming/wave-orchestration@0.5.3`
 - Primary public registry: `https://registry.npmjs.org`
-- Release: [v0.5.2](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.2)
+- Release: [v0.5.3](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.3)
 - npmjs publish workflow: [publish-npm.yml](./.github/workflows/publish-npm.yml)
-- npmjs install is now live for `0.5.2`; GitHub Packages is the authenticated fallback path only.
+- npmjs install is now live for `0.5.3`; GitHub Packages is the authenticated fallback path only.
 
 Install from npmjs:
 
@@ -38,6 +38,12 @@ If your repo already has Wave config, docs, or waves you want to keep:
 ```bash
 pnpm exec wave init --adopt-existing
 ```
+
+## New In 0.5.3
+
+- The launcher now starts only implementation agents in the initial wave pass when implementation work is still pending.
+- Wait/progress tracking now scopes to the runs actually launched in the current pass, so deferred closure agents no longer look like missing or pending failures.
+- Closure-only retries still run through the existing `A8` -> `A9` -> `A0` sweep, with regression coverage for both mixed and closure-only cases.
 
 ## New In 0.5.2
 

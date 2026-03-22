@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3 - 2026-03-22
+
+- Deferred integration, documentation, and evaluator agents until the closure sweep whenever implementation work is still pending, so the runtime now matches the documented closure model.
+- Scoped wave wait/progress and human-feedback monitoring to the runs actually launched in the current pass, preventing deferred closure agents from surfacing as false pending or missing-status failures.
+- Added regression coverage for mixed implementation/closure waves and for closure-only retry waves.
+- Published `@chllming/wave-orchestration@0.5.3` successfully to npmjs and GitHub Releases.
+
 ## 0.5.2 - 2026-03-22
 
 - Hardened structured closure marker parsing so fenced or prose example `[wave-*]` lines no longer satisfy implementation, integration, documentation, or evaluator gates.

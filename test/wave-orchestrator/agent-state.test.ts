@@ -8,6 +8,7 @@ import {
   validateDocumentationClosureSummary,
   validateContQaSummary,
   validateImplementationSummary,
+  validateSecuritySummary,
 } from "../../scripts/wave-orchestrator/agent-state.mjs";
 import { REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
 
@@ -97,7 +98,9 @@ describe("buildAgentExecutionSummary", () => {
       docs: "pass",
       detail: "wrapped-gate",
     });
-    expect(summary.deliverables).toEqual([{ path: "README.md", exists: true }]);
+    expect(summary.deliverables).toEqual([
+      expect.objectContaining({ path: "README.md", exists: true }),
+    ]);
   });
 
   it("ignores fenced example markers that are mixed with prose", () => {
@@ -154,6 +157,64 @@ describe("buildAgentExecutionSummary", () => {
       targetIds: ["response-quality", "startup-latency"],
       benchmarkIds: ["golden-response-smoke", "http-latency-smoke"],
       detail: "all-good",
+    });
+  });
+
+  it("records proof artifact presence for implementation agents", () => {
+    const repoDir = makeRepoTempDir();
+    const artifactPath = path
+      .relative(REPO_ROOT, path.join(repoDir, "live-proof.json"))
+      .replaceAll("\\", "/");
+    fs.writeFileSync(path.join(REPO_ROOT, artifactPath), "{\"ok\":true}\n", "utf8");
+    const logPath = path.join(repoDir, "a6.log");
+    fs.writeFileSync(
+      logPath,
+      "[wave-proof] completion=live durability=durable proof=live state=met detail=live-proof\n[wave-doc-delta] state=none detail=no-docs\n",
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: {
+        agentId: "A6",
+        proofArtifacts: [
+          { path: artifactPath, kind: "live-status", requiredFor: ["pilot-live"] },
+        ],
+      },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary.proofArtifacts).toEqual([
+      expect.objectContaining({
+        path: artifactPath,
+        kind: "live-status",
+        requiredFor: ["pilot-live"],
+        exists: true,
+      }),
+    ]);
+  });
+
+  it("parses the final wave-security marker", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a7.log");
+    fs.writeFileSync(
+      logPath,
+      "[wave-security] state=concerns findings=2 approvals=1 detail=needs-human-review\n",
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A7" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+      reportPath: path.join(dir, "wave-0-security-review.md"),
+    });
+
+    expect(summary.security).toMatchObject({
+      state: "concerns",
+      findings: 2,
+      approvals: 1,
+      detail: "needs-human-review",
     });
   });
 });
@@ -290,6 +351,63 @@ describe("validateImplementationSummary", () => {
     });
   });
 
+  it("rejects missing required proof artifacts for proof-centric owners", () => {
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A6",
+          exitContract: {
+            completion: "live",
+            durability: "durable",
+            proof: "live",
+            docImpact: "none",
+          },
+          components: ["learning-memory-action-plane"],
+          componentTargets: {
+            "learning-memory-action-plane": "pilot-live",
+          },
+          proofArtifacts: [
+            {
+              path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+              kind: "restart-check",
+              requiredFor: ["pilot-live"],
+            },
+          ],
+        },
+        {
+          proof: {
+            completion: "live",
+            durability: "durable",
+            proof: "live",
+            state: "met",
+          },
+          docDelta: {
+            state: "none",
+            paths: [],
+          },
+          components: [
+            {
+              componentId: "learning-memory-action-plane",
+              level: "pilot-live",
+              state: "met",
+            },
+          ],
+          proofArtifacts: [
+            {
+              path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+              kind: "restart-check",
+              requiredFor: ["pilot-live"],
+              exists: false,
+            },
+          ],
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-proof-artifact",
+    });
+  });
+
   it("rejects example markers that only appear inside a prose fence", () => {
     const dir = makeTempDir();
     const logPath = path.join(dir, "a1.log");
@@ -332,6 +450,60 @@ describe("validateImplementationSummary", () => {
     ).toMatchObject({
       ok: false,
       statusCode: "missing-wave-proof",
+    });
+  });
+});
+
+describe("validateSecuritySummary", () => {
+  it("accepts clear security output when the report exists", () => {
+    const reportDir = makeRepoTempDir();
+    const reportPath = path.join(reportDir, "wave-0-security-review.md");
+    fs.writeFileSync(reportPath, "# Security Review\n", "utf8");
+
+    expect(
+      validateSecuritySummary(
+        {
+          agentId: "A7",
+        },
+        {
+          reportPath: path.relative(REPO_ROOT, reportPath),
+          security: {
+            state: "clear",
+            findings: 0,
+            approvals: 0,
+            detail: "clear",
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+    });
+  });
+
+  it("treats blocked security output as a hard failure", () => {
+    const reportDir = makeRepoTempDir();
+    const reportPath = path.join(reportDir, "wave-0-security-review.md");
+    fs.writeFileSync(reportPath, "# Security Review\n", "utf8");
+
+    expect(
+      validateSecuritySummary(
+        {
+          agentId: "A7",
+        },
+        {
+          reportPath: path.relative(REPO_ROOT, reportPath),
+          security: {
+            state: "blocked",
+            findings: 1,
+            approvals: 0,
+            detail: "untrusted-shell-execution",
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "security-blocked",
     });
   });
 });

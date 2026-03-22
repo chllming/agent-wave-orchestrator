@@ -121,6 +121,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     inboxesDir: path.join(stateDir, "inboxes"),
     ledgerDir: path.join(stateDir, "ledger"),
     integrationDir: path.join(stateDir, "integration"),
+    securityDir: path.join(stateDir, "security"),
     dependencySnapshotsDir: path.join(stateDir, "dependencies"),
     docsQueueDir: path.join(stateDir, "docs-queue"),
     tracesDir: path.join(stateDir, "traces"),

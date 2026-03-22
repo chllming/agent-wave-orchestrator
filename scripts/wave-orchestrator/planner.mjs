@@ -3,7 +3,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin, stderr } from "node:process";
 import { EXIT_CONTRACT_COMPLETION_VALUES, EXIT_CONTRACT_DOC_IMPACT_VALUES, EXIT_CONTRACT_DURABILITY_VALUES, EXIT_CONTRACT_PROOF_VALUES } from "./agent-state.mjs";
-import { loadWaveConfig } from "./config.mjs";
+import { DEFAULT_SECURITY_ROLE_PROMPT_PATH, loadWaveConfig } from "./config.mjs";
 import { loadComponentCutoverMatrix, parseWaveFile, requiredDocumentationStewardPathsForWave, SHARED_PLAN_DOC_PATHS, validateWaveDefinition, applyExecutorSelectionsToWave } from "./wave-files.mjs";
 import { buildLanePaths, ensureDirectory, REPO_ROOT, writeJsonAtomic, writeTextAtomic } from "./shared.mjs";
 import {
@@ -118,10 +118,16 @@ function defaultExecutorProfile(roleKind) {
   if (roleKind === "infra" || roleKind === "deploy" || roleKind === "research") {
     return "ops-triage";
   }
+  if (roleKind === "security") {
+    return "security-review";
+  }
   return "implement-fast";
 }
 
 function defaultExitContract(roleKind) {
+  if (roleKind === "security") {
+    return null;
+  }
   if (roleKind === "infra" || roleKind === "deploy") {
     return {
       completion: "live",
@@ -147,6 +153,9 @@ function defaultExitContract(roleKind) {
 }
 
 function buildDefaultValidationCommand(template, roleKind) {
+  if (roleKind === "security") {
+    return "Manual review of the changed security-sensitive surfaces plus required proofs.";
+  }
   if (template === "qa" || roleKind === "qa") {
     return "pnpm test";
   }
@@ -157,6 +166,9 @@ function buildDefaultValidationCommand(template, roleKind) {
 }
 
 function buildDefaultOutputSummary(template, roleKind) {
+  if (roleKind === "security") {
+    return "Summarize the threat model, findings, required approvals, requested fixes, and final security disposition.";
+  }
   if (template === "qa" || roleKind === "qa") {
     return "Summarize the proved QA coverage, the remaining gaps, and whether the wave is closure-ready.";
   }
@@ -167,6 +179,9 @@ function buildDefaultOutputSummary(template, roleKind) {
 }
 
 function buildDefaultPrimaryGoal(template, roleKind, title) {
+  if (roleKind === "security") {
+    return `Review the ${title.toLowerCase()} slice for security risks and route exact fixes before integration.`;
+  }
   if (template === "qa" || roleKind === "qa") {
     return `Build and validate the ${title.toLowerCase()} QA slice.`;
   }
@@ -705,6 +720,9 @@ function buildWorkerAgentSpec({
     ]),
   );
   const capabilities = values.capabilities.slice();
+  if (roleKind === "security" && !capabilities.some((capability) => capability.startsWith("security"))) {
+    capabilities.push("security-review");
+  }
   if (roleKind === "infra" && !capabilities.includes("infra")) {
     capabilities.push("infra");
   }
@@ -717,7 +735,7 @@ function buildWorkerAgentSpec({
   return {
     agentId,
     title,
-    rolePromptPaths: [],
+    rolePromptPaths: roleKind === "security" ? [DEFAULT_SECURITY_ROLE_PROMPT_PATH] : [],
     skills: values.skills || [],
     executor: {
       profile: values.executorProfile,
@@ -929,7 +947,7 @@ async function runProjectSetupFlow(options = {}) {
 async function collectComponentPromotions({ prompt, matrix, template, waveNumber }) {
   const targetLevel = defaultTargetLevel(template);
   const promotionCount = await prompt.askInteger("How many component promotions belong in this wave?", 1, {
-    min: 1,
+    min: 0,
   });
   const componentPromotions = [];
   const componentCatalog = [];
@@ -985,7 +1003,7 @@ async function collectComponentPromotions({ prompt, matrix, template, waveNumber
   return { componentPromotions, componentCatalog };
 }
 
-async function collectWorkerAgents({ prompt, template, profile, componentPromotions, waveNumber }) {
+async function collectWorkerAgents({ prompt, template, profile, componentPromotions, waveNumber, lane }) {
   const defaultRoleKind = defaultWorkerRoleKindForTemplate(template);
   const workerCount = await prompt.askInteger("How many worker agents should this wave include?", 1, {
     min: 1,
@@ -1001,19 +1019,21 @@ async function collectWorkerAgents({ prompt, template, profile, componentPromoti
     const title = cleanText(await prompt.ask(`Worker ${agentId} title`, defaults.title));
     const roleKind = await prompt.askChoice(
       `Worker ${agentId} role kind`,
-      ["implementation", "qa", "infra", "deploy", "research"],
+      ["implementation", "qa", "infra", "deploy", "research", "security"],
       defaultRoleKind,
     );
     const executorProfile = await prompt.askChoice(
       `Worker ${agentId} executor profile`,
-      ["implement-fast", "deep-review", "eval-tuning", "docs-pass", "ops-triage"],
+      ["implement-fast", "deep-review", "eval-tuning", "docs-pass", "ops-triage", "security-review"],
       defaultExecutorProfile(roleKind),
     );
     const ownedPaths = normalizeRepoPathList(
       normalizeListText(
         await prompt.ask(
           `Worker ${agentId} owned paths (comma or | separated)`,
-          template === "infra"
+          roleKind === "security"
+            ? `.tmp/${lane}-wave-launcher/security/wave-${waveNumber}-review.md`
+            : template === "infra"
             ? "scripts/,docs/plans/"
             : template === "release"
               ? "CHANGELOG.md,README.md"
@@ -1025,11 +1045,16 @@ async function collectWorkerAgents({ prompt, template, profile, componentPromoti
     const components = normalizeListText(
       await prompt.ask(
         `Worker ${agentId} component ids (comma or | separated)`,
-        componentPromotions.map((promotion) => promotion.componentId).join(", "),
+        roleKind === "security"
+          ? ""
+          : componentPromotions.map((promotion) => promotion.componentId).join(", "),
       ),
     ).map((componentId) => normalizeComponentId(componentId, `${agentId}.components`));
     const capabilities = normalizeListText(
-      await prompt.ask(`Worker ${agentId} capabilities (comma or | separated)`, roleKind === "implementation" ? "" : roleKind),
+      await prompt.ask(
+        `Worker ${agentId} capabilities (comma or | separated)`,
+        roleKind === "implementation" ? "" : roleKind === "security" ? "security-review" : roleKind,
+      ),
     );
     const additionalContext = normalizeRepoPathList(
       normalizeListText(
@@ -1091,28 +1116,30 @@ async function collectWorkerAgents({ prompt, template, profile, componentPromoti
     );
     const context7Query = cleanText(await prompt.ask(`Worker ${agentId} Context7 query`, ""));
     const exitDefaults = defaultExitContract(roleKind);
-    const exitContract = {
-      completion: await prompt.askChoice(
-        `Worker ${agentId} exit completion`,
-        EXIT_CONTRACT_COMPLETION_VALUES,
-        exitDefaults.completion,
-      ),
-      durability: await prompt.askChoice(
-        `Worker ${agentId} exit durability`,
-        EXIT_CONTRACT_DURABILITY_VALUES,
-        exitDefaults.durability,
-      ),
-      proof: await prompt.askChoice(
-        `Worker ${agentId} exit proof`,
-        EXIT_CONTRACT_PROOF_VALUES,
-        exitDefaults.proof,
-      ),
-      docImpact: await prompt.askChoice(
-        `Worker ${agentId} exit doc impact`,
-        EXIT_CONTRACT_DOC_IMPACT_VALUES,
-        exitDefaults.docImpact,
-      ),
-    };
+    const exitContract = exitDefaults
+      ? {
+          completion: await prompt.askChoice(
+            `Worker ${agentId} exit completion`,
+            EXIT_CONTRACT_COMPLETION_VALUES,
+            exitDefaults.completion,
+          ),
+          durability: await prompt.askChoice(
+            `Worker ${agentId} exit durability`,
+            EXIT_CONTRACT_DURABILITY_VALUES,
+            exitDefaults.durability,
+          ),
+          proof: await prompt.askChoice(
+            `Worker ${agentId} exit proof`,
+            EXIT_CONTRACT_PROOF_VALUES,
+            exitDefaults.proof,
+          ),
+          docImpact: await prompt.askChoice(
+            `Worker ${agentId} exit doc impact`,
+            EXIT_CONTRACT_DOC_IMPACT_VALUES,
+            exitDefaults.docImpact,
+          ),
+        }
+      : null;
     workerAgents.push({
       agentId,
       title,
@@ -1257,6 +1284,7 @@ async function runDraftFlow(options = {}) {
       profile,
       componentPromotions,
       waveNumber,
+      lane: lanePaths.lane,
     });
     const draftValues = {
       wave: waveNumber,

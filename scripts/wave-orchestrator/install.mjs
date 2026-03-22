@@ -22,6 +22,7 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/agents/wave-cont-qa-role.md",
   "docs/agents/wave-cont-eval-role.md",
   "docs/agents/wave-integration-role.md",
+  "docs/agents/wave-security-role.md",
   "docs/concepts/context7-vs-skills.md",
   "docs/concepts/operating-modes.md",
   "docs/concepts/runtime-agnostic-orchestration.md",

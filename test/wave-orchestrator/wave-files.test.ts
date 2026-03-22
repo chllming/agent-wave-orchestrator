@@ -10,6 +10,7 @@ import {
   parseWaveFiles,
   readRunState,
   reconcileRunStateFromStatusFiles,
+  resolveAgentExecutor,
   requiredDocumentationStewardPathsForWave,
   SHARED_PLAN_DOC_PATHS,
   validateWaveComponentPromotions,
@@ -20,6 +21,7 @@ import {
   WAVE_DOCUMENTATION_ROLE_PROMPT_PATH,
   WAVE_CONT_QA_ROLE_PROMPT_PATH,
   WAVE_INTEGRATION_ROLE_PROMPT_PATH,
+  WAVE_SECURITY_ROLE_PROMPT_PATH,
 } from "../../scripts/wave-orchestrator/wave-files.mjs";
 
 const tempPaths = [];
@@ -306,6 +308,48 @@ File ownership (only touch these paths):
     expect(wave.agents[0]?.skills).toEqual(["provider-github-release", "provider-aws"]);
   });
 
+  it("extracts proof artifacts from agent sections", () => {
+    const wave = parseWaveContent(
+      `# Wave 8 - Live Proof
+
+## Agent A6: Live Validation
+
+### Exit contract
+
+- completion: live
+- durability: durable
+- proof: live
+- doc-impact: none
+
+### Proof artifacts
+
+- path: .tmp/wave-8-learning-proof/learning-plane-before-restart.json | kind: live-status | required-for: pilot-live
+- path: .tmp/wave-8-learning-proof/learning-plane-after-restart.json | kind: restart-check | required-for: pilot-live
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- .tmp/wave-8-learning-proof/
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-8.md"),
+      { lane: "main" },
+    );
+
+    expect(wave.agents[0]?.proofArtifacts).toEqual([
+      {
+        path: ".tmp/wave-8-learning-proof/learning-plane-before-restart.json",
+        kind: "live-status",
+        requiredFor: ["pilot-live"],
+      },
+      {
+        path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+        kind: "restart-check",
+        requiredFor: ["pilot-live"],
+      },
+    ]);
+  });
+
   it("accepts deliverables that exactly match an owned file path", () => {
     const wave = parseWaveContent(
       `# Wave 7 - Sample
@@ -402,6 +446,84 @@ File ownership (only touch these paths):
         { lane: "main" },
       ),
     ).toThrow(/must be a file path, not a directory path/);
+  });
+
+  it("rejects proof artifacts that escape the agent's owned paths", () => {
+    expect(() =>
+      parseWaveContent(
+        `# Wave 8 - Live Proof
+
+## Agent A6: Live Validation
+
+### Exit contract
+
+- completion: live
+- durability: durable
+- proof: live
+- doc-impact: none
+
+### Proof artifacts
+
+- path: .tmp/wave-8-learning-proof/learning-plane-before-restart.json | kind: live-status | required-for: pilot-live
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- docs/
+\`\`\`
+`,
+        path.join(REPO_ROOT, "docs/plans/waves/wave-8.md"),
+        { lane: "main" },
+      ),
+    ).toThrow(/Proof artifact ".*" .* must stay within the agent's declared file ownership/);
+  });
+
+  it("defaults proof-centric agents to sticky retry policy", () => {
+    const resolved = resolveAgentExecutor(
+      {
+        agentId: "A6",
+        title: "Live Validation",
+        components: ["learning-memory-action-plane"],
+        componentTargets: {
+          "learning-memory-action-plane": "pilot-live",
+        },
+        exitContract: {
+          completion: "live",
+          durability: "durable",
+          proof: "live",
+          docImpact: "none",
+        },
+        proofArtifacts: [
+          {
+            path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+            kind: "restart-check",
+            requiredFor: ["pilot-live"],
+          },
+        ],
+        executorConfig: {
+          id: "codex",
+        },
+      },
+      {
+        lane: "main",
+        wave: {
+          wave: 8,
+          componentPromotions: [
+            {
+              componentId: "learning-memory-action-plane",
+              targetLevel: "pilot-live",
+            },
+          ],
+        },
+      },
+    );
+
+    expect(resolved).toMatchObject({
+      id: "codex",
+      retryPolicy: "sticky",
+      allowFallbackOnRetry: false,
+      fallbacks: [],
+    });
   });
 
   it("composes imported standing role prompts while keeping ownership local", () => {
@@ -751,6 +873,72 @@ describe("validateWaveDefinition", () => {
               ownedPaths: ["go/example/file.go"],
               components: Object.keys(starterComponentTargets),
               componentTargets: starterComponentTargets,
+            },
+          ],
+        },
+        { lane: "leap-claw" },
+      ),
+    ).toMatchObject({ wave: 0 });
+  });
+
+  it("accepts a security reviewer without components or an exit contract", () => {
+    expect(
+      validateWaveDefinition(
+        {
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
+          agents: [
+            {
+              agentId: "A0",
+              prompt: leapClawPrompt.replace(
+                "go/example/file.go",
+                "docs/plans/waves/reviews/wave-0-cont-qa.md",
+              ),
+              rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-cont-qa.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [WAVE_INTEGRATION_ROLE_PROMPT_PATH],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+            },
+            {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
+              agentId: "A7",
+              title: "Security Engineer",
+              prompt: [
+                "Read docs/reference/repository-guidance.md.",
+                "Read docs/research/agent-context-sources.md.",
+                "",
+                "File ownership (only touch these paths):",
+                "- .tmp/main-wave-launcher/security/wave-0-review.md",
+              ].join("\n"),
+              rolePromptPaths: [WAVE_SECURITY_ROLE_PROMPT_PATH],
+              ownedPaths: [".tmp/main-wave-launcher/security/wave-0-review.md"],
+              capabilities: ["security-review"],
+            },
+            {
+              agentId: "A1",
+              prompt: leapClawPrompt,
+              ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
+              exitContract: {
+                completion: "integrated",
+                durability: "none",
+                proof: "integration",
+                docImpact: "owned",
+              },
             },
           ],
         },
@@ -2170,6 +2358,128 @@ describe("reconcileRunStateFromStatusFiles", () => {
           {
             code: "open-human-escalation",
             detail: "Open human escalation records: escalation-1.",
+          },
+        ]),
+      },
+    ]);
+  });
+
+  it("removes previously completed waves when helper assignments or dependencies stay open", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile-hardening`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    const assignmentsDir = path.join(tempRoot, "assignments");
+    const dependencySnapshotsDir = path.join(tempRoot, "dependencies");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+    fs.mkdirSync(assignmentsDir, { recursive: true });
+    fs.mkdirSync(dependencySnapshotsDir, { recursive: true });
+
+    const wave = makeReconcileWave(tempRoot);
+    fs.writeFileSync(
+      runStatePath,
+      JSON.stringify({ completedWaves: [200] }, null, 2),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(REPO_ROOT, wave.contQaReportPath),
+      "# cont-QA\n\nVerdict: PASS\n",
+      "utf8",
+    );
+    for (const agent of wave.agents) {
+      writeStatus(statusDir, agent, {
+        code: 0,
+        promptHash: hashAgentPromptFingerprint(agent),
+      });
+    }
+    writeSummary(statusDir, wave.agents[0], {
+      reportPath: wave.contQaReportPath,
+      verdict: { verdict: "pass", detail: "good" },
+      gate: {
+        architecture: "pass",
+        integration: "pass",
+        durability: "pass",
+        live: "pass",
+        docs: "pass",
+        detail: "all clear",
+      },
+    });
+    writeSummary(statusDir, wave.agents[1], {
+      proof: { completion: "contract", durability: "none", proof: "unit", state: "met" },
+      docDelta: { state: "owned", paths: [] },
+    });
+    writeSummary(statusDir, wave.agents[2], {
+      integration: { state: "ready-for-doc-closure", detail: "all lanes landed" },
+    });
+    writeSummary(statusDir, wave.agents[3], {
+      docClosure: { state: "closed", detail: "docs reconciled" },
+    });
+    fs.writeFileSync(path.join(coordinationDir, "wave-200.jsonl"), "", "utf8");
+    fs.writeFileSync(
+      path.join(assignmentsDir, "wave-200.json"),
+      JSON.stringify(
+        [
+          {
+            id: "assignment:request-1",
+            requestId: "request-1",
+            assignedAgentId: "A1",
+            blocking: true,
+          },
+        ],
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(dependencySnapshotsDir, "wave-200.json"),
+      JSON.stringify(
+        {
+          requiredInbound: [{ id: "dep-1" }],
+          requiredOutbound: [],
+          unresolvedInboundAssignments: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      coordinationDir,
+      assignmentsDir,
+      dependencySnapshotsDir,
+      requireIntegrationStewardFromWave: 0,
+      laneProfile: {
+        validation: {
+          requireComponentPromotionsFromWave: null,
+          requireIntegrationStewardFromWave: 0,
+          requiredPromptReferences: [],
+        },
+        paths: {
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      },
+    });
+
+    expect(reconciliation.state.completedWaves).toEqual([]);
+    expect(reconciliation.blockedFromStatus).toMatchObject([
+      {
+        wave: 200,
+        reasons: expect.arrayContaining([
+          {
+            code: "helper-assignment-open",
+            detail: "Helper assignments remain open (request-1).",
+          },
+          {
+            code: "dependency-open",
+            detail: "Open required dependencies remain (dep-1).",
           },
         ]),
       },

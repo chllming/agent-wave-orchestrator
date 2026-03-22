@@ -11,6 +11,7 @@ import {
   DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
   DEFAULT_INTEGRATION_AGENT_ID,
   DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
+  DEFAULT_SECURITY_ROLE_PROMPT_PATH,
   DEFAULT_WAVE_LANE,
   loadWaveConfig,
   normalizeCodexSandboxMode,
@@ -46,6 +47,7 @@ import {
   validateExitContractShape,
   validateIntegrationSummary,
   validateImplementationSummary,
+  validateSecuritySummary,
   writeAgentExecutionSummary,
 } from "./agent-state.mjs";
 import { parseEvalTargets, validateEvalTargets } from "./evals.mjs";
@@ -55,12 +57,15 @@ import {
   isContEvalReportOnlyAgent,
   isContEvalReportPath,
   isContQaReportPath,
+  isSecurityReviewAgent,
+  resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
 
 export const WAVE_CONT_QA_ROLE_PROMPT_PATH = DEFAULT_CONT_QA_ROLE_PROMPT_PATH;
 export const WAVE_CONT_EVAL_ROLE_PROMPT_PATH = DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH;
 export const WAVE_INTEGRATION_ROLE_PROMPT_PATH = DEFAULT_INTEGRATION_ROLE_PROMPT_PATH;
 export const WAVE_DOCUMENTATION_ROLE_PROMPT_PATH = DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH;
+export const WAVE_SECURITY_ROLE_PROMPT_PATH = DEFAULT_SECURITY_ROLE_PROMPT_PATH;
 export const SHARED_PLAN_DOC_PATHS = [
   "docs/plans/current-state.md",
   "docs/plans/master-plan.md",
@@ -68,6 +73,22 @@ export const SHARED_PLAN_DOC_PATHS = [
 ];
 
 const COMPONENT_ID_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
+const COMPONENT_MATURITY_LEVELS = [
+  "inventoried",
+  "contract-frozen",
+  "repo-landed",
+  "baseline-proved",
+  "pilot-live",
+  "qa-proved",
+  "fleet-ready",
+  "cutover-ready",
+  "deprecation-ready",
+];
+const COMPONENT_MATURITY_ORDER = Object.fromEntries(
+  COMPONENT_MATURITY_LEVELS.map((level, index) => [level, index]),
+);
+const PROOF_CENTRIC_COMPONENT_LEVEL = "pilot-live";
+const RETRY_POLICY_VALUES = new Set(["sticky", "fallback-allowed"]);
 
 function resolveLaneProfileForOptions(options = {}) {
   if (options.laneProfile) {
@@ -329,6 +350,147 @@ function validateAgentDeliverables(deliverables, ownedPaths, filePath, agentId) 
   }
 }
 
+function normalizeMaturityLevel(value, label, filePath) {
+  const normalized = String(value || "").trim();
+  if (!COMPONENT_MATURITY_ORDER.hasOwnProperty(normalized)) {
+    throw new Error(`Invalid maturity level "${value}" in ${label} (${filePath})`);
+  }
+  return normalized;
+}
+
+function proofCentricLevelReached(level) {
+  return (
+    COMPONENT_MATURITY_ORDER[String(level || "").trim()] >=
+    COMPONENT_MATURITY_ORDER[PROOF_CENTRIC_COMPONENT_LEVEL]
+  );
+}
+
+export function waveRequiresProofCentricValidation(wave) {
+  return Array.isArray(wave?.componentPromotions)
+    ? wave.componentPromotions.some((promotion) => proofCentricLevelReached(promotion?.targetLevel))
+    : false;
+}
+
+function agentHighestComponentTargetLevel(agent) {
+  const levels = Array.isArray(agent?.components)
+    ? agent.components
+        .map((componentId) => agent?.componentTargets?.[componentId] || null)
+        .filter(Boolean)
+    : [];
+  if (levels.length === 0) {
+    return null;
+  }
+  return levels.sort((left, right) => COMPONENT_MATURITY_ORDER[right] - COMPONENT_MATURITY_ORDER[left])[0];
+}
+
+export function agentRequiresProofCentricValidation(agent) {
+  const highestTarget = agentHighestComponentTargetLevel(agent);
+  if (highestTarget && proofCentricLevelReached(highestTarget)) {
+    return true;
+  }
+  return Array.isArray(agent?.proofArtifacts) && agent.proofArtifacts.some((artifact) => {
+    if (!Array.isArray(artifact?.requiredFor) || artifact.requiredFor.length === 0) {
+      return true;
+    }
+    return artifact.requiredFor.some((level) => proofCentricLevelReached(level));
+  });
+}
+
+function parseProofArtifacts(blockText, filePath, label) {
+  if (!blockText) {
+    return [];
+  }
+  const artifacts = [];
+  const seenPaths = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^-\s+(.+?)\s*$/);
+    if (!bulletMatch) {
+      throw new Error(`Malformed proof artifact entry "${trimmed}" in ${label} (${filePath})`);
+    }
+    const rawEntry = bulletMatch[1].trim();
+    let artifact = null;
+    if (!rawEntry.includes("|") && !/^path\s*:/i.test(rawEntry)) {
+      const relPath = rawEntry.replace(/[`"']/g, "").trim();
+      if (!isRepoContainedPath(relPath)) {
+        throw new Error(`Path "${relPath}" in ${label} (${filePath}) must stay within the repo root`);
+      }
+      artifact = {
+        path: relPath,
+        kind: null,
+        requiredFor: [],
+      };
+    } else {
+      const fields = {};
+      for (const segment of rawEntry.split("|")) {
+        const pair = segment.trim();
+        if (!pair) {
+          continue;
+        }
+        const separatorIndex = pair.indexOf(":");
+        if (separatorIndex <= 0) {
+          throw new Error(`Malformed proof artifact field "${pair}" in ${label} (${filePath})`);
+        }
+        const key = pair.slice(0, separatorIndex).trim().toLowerCase();
+        const value = pair
+          .slice(separatorIndex + 1)
+          .trim()
+          .replace(/^["'`]|["'`]$/g, "");
+        if (!key || !value) {
+          throw new Error(`Malformed proof artifact field "${pair}" in ${label} (${filePath})`);
+        }
+        fields[key] = value;
+      }
+      const relPath = String(fields.path || "").trim();
+      if (!relPath) {
+        throw new Error(`Proof artifact entry in ${label} (${filePath}) must include path`);
+      }
+      if (!isRepoContainedPath(relPath)) {
+        throw new Error(`Path "${relPath}" in ${label} (${filePath}) must stay within the repo root`);
+      }
+      const requiredFor = String(fields["required-for"] || "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => normalizeMaturityLevel(entry, label, filePath));
+      artifact = {
+        path: relPath,
+        kind: String(fields.kind || "").trim() || null,
+        requiredFor,
+      };
+    }
+    if (normalizeRepoRelativePath(artifact.path).endsWith("/")) {
+      throw new Error(
+        `Proof artifact "${artifact.path}" in ${label} (${filePath}) must be a file path, not a directory path`,
+      );
+    }
+    if (seenPaths.has(artifact.path)) {
+      throw new Error(`Duplicate proof artifact "${artifact.path}" in ${label} (${filePath})`);
+    }
+    seenPaths.add(artifact.path);
+    artifacts.push(artifact);
+  }
+  return artifacts;
+}
+
+function validateAgentProofArtifacts(proofArtifacts, ownedPaths, filePath, agentId) {
+  if (!Array.isArray(proofArtifacts) || proofArtifacts.length === 0) {
+    return;
+  }
+  const owned = Array.isArray(ownedPaths) ? ownedPaths : [];
+  for (const artifact of proofArtifacts) {
+    const normalized = normalizeRepoRelativePath(artifact?.path);
+    if (!owned.some((ownedPath) => deliverableIsOwned(normalized, ownedPath))) {
+      throw new Error(
+        `Proof artifact "${artifact?.path}" for agent ${agentId} in ${filePath} must stay within the agent's declared file ownership`,
+      );
+    }
+  }
+}
+
 function extractFencedBlock(blockText, messagePrefix) {
   const fencedBlockMatch = String(blockText || "").match(
     /```(?:[a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)\r?\n```/,
@@ -479,6 +641,8 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
     fallbacks: [],
     tags: [],
     budget: null,
+    retryPolicy: null,
+    allowFallbackOnRetry: null,
     codex: null,
     claude: null,
     opencode: null,
@@ -489,6 +653,8 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
     "model",
     "fallbacks",
     "tags",
+    "retry-policy",
+    "allow-fallback-on-retry",
     "budget.turns",
     "budget.minutes",
     "codex.command",
@@ -543,6 +709,20 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
       );
     } else if (key === "tags") {
       executorConfig.tags = parseExecutorStringList(value);
+    } else if (key === "retry-policy") {
+      const normalizedPolicy = value.toLowerCase();
+      if (!RETRY_POLICY_VALUES.has(normalizedPolicy)) {
+        throw new Error(
+          `Invalid ${label}.retry-policy "${value}" in ${filePath}; expected sticky or fallback-allowed`,
+        );
+      }
+      executorConfig.retryPolicy = normalizedPolicy;
+    } else if (key === "allow-fallback-on-retry") {
+      executorConfig.allowFallbackOnRetry = parseExecutorBoolean(
+        value,
+        `${label}.allow-fallback-on-retry`,
+        filePath,
+      );
     } else if (key === "budget.turns" || key === "budget.minutes") {
       executorConfig.budget = {
         ...(executorConfig.budget || { turns: null, minutes: null }),
@@ -806,6 +986,13 @@ export function extractAgentDeliverablesFromSection(sectionText, filePath, agent
   return parsePathList(block, filePath, `agent ${agentId} deliverables`);
 }
 
+export function extractAgentProofArtifactsFromSection(sectionText, filePath, agentId) {
+  const block = extractSectionBody(sectionText, "Proof artifacts", filePath, agentId, {
+    required: false,
+  });
+  return parseProofArtifacts(block, filePath, `agent ${agentId} proof artifacts`);
+}
+
 export function slugify(value) {
   return value
     .toLowerCase()
@@ -935,12 +1122,35 @@ export function resolveContEvalReportPath(wave, options = {}) {
   );
 }
 
+function isImplementationOwningWaveAgent(
+  agent,
+  {
+    contQaAgentId,
+    contEvalAgentId,
+    integrationAgentId,
+    documentationAgentId,
+  },
+) {
+  return (
+    ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
+    !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+    !isSecurityReviewAgent(agent)
+  );
+}
+
 function resolveAgentSummaryReportPath(wave, agentId, { contQaAgentId, contEvalAgentId } = {}) {
   if (agentId === contQaAgentId && wave.contQaReportPath) {
     return path.resolve(REPO_ROOT, wave.contQaReportPath);
   }
   if (agentId === contEvalAgentId && wave.contEvalReportPath) {
     return path.resolve(REPO_ROOT, wave.contEvalReportPath);
+  }
+  const agent = wave?.agents?.find((entry) => entry.agentId === agentId);
+  if (isSecurityReviewAgent(agent)) {
+    const securityReportPath = resolveSecurityReviewReportPath(agent);
+    if (securityReportPath) {
+      return path.resolve(REPO_ROOT, securityReportPath);
+    }
   }
   return null;
 }
@@ -1169,10 +1379,22 @@ export function validateWaveDefinition(wave, options = {}) {
   const contEvalImplementationOwning = contEvalAgent
     ? isContEvalImplementationOwningAgent(contEvalAgent, { contEvalAgentId })
     : false;
+  const implementationOwningAgents = wave.agents.filter((agent) =>
+    isImplementationOwningWaveAgent(agent, {
+      contQaAgentId,
+      contEvalAgentId,
+      integrationAgentId,
+      documentationAgentId,
+    }),
+  );
   if (!wave.agents.some((agent) => agent.agentId === contQaAgentId)) {
     errors.push(`must include Agent ${contQaAgentId} as the cont-QA closure role`);
   }
-  if (componentPromotionRuleActive && promotedComponents.size === 0) {
+  if (
+    componentPromotionRuleActive &&
+    promotedComponents.size === 0 &&
+    implementationOwningAgents.length > 0
+  ) {
     errors.push(
       `Wave ${wave.wave} must declare a ## Component promotions section in waves ${componentPromotionThreshold} and later`,
     );
@@ -1280,7 +1502,8 @@ export function validateWaveDefinition(wave, options = {}) {
     }
     if (
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
-      isContEvalReportOnlyAgent(agent, { contEvalAgentId })
+      isContEvalReportOnlyAgent(agent, { contEvalAgentId }) ||
+      isSecurityReviewAgent(agent)
     ) {
       if (Array.isArray(agent.components) && agent.components.length > 0) {
         errors.push(`Agent ${agent.agentId} must not declare a ### Components section`);
@@ -1310,7 +1533,8 @@ export function validateWaveDefinition(wave, options = {}) {
     if (exitContractThreshold !== null && wave.wave >= exitContractThreshold) {
       if (
         ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
-        !isContEvalReportOnlyAgent(agent, { contEvalAgentId })
+        !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+        !isSecurityReviewAgent(agent)
       ) {
         if (!agent.exitContract) {
           errors.push(
@@ -1326,9 +1550,28 @@ export function validateWaveDefinition(wave, options = {}) {
         }
       }
     }
+    if (
+      agentRequiresProofCentricValidation(agent) &&
+      (!Array.isArray(agent.proofArtifacts) || agent.proofArtifacts.length === 0) &&
+      ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
+      !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+      !isSecurityReviewAgent(agent)
+    ) {
+      errors.push(
+        `Agent ${agent.agentId} must declare a ### Proof artifacts section when it targets ${PROOF_CENTRIC_COMPONENT_LEVEL} or above`,
+      );
+    }
+    if (
+      agentRequiresProofCentricValidation(agent) &&
+      (agent.executorConfig?.id === "local" || agent.executorResolved?.id === "local")
+    ) {
+      errors.push(
+        `Agent ${agent.agentId} must not use executor=local when it carries proof-centric validation artifacts`,
+      );
+    }
   }
   for (const agent of wave.agents) {
-    for (const requiredRef of laneProfile.validation.requiredPromptReferences) {
+    for (const requiredRef of laneProfile.validation.requiredPromptReferences || []) {
       if (!agent.prompt.includes(requiredRef)) {
         errors.push(`Agent ${agent.agentId} must reference ${requiredRef}`);
       }
@@ -1474,6 +1717,11 @@ export function parseWaveContent(content, filePath, options = {}) {
       filePath,
       current.agentId,
     );
+    const proofArtifacts = extractAgentProofArtifactsFromSection(
+      sectionText,
+      filePath,
+      current.agentId,
+    );
     const promptOverlay = extractPromptFromSection(sectionText, filePath, current.agentId);
     const prompt = composeResolvedPrompt(
       rolePromptPaths,
@@ -1486,6 +1734,7 @@ export function parseWaveContent(content, filePath, options = {}) {
     );
     const ownedPaths = extractOwnedPaths(promptOverlay);
     validateAgentDeliverables(deliverables, ownedPaths, filePath, current.agentId);
+    validateAgentProofArtifacts(proofArtifacts, ownedPaths, filePath, current.agentId);
     agents.push({
       agentId: current.agentId,
       title: current.title,
@@ -1500,6 +1749,7 @@ export function parseWaveContent(content, filePath, options = {}) {
       capabilities,
       skills,
       deliverables,
+      proofArtifacts,
       ownedPaths,
     });
   }
@@ -1590,6 +1840,9 @@ function inferAgentRuntimeRole(agent, laneProfile) {
   if (agent?.agentId === laneProfile.roles.documentationAgentId) {
     return "documentation";
   }
+  if (isSecurityReviewAgent(agent)) {
+    return "security";
+  }
   const capabilities = Array.isArray(agent?.capabilities)
     ? agent.capabilities.map((entry) => String(entry || "").trim().toLowerCase())
     : [];
@@ -1657,6 +1910,8 @@ export function resolveAgentExecutor(agent, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const executorConfig = agent?.executorConfig || null;
   const role = inferAgentRuntimeRole(agent, laneProfile);
+  const proofCentricAgent =
+    agentRequiresProofCentricValidation(agent) || waveRequiresProofCentricValidation(options.wave);
   const profileName = executorConfig?.profile || null;
   if (profileName && !laneProfile.executors.profiles?.[profileName]) {
     throw new Error(
@@ -1696,12 +1951,31 @@ export function resolveAgentExecutor(agent, options = {}) {
     profile?.fallbacks,
     executorConfig?.fallbacks,
   );
+  const explicitAllowFallback =
+    executorConfig?.allowFallbackOnRetry ??
+    profile?.allowFallbackOnRetry ??
+    null;
+  const explicitRetryPolicy =
+    executorConfig?.retryPolicy ||
+    profile?.retryPolicy ||
+    null;
+  const allowFallbackOnRetry =
+    explicitAllowFallback !== null
+      ? explicitAllowFallback
+      : explicitRetryPolicy
+        ? explicitRetryPolicy !== "sticky"
+        : !proofCentricAgent;
+  const retryPolicy =
+    explicitRetryPolicy ||
+    (allowFallbackOnRetry ? "fallback-allowed" : "sticky");
   const runtimeFallbacks =
-    fallbacks.length > 0
+    allowFallbackOnRetry && fallbacks.length > 0
       ? fallbacks
-      : (laneProfile.runtimePolicy?.fallbackExecutorOrder || []).filter(
+      : allowFallbackOnRetry
+        ? (laneProfile.runtimePolicy?.fallbackExecutorOrder || []).filter(
           (candidate) => candidate !== executorId,
-        );
+        )
+        : [];
   const runtimeTags = mergeUniqueStringArrays(profile?.tags, executorConfig?.tags);
   const runtimeBudget = {
     turns:
@@ -1722,6 +1996,8 @@ export function resolveAgentExecutor(agent, options = {}) {
     selectedBy,
     fallbacks: runtimeFallbacks,
     tags: runtimeTags,
+    retryPolicy,
+    allowFallbackOnRetry,
     budget:
       runtimeBudget.turns !== null || runtimeBudget.minutes !== null ? runtimeBudget : null,
     fallbackUsed: false,
@@ -1884,25 +2160,40 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
     };
   }
   const promotions = Array.isArray(wave.componentPromotions) ? wave.componentPromotions : [];
-  if (promotions.length === 0) {
-    return {
-      ok: false,
-      statusCode: "missing-component-promotions",
-      detail: `Wave ${wave.wave} is missing component promotions.`,
-      componentId: null,
-    };
-  }
   const roles = laneProfile.roles || {};
   const contQaAgentId = roles.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
   const contEvalAgentId = roles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
+  const integrationAgentId = roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId =
     roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const implementationOwningAgents = (wave.agents || []).filter((agent) =>
+    isImplementationOwningWaveAgent(agent, {
+      contQaAgentId,
+      contEvalAgentId,
+      integrationAgentId,
+      documentationAgentId,
+    }),
+  );
+  if (promotions.length === 0) {
+    return {
+      ok: implementationOwningAgents.length === 0,
+      statusCode:
+        implementationOwningAgents.length === 0 ? "pass" : "missing-component-promotions",
+      detail:
+        implementationOwningAgents.length === 0
+          ? `Wave ${wave.wave} has no implementation-owned component promotions to prove.`
+          : `Wave ${wave.wave} is missing component promotions.`,
+      componentId: null,
+    };
+  }
   const satisfied = new Set();
   for (const agent of wave.agents) {
-    if (
-      [contQaAgentId, documentationAgentId].includes(agent.agentId) ||
-      isContEvalReportOnlyAgent(agent, { contEvalAgentId })
-    ) {
+    if (!isImplementationOwningWaveAgent(agent, {
+      contQaAgentId,
+      contEvalAgentId,
+      integrationAgentId,
+      documentationAgentId,
+    })) {
       continue;
     }
     const summary = summariesByAgentId[agent.agentId] || null;
@@ -1941,14 +2232,31 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const componentThreshold = laneProfile.validation.requireComponentPromotionsFromWave;
   const promotions = Array.isArray(wave.componentPromotions) ? wave.componentPromotions : [];
+  const roles = laneProfile.roles || {};
+  const contQaAgentId = roles.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
+  const contEvalAgentId = roles.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
+  const integrationAgentId = roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
+  const documentationAgentId = roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
+  const implementationOwningAgents = (wave.agents || []).filter((agent) =>
+    isImplementationOwningWaveAgent(agent, {
+      contQaAgentId,
+      contEvalAgentId,
+      integrationAgentId,
+      documentationAgentId,
+    }),
+  );
   if (
     promotions.length === 0 &&
-    (componentThreshold === null || wave.wave < componentThreshold)
+    ((componentThreshold === null || wave.wave < componentThreshold) ||
+      implementationOwningAgents.length === 0)
   ) {
     return {
       ok: true,
       statusCode: "pass",
-      detail: "Component current-level gate is not active for this wave.",
+      detail:
+        implementationOwningAgents.length === 0
+          ? `Wave ${wave.wave} has no implementation-owned component promotions to reconcile.`
+          : "Component current-level gate is not active for this wave.",
       componentId: null,
     };
   }
@@ -2116,6 +2424,10 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
   const coordinationDir =
     options.coordinationDir || path.join(path.resolve(statusDir, ".."), "coordination");
+  const assignmentsDir =
+    options.assignmentsDir || path.join(path.resolve(statusDir, ".."), "assignments");
+  const dependencySnapshotsDir =
+    options.dependencySnapshotsDir || path.join(path.resolve(statusDir, ".."), "dependencies");
   const contQaAgentId = options.contQaAgentId || DEFAULT_CONT_QA_AGENT_ID;
   const contEvalAgentId = options.contEvalAgentId || DEFAULT_CONT_EVAL_AGENT_ID;
   const integrationAgentId = options.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
@@ -2207,6 +2519,18 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
           );
           statusesReady = false;
         }
+      }
+      continue;
+    }
+    if (isSecurityReviewAgent(agent)) {
+      const validation = validateSecuritySummary(agent, summary);
+      if (!validation.ok) {
+        pushWaveCompletionReason(
+          reasons,
+          "invalid-security-summary",
+          `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+        );
+        statusesReady = false;
       }
       continue;
     }
@@ -2328,6 +2652,50 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       `Open human feedback records: ${openHumanFeedbackIds.join(", ")}.`,
     );
   }
+  const capabilityAssignments = readJsonOrNull(path.join(assignmentsDir, `wave-${wave.wave}.json`));
+  const blockingAssignments = Array.isArray(capabilityAssignments)
+    ? capabilityAssignments.filter((assignment) => assignment?.blocking)
+    : [];
+  const unresolvedAssignments = blockingAssignments.filter((assignment) => !assignment?.assignedAgentId);
+  if (unresolvedAssignments.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "helper-assignment-unresolved",
+      `Helper assignments remain unresolved (${unresolvedAssignments.map((assignment) => assignment.requestId || assignment.id).join(", ")}).`,
+    );
+  } else if (blockingAssignments.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "helper-assignment-open",
+      `Helper assignments remain open (${blockingAssignments.map((assignment) => assignment.requestId || assignment.id).join(", ")}).`,
+    );
+  }
+  const dependencySnapshot = readJsonOrNull(
+    path.join(dependencySnapshotsDir, `wave-${wave.wave}.json`),
+  );
+  const unresolvedInboundAssignments = Array.isArray(dependencySnapshot?.unresolvedInboundAssignments)
+    ? dependencySnapshot.unresolvedInboundAssignments
+    : [];
+  if (unresolvedInboundAssignments.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "dependency-assignment-unresolved",
+      `Required inbound dependencies are not assigned (${unresolvedInboundAssignments.map((record) => record.id || record).join(", ")}).`,
+    );
+  }
+  const requiredInbound = Array.isArray(dependencySnapshot?.requiredInbound)
+    ? dependencySnapshot.requiredInbound
+    : [];
+  const requiredOutbound = Array.isArray(dependencySnapshot?.requiredOutbound)
+    ? dependencySnapshot.requiredOutbound
+    : [];
+  if (requiredInbound.length > 0 || requiredOutbound.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "dependency-open",
+      `Open required dependencies remain (${[...requiredInbound, ...requiredOutbound].map((record) => record.id || record).join(", ")}).`,
+    );
+  }
 
   return {
     ok: reasons.length === 0,
@@ -2353,10 +2721,19 @@ export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusD
   const completedFromStatus = diagnostics
     .filter((diagnostic) => diagnostic.ok)
     .map((diagnostic) => diagnostic.wave);
+  const blockedWaveNumbers = new Set(
+    diagnostics.filter((diagnostic) => !diagnostic.ok).map((diagnostic) => diagnostic.wave),
+  );
   const before = readRunState(runStatePath);
-  const firstMerge = normalizeCompletedWaves([...before.completedWaves, ...completedFromStatus]);
+  const firstMerge = normalizeCompletedWaves([
+    ...before.completedWaves.filter((waveNumber) => !blockedWaveNumbers.has(waveNumber)),
+    ...completedFromStatus,
+  ]);
   const latest = readRunState(runStatePath);
-  const merged = normalizeCompletedWaves([...latest.completedWaves, ...completedFromStatus]);
+  const merged = normalizeCompletedWaves([
+    ...latest.completedWaves.filter((waveNumber) => !blockedWaveNumbers.has(waveNumber)),
+    ...completedFromStatus,
+  ]);
   let state = latest;
   if (!arraysEqual(merged, latest.completedWaves)) {
     state = writeRunState(runStatePath, { completedWaves: merged });

@@ -89,7 +89,7 @@ function buildQaDraftInput() {
     "1",
     "state-artifacts-and-feedback",
     "",
-    "qa-proved",
+    "repo-landed",
     "",
     "",
     "1",
@@ -112,6 +112,39 @@ function buildQaDraftInput() {
     "none",
     "integration",
     "owned",
+  ].join("\n");
+}
+
+function buildSecurityDraftInput() {
+  return [
+    "Wave 6 Security Review",
+    "Test: scaffold security reviewer",
+    "Wave 6 adds an explicit security review pass before integration closure.",
+    "",
+    "oversight",
+    "none",
+    "",
+    "y",
+    "n",
+    "y",
+    "y",
+    "0",
+    "1",
+    "A1",
+    "Security Engineer",
+    "security",
+    "security-review",
+    "",
+    "",
+    "",
+    "docs/plans/current-state.md",
+    "",
+    "Review trust boundaries | Route exact fixes and approvals before integration",
+    "",
+    "",
+    "",
+    "none",
+    "",
   ].join("\n");
 }
 
@@ -237,6 +270,36 @@ describe("wave draft", () => {
     expect(waveMarkdown).toContain("### Context7");
     expect(waveMarkdown).toContain("### Exit contract");
     expect(waveMarkdown).toContain("Validation:");
+
+    const dryRunResult = runWaveCli(
+      ["launch", "--lane", "main", "--start-wave", "6", "--end-wave", "6", "--dry-run", "--no-dashboard"],
+      { cwd: repoDir },
+    );
+    expect(dryRunResult.status).toBe(0);
+  });
+
+  it("generates a security-review wave without an exit-contract section", () => {
+    const repoDir = makeTempRepo();
+    expect(runWaveCli(["init"], { cwd: repoDir }).status).toBe(0);
+    expect(
+      runWaveCli(["project", "setup"], {
+        cwd: repoDir,
+        input: ["n", "", "", "", "main", "0"].join("\n"),
+      }).status,
+    ).toBe(0);
+
+    const draftResult = runWaveCli(["draft", "--wave", "6", "--template", "implementation", "--json"], {
+      cwd: repoDir,
+      input: buildSecurityDraftInput(),
+    });
+
+    expect(draftResult.status).toBe(0);
+    const payload = JSON.parse(draftResult.stdout);
+    const waveMarkdown = fs.readFileSync(path.join(repoDir, payload.wavePath), "utf8");
+    expect(waveMarkdown).toContain("# Wave 6 - Wave 6 Security Review");
+    expect(waveMarkdown).toContain("docs/agents/wave-security-role.md");
+    expect(waveMarkdown).toContain("- profile: security-review");
+    expect(waveMarkdown).not.toContain("### Exit contract");
 
     const dryRunResult = runWaveCli(
       ["launch", "--lane", "main", "--start-wave", "6", "--end-wave", "6", "--dry-run", "--no-dashboard"],

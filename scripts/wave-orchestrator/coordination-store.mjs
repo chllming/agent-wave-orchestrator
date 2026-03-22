@@ -489,6 +489,9 @@ export function compileSharedSummary({
           `- Integration proof gaps: ${(integrationSummary.proofGaps || []).length}`,
           `- Integration deploy risks: ${(integrationSummary.deployRisks || []).length}`,
           `- Integration doc gaps: ${(integrationSummary.docGaps || []).length}`,
+          `- Security review: ${integrationSummary.securityState || "not-applicable"}`,
+          `- Security findings: ${(integrationSummary.securityFindings || []).length}`,
+          `- Security approvals: ${(integrationSummary.securityApprovals || []).length}`,
         ]
       : []),
     ...(ledger ? [`- Ledger phase: ${ledger.phase || "n/a"}`] : []),
@@ -544,6 +547,10 @@ export function compileSharedSummary({
           ...renderIntegrationItems("## Proof gaps", integrationSummary.proofGaps),
           "",
           ...renderIntegrationItems("## Deploy risks", integrationSummary.deployRisks),
+          "",
+          ...renderIntegrationItems("## Security findings", integrationSummary.securityFindings),
+          "",
+          ...renderIntegrationItems("## Security approvals", integrationSummary.securityApprovals),
           "",
           ...renderIntegrationItems("## Documentation gaps", integrationSummary.docGaps),
         ]
@@ -695,6 +702,9 @@ export function compileAgentInbox({
           `- Proof gaps: ${(integrationSummary.proofGaps || []).length}`,
           `- Deploy risks: ${(integrationSummary.deployRisks || []).length}`,
           `- Documentation gaps: ${(integrationSummary.docGaps || []).length}`,
+          `- Security review: ${integrationSummary.securityState || "not-applicable"}`,
+          `- Security findings: ${(integrationSummary.securityFindings || []).length}`,
+          `- Security approvals: ${(integrationSummary.securityApprovals || []).length}`,
           ...renderIntegrationItems(
             "- Changed interfaces",
             integrationSummary.changedInterfaces,
@@ -709,6 +719,12 @@ export function compileAgentInbox({
             maxItems: 3,
           }),
           ...renderIntegrationItems("- Deploy risks", integrationSummary.deployRisks, {
+            maxItems: 3,
+          }),
+          ...renderIntegrationItems("- Security findings", integrationSummary.securityFindings, {
+            maxItems: 3,
+          }),
+          ...renderIntegrationItems("- Security approvals", integrationSummary.securityApprovals, {
             maxItems: 3,
           }),
           ...renderIntegrationItems("- Documentation gaps", integrationSummary.docGaps, {

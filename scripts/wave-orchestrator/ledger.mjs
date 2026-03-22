@@ -9,8 +9,12 @@ import {
   validateDocumentationClosureSummary,
   validateContQaSummary,
   validateImplementationSummary,
+  validateSecuritySummary,
 } from "./agent-state.mjs";
-import { isContEvalImplementationOwningAgent } from "./role-helpers.mjs";
+import {
+  isContEvalImplementationOwningAgent,
+  isSecurityReviewAgent,
+} from "./role-helpers.mjs";
 import { openClarificationLinkedRequests } from "./coordination-store.mjs";
 import { buildHelperTasks } from "./routing-state.mjs";
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
@@ -57,8 +61,10 @@ export function buildSeedWaveLedger({
           ? "cont-eval"
         : agent.agentId === integrationAgentId
           ? "integration"
-          : agent.agentId === documentationAgentId
+        : agent.agentId === documentationAgentId
             ? "documentation"
+            : isSecurityReviewAgent(agent)
+              ? "security"
             : "implementation";
     tasks.push({
       id: taskId(kind, agent.agentId),
@@ -79,6 +85,8 @@ export function buildSeedWaveLedger({
             role: agent.executorResolved.role,
             profile: agent.executorResolved.profile,
             selectedBy: agent.executorResolved.selectedBy,
+            retryPolicy: agent.executorResolved.retryPolicy || null,
+            allowFallbackOnRetry: agent.executorResolved.allowFallbackOnRetry !== false,
             fallbacks: agent.executorResolved.fallbacks || [],
             fallbackUsed: agent.executorResolved.fallbackUsed === true,
           }
@@ -114,6 +122,7 @@ export function buildSeedWaveLedger({
     humanFeedback: [],
     humanEscalations: [],
     contEvalState: "pending",
+    securityState: "pending",
     integrationState: "pending",
     docClosureState: "pending",
     contQaState: "pending",
@@ -125,6 +134,7 @@ function derivePhase({
   tasks,
   integrationSummary,
   contEvalValidation,
+  securityValidation,
   docValidation,
   contQaValidation,
   state,
@@ -159,6 +169,9 @@ function derivePhase({
   }
   if (tasks.some((task) => task.kind === "cont-eval") && !contEvalValidation?.ok) {
     return "cont-eval";
+  }
+  if (tasks.some((task) => task.kind === "security") && !securityValidation?.ok) {
+    return "security-review";
   }
   if (integrationSummary?.recommendation !== "ready-for-doc-closure") {
     return "integrating";
@@ -247,6 +260,15 @@ export function deriveWaveLedger({
         docState: "n/a",
       };
     }
+    if (task.kind === "security" && agent) {
+      const validation = validateSecuritySummary(agent, summary);
+      return {
+        ...task,
+        state: taskStateFromValidation(validation),
+        proofState: validation.ok ? "met" : "gap",
+        docState: "n/a",
+      };
+    }
     if (task.kind === "integration") {
       const ready = integrationSummary?.recommendation === "ready-for-doc-closure";
       return {
@@ -292,6 +314,7 @@ export function deriveWaveLedger({
   const docAgent = wave.agents.find((agent) => agent.agentId === documentationAgentId);
   const contEvalAgent = wave.agents.find((agent) => agent.agentId === contEvalAgentId);
   const contQaAgent = wave.agents.find((agent) => agent.agentId === contQaAgentId);
+  const securityAgents = (wave.agents || []).filter((agent) => isSecurityReviewAgent(agent));
   const contEvalValidation = (() => {
     if (!contEvalAgent) {
       return { ok: true };
@@ -317,6 +340,22 @@ export function deriveWaveLedger({
   const docValidation = docAgent
     ? validateDocumentationClosureSummary(docAgent, summariesByAgentId[documentationAgentId])
     : { ok: true };
+  const securityValidation = (() => {
+    if (securityAgents.length === 0) {
+      return { ok: true, statusCode: "pass" };
+    }
+    for (const agent of securityAgents) {
+      const validation = validateSecuritySummary(agent, summariesByAgentId[agent.agentId]);
+      if (!validation.ok) {
+        return validation;
+      }
+    }
+    return securityAgents.some(
+      (agent) => summariesByAgentId[agent.agentId]?.security?.state === "concerns",
+    )
+      ? { ok: true, statusCode: "security-concerns" }
+      : { ok: true, statusCode: "pass" };
+  })();
   const contQaValidation = contQaAgent
     ? validateContQaSummary(contQaAgent, summariesByAgentId[contQaAgentId], {
         mode: "live",
@@ -330,6 +369,7 @@ export function deriveWaveLedger({
       tasks,
       integrationSummary,
       contEvalValidation,
+      securityValidation,
       docValidation,
       contQaValidation,
       state: coordinationState,
@@ -378,6 +418,7 @@ export function deriveWaveLedger({
       .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
       .map((record) => record.id),
     contEvalState: contEvalValidation.ok ? "pass" : "open",
+    securityState: securityValidation.ok ? securityValidation.statusCode || "pass" : "open",
     integrationState: integrationSummary?.recommendation || "pending",
     docClosureState: docValidation.ok ? "closed" : "open",
     contQaState: contQaValidation.ok ? "pass" : "open",

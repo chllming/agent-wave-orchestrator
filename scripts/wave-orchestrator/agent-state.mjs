@@ -21,6 +21,19 @@ const COMPLETION_ORDER = ORDER(EXIT_CONTRACT_COMPLETION_VALUES);
 const DURABILITY_ORDER = ORDER(EXIT_CONTRACT_DURABILITY_VALUES);
 const PROOF_ORDER = ORDER(EXIT_CONTRACT_PROOF_VALUES);
 const DOC_IMPACT_ORDER = ORDER(EXIT_CONTRACT_DOC_IMPACT_VALUES);
+const COMPONENT_MATURITY_LEVELS = [
+  "inventoried",
+  "contract-frozen",
+  "repo-landed",
+  "baseline-proved",
+  "pilot-live",
+  "qa-proved",
+  "fleet-ready",
+  "cutover-ready",
+  "deprecation-ready",
+];
+const COMPONENT_MATURITY_ORDER = ORDER(COMPONENT_MATURITY_LEVELS);
+const PROOF_CENTRIC_COMPONENT_LEVEL = "pilot-live";
 
 const WAVE_PROOF_REGEX =
   /^\[wave-proof\]\s*completion=(contract|integrated|authoritative|live)\s+durability=(none|ephemeral|durable)\s+proof=(unit|integration|live)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
@@ -32,6 +45,8 @@ const WAVE_INTEGRATION_REGEX =
   /^\[wave-integration\]\s*state=(ready-for-doc-closure|needs-more-work)\s+claims=(\d+)\s+conflicts=(\d+)\s+blockers=(\d+)\s*(?:detail=(.*))?$/gim;
 const WAVE_EVAL_REGEX =
   /^\[wave-eval\]\s*state=(satisfied|needs-more-work|blocked)\s+targets=(\d+)\s+benchmarks=(\d+)\s+regressions=(\d+)(?:\s+target_ids=([^\s]+))?(?:\s+benchmark_ids=([^\s]+))?\s*(?:detail=(.*))?$/gim;
+const WAVE_SECURITY_REGEX =
+  /^\[wave-security\]\s*state=(clear|concerns|blocked)\s+findings=(\d+)\s+approvals=(\d+)\s*(?:detail=(.*))?$/gim;
 const WAVE_GATE_REGEX =
   /^\[wave-gate\]\s*architecture=(pass|concerns|blocked)\s+integration=(pass|concerns|blocked)\s+durability=(pass|concerns|blocked)\s+live=(pass|concerns|blocked)\s+docs=(pass|concerns|blocked)\s*(?:detail=(.*))?$/gim;
 const WAVE_GAP_REGEX =
@@ -223,6 +238,44 @@ function meetsOrExceeds(actual, required, orderMap) {
   return orderMap[actual] >= orderMap[required];
 }
 
+function proofCentricLevelReached(level) {
+  return (
+    COMPONENT_MATURITY_ORDER[String(level || "").trim()] >=
+    COMPONENT_MATURITY_ORDER[PROOF_CENTRIC_COMPONENT_LEVEL]
+  );
+}
+
+function highestAgentComponentTargetLevel(agent) {
+  const levels = Array.isArray(agent?.components)
+    ? agent.components
+        .map((componentId) => agent?.componentTargets?.[componentId] || null)
+        .filter(Boolean)
+    : [];
+  if (levels.length === 0) {
+    return null;
+  }
+  return levels.sort(
+    (left, right) => COMPONENT_MATURITY_ORDER[right] - COMPONENT_MATURITY_ORDER[left],
+  )[0];
+}
+
+function proofArtifactRequiredForAgent(agent, artifact) {
+  if (!artifact) {
+    return false;
+  }
+  const requiredFor = Array.isArray(artifact.requiredFor) ? artifact.requiredFor : [];
+  if (requiredFor.length === 0) {
+    return true;
+  }
+  const highestTarget = highestAgentComponentTargetLevel(agent);
+  if (!highestTarget) {
+    return true;
+  }
+  return requiredFor.some(
+    (level) => COMPONENT_MATURITY_ORDER[highestTarget] >= COMPONENT_MATURITY_ORDER[level],
+  );
+}
+
 export function normalizeExitContract(raw) {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -327,6 +380,12 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       benchmarkIds: parseIdList(match[6]),
       detail: cleanText(match[7]),
     })),
+    security: findLastMatch(signalText, WAVE_SECURITY_REGEX, (match) => ({
+      state: match[1],
+      findings: Number.parseInt(String(match[2] || "0"), 10) || 0,
+      approvals: Number.parseInt(String(match[3] || "0"), 10) || 0,
+      detail: cleanText(match[4]),
+    })),
     gate: findLastMatch(signalText, WAVE_GATE_REGEX, (match) => ({
       architecture: match[1],
       integration: match[2],
@@ -344,7 +403,24 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       ? agent.deliverables.map((deliverable) => ({
           path: deliverable,
           exists: fs.existsSync(path.resolve(REPO_ROOT, deliverable)),
+          modifiedAt:
+            fs.existsSync(path.resolve(REPO_ROOT, deliverable))
+              ? fs.statSync(path.resolve(REPO_ROOT, deliverable)).mtime.toISOString()
+              : null,
         }))
+      : [],
+    proofArtifacts: Array.isArray(agent?.proofArtifacts)
+      ? agent.proofArtifacts.map((artifact) => {
+          const absolutePath = path.resolve(REPO_ROOT, artifact.path);
+          const exists = fs.existsSync(absolutePath);
+          return {
+            path: artifact.path,
+            kind: artifact.kind || null,
+            requiredFor: Array.isArray(artifact.requiredFor) ? artifact.requiredFor : [],
+            exists,
+            modifiedAt: exists ? fs.statSync(absolutePath).mtime.toISOString() : null,
+          };
+        })
       : [],
     verdict: verdict.verdict
       ? {
@@ -488,6 +564,34 @@ export function validateImplementationSummary(agent, summary) {
       }
     }
   }
+  const proofArtifacts = Array.isArray(agent?.proofArtifacts) ? agent.proofArtifacts : [];
+  if (proofArtifacts.length > 0) {
+    const artifactState = new Map(
+      Array.isArray(summary.proofArtifacts)
+        ? summary.proofArtifacts.map((artifact) => [artifact.path, artifact])
+        : [],
+    );
+    for (const proofArtifact of proofArtifacts) {
+      if (!proofArtifactRequiredForAgent(agent, proofArtifact)) {
+        continue;
+      }
+      const artifact = artifactState.get(proofArtifact.path);
+      if (!artifact) {
+        return {
+          ok: false,
+          statusCode: "missing-proof-artifact-summary",
+          detail: `Missing proof artifact presence record for ${agent.agentId} path ${proofArtifact.path}.`,
+        };
+      }
+      if (artifact.exists !== true) {
+        return {
+          ok: false,
+          statusCode: "missing-proof-artifact",
+          detail: `Agent ${agent.agentId} did not land required proof artifact ${proofArtifact.path}.`,
+        };
+      }
+    }
+  }
   return {
     ok: true,
     statusCode: "pass",
@@ -520,6 +624,51 @@ export function validateDocumentationClosureSummary(agent, summary) {
       summary.docClosure.state === "closed"
         ? "Documentation steward closed the shared-plan delta."
         : "Documentation steward confirmed no shared-plan changes were needed.",
+  };
+}
+
+export function validateSecuritySummary(agent, summary) {
+  if (!summary?.security) {
+    return {
+      ok: false,
+      statusCode: "missing-wave-security",
+      detail: appendTerminationHint(
+        `Missing [wave-security] marker for ${agent?.agentId || "A7"}.`,
+        summary,
+      ),
+    };
+  }
+  if (!summary.reportPath) {
+    return {
+      ok: false,
+      statusCode: "missing-security-report",
+      detail: `Missing security review report path for ${agent?.agentId || "A7"}.`,
+    };
+  }
+  if (!fs.existsSync(path.resolve(REPO_ROOT, summary.reportPath))) {
+    return {
+      ok: false,
+      statusCode: "missing-security-report",
+      detail: `Missing security review report at ${summary.reportPath}.`,
+    };
+  }
+  if (summary.security.state === "blocked") {
+    return {
+      ok: false,
+      statusCode: "security-blocked",
+      detail:
+        summary.security.detail ||
+        `Security review reported blocked for ${agent?.agentId || "A7"}.`,
+    };
+  }
+  return {
+    ok: true,
+    statusCode: summary.security.state === "concerns" ? "security-concerns" : "pass",
+    detail:
+      summary.security.detail ||
+      (summary.security.state === "concerns"
+        ? "Security review reported advisory concerns."
+        : "Security review reported clear."),
   };
 }
 

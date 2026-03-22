@@ -15,7 +15,10 @@ import {
   toIsoTimestamp,
 } from "./shared.mjs";
 import { resolveEvalTargetsAgainstCatalog } from "./evals.mjs";
-import { isContEvalImplementationOwningAgent } from "./role-helpers.mjs";
+import {
+  isContEvalImplementationOwningAgent,
+  isSecurityReviewAgent,
+} from "./role-helpers.mjs";
 
 export const ENTRY_HEADER_REGEX = /^##\s+(.+?)\s+\|\s+Agent\s+([A-Za-z0-9.]+)\s*$/;
 export const PLACEHOLDER_TIMESTAMP_REGEX = /\$\{(?:ts|TS)\}/;
@@ -258,8 +261,17 @@ export function buildExecutionPrompt({
           "- If implementation work is still landing, any early closure note is provisional. Your final closure marker must reflect the post-implementation state seen during the closure sweep.",
         ]
       : [];
+  const securityRequirements = isSecurityReviewAgent(agent)
+    ? [
+        "- You are the wave's security reviewer. Default to report-only work and route fixes to the owning agent instead of editing product code.",
+        "- Leave a security review report with these sections in order: `Threat Model`, `Risky Surfaces`, `Findings`, `Required Approvals`, `Requested Fixes`, and `Final Disposition`.",
+        "- Emit one final structured security marker: `[wave-security] state=<clear|concerns|blocked> findings=<n> approvals=<n> detail=<short-note>`.",
+        "- Use `clear` only when no unresolved findings or approvals remain. Use `blocked` only when the wave must stop before integration.",
+      ]
+    : [];
   const implementationRequirements =
     ![contQaAgentId, documentationAgentId].includes(agent.agentId) &&
+    !isSecurityReviewAgent(agent) &&
     (agent.agentId !== contEvalAgentId || contEvalImplementationOwning)
       ? [
           "- Emit one final structured proof marker: `[wave-proof] completion=<contract|integrated|authoritative|live> durability=<none|ephemeral|durable> proof=<unit|integration|live> state=<met|gap> detail=<short-note>`.",
@@ -392,6 +404,20 @@ export function buildExecutionPrompt({
           "",
         ]
       : [];
+  const proofArtifactLines =
+    Array.isArray(agent.proofArtifacts) && agent.proofArtifacts.length > 0
+      ? [
+          "Proof artifacts required for this agent:",
+          ...agent.proofArtifacts.map((artifact) => {
+            const requiredFor =
+              Array.isArray(artifact.requiredFor) && artifact.requiredFor.length > 0
+                ? ` required-for=${artifact.requiredFor.join(",")}`
+                : "";
+            return `- ${artifact.path}${artifact.kind ? ` kind=${artifact.kind}` : ""}${requiredFor}`;
+          }),
+          "",
+        ]
+      : [];
   const skillLines =
     Array.isArray(agent.skillsResolved?.ids) && agent.skillsResolved.ids.length > 0
       ? [
@@ -444,6 +470,7 @@ export function buildExecutionPrompt({
     ...contQaRequirements,
     ...contEvalRequirements,
     ...docStewardRequirements,
+    ...securityRequirements,
     ...implementationRequirements,
     `- Update docs impacted by your implementation. If your work changes status, sequencing, ownership, or explicit proof expectations, update the relevant docs. If shared plan docs need changes outside your owned files, post the exact doc paths and exact delta needed for ${sharedPlanDocList} as a coordination record instead of leaving documentation drift for later cleanup.`,
     "- If the wave defines a documentation steward or other explicit owner for shared plan docs, coordinate those updates through that owner, notify them as soon as the delta is known, and stay engaged until they confirm `closed` or `no-change`. Do not treat the ownership boundary as the definition of done.",
@@ -474,6 +501,7 @@ export function buildExecutionPrompt({
     ...evalTargetLines,
     ...ownedComponentLines,
     ...deliverableLines,
+    ...proofArtifactLines,
     ...skillLines,
     ...context7PromptLines,
     "Assigned implementation prompt:",

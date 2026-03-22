@@ -21,6 +21,7 @@ export const DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH = "docs/agents/wave-cont-eval-ro
 export const DEFAULT_INTEGRATION_ROLE_PROMPT_PATH = "docs/agents/wave-integration-role.md";
 export const DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH =
   "docs/agents/wave-documentation-role.md";
+export const DEFAULT_SECURITY_ROLE_PROMPT_PATH = "docs/agents/wave-security-role.md";
 export const DEFAULT_TERMINALS_PATH = ".vscode/terminals.json";
 export const DEFAULT_DOCS_DIR = "docs";
 export const DEFAULT_STATE_ROOT = ".tmp";

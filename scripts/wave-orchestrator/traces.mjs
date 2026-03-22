@@ -2,7 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
 import { openClarificationLinkedRequests, readCoordinationLog, serializeCoordinationState } from "./coordination-store.mjs";
-import { isContEvalReportOnlyAgent } from "./role-helpers.mjs";
+import {
+  isContEvalReportOnlyAgent,
+  isSecurityReviewAgent,
+  resolveSecurityReviewReportPath,
+} from "./role-helpers.mjs";
 import {
   REPO_ROOT,
   ensureDirectory,
@@ -363,7 +367,8 @@ function computeProofCompletenessRatio(wave, summariesByAgentId) {
     agent.agentId !== contQaAgentId &&
     agent.agentId !== integrationAgentId &&
     agent.agentId !== documentationAgentId &&
-    !isContEvalReportOnlyAgent(agent, { contEvalAgentId }),
+    !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+    !isSecurityReviewAgent(agent),
   );
   const contractAgents = implementationAgents.filter((agent) => agent.exitContract);
   if (contractAgents.length === 0) {
@@ -550,6 +555,7 @@ export function normalizeGateSnapshotForBundle(gateSnapshot, agentArtifacts) {
     "helperAssignmentBarrier",
     "dependencyBarrier",
     "contEvalGate",
+    "securityGate",
     "integrationGate",
     "integrationBarrier",
     "documentationGate",
@@ -624,6 +630,11 @@ function resolveRunSummaryPayload(wave, run) {
       ? path.resolve(REPO_ROOT, wave.contQaReportPath || wave.evaluatorReportPath)
       : run.agent?.agentId === (wave?.contEvalAgentId || "E0") && wave?.contEvalReportPath
         ? path.resolve(REPO_ROOT, wave.contEvalReportPath)
+        : isSecurityReviewAgent(run.agent)
+          ? (() => {
+              const securityReportPath = resolveSecurityReviewReportPath(run.agent);
+              return securityReportPath ? path.resolve(REPO_ROOT, securityReportPath) : null;
+            })()
         : null;
   return buildAgentExecutionSummary({
     agent: run.agent,
@@ -727,6 +738,7 @@ export function writeTraceBundle({
   docsQueue,
   capabilityAssignments = [],
   dependencySnapshot = null,
+  securitySummary = null,
   integrationSummary,
   integrationMarkdownPath,
   clarificationTriage,
@@ -777,6 +789,13 @@ export function writeTraceBundle({
     dir,
     path.join(dir, "dependency-snapshot.json"),
     dependencySnapshot || {},
+    "json",
+    true,
+  );
+  const securityArtifact = writeArtifactDescriptor(
+    dir,
+    path.join(dir, "security.json"),
+    securitySummary || {},
     "json",
     true,
   );
@@ -926,6 +945,7 @@ export function writeTraceBundle({
       docsQueue: docsQueueArtifact,
       capabilityAssignments: capabilityAssignmentsArtifact,
       dependencySnapshot: dependencySnapshotArtifact,
+      security: securityArtifact,
       integration: integrationArtifact,
       integrationMarkdown: integrationMarkdownArtifact,
       componentMatrix: componentMatrixArtifact,
@@ -966,6 +986,7 @@ export function loadTraceBundle(dir) {
     docsQueue: readJsonOrNull(path.join(dir, "docs-queue.json")),
     capabilityAssignments: readJsonOrNull(path.join(dir, "capability-assignments.json")),
     dependencySnapshot: readJsonOrNull(path.join(dir, "dependency-snapshot.json")),
+    securitySummary: readJsonOrNull(path.join(dir, "security.json")),
     integrationSummary: readJsonOrNull(path.join(dir, "integration.json")),
     quality: readJsonOrNull(path.join(dir, "quality.json")),
     storedOutcome: readJsonOrNull(path.join(dir, "outcome.json")),

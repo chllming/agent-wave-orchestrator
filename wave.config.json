@@ -59,6 +59,14 @@
           "minutes": 20
         }
       },
+      "security-review": {
+        "id": "claude",
+        "tags": ["security", "review"],
+        "budget": {
+          "turns": 8,
+          "minutes": 20
+        }
+      },
       "ops-triage": {
         "id": "opencode",
         "tags": ["ops", "research"],
@@ -135,7 +143,7 @@
       "runtimePolicy": {
         "runtimeMixTargets": {
           "codex": 3,
-          "claude": 3,
+          "claude": 4,
           "opencode": 2
         },
         "defaultExecutorByRole": {
@@ -144,6 +152,7 @@
           "documentation": "claude",
           "cont-qa": "claude",
           "cont-eval": "codex",
+          "security": "claude",
           "research": "opencode",
           "infra": "opencode",
           "deploy": "opencode"

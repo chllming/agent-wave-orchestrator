@@ -16,6 +16,7 @@ import {
   readWaveContEvalGate,
   readWaveContQaGate,
   readWaveInfraGate,
+  readWaveSecurityGate,
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
   resolveRelaunchRuns,
@@ -330,6 +331,47 @@ describe("readWaveInfraGate", () => {
   });
 });
 
+describe("readWaveSecurityGate", () => {
+  it("fails when a security reviewer reports blocked", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-0-security-review.md");
+    const logPath = path.join(dir, "wave-0-a7.log");
+    const statusPath = path.join(dir, "wave-0-a7.status");
+
+    fs.writeFileSync(reportPath, "# Security Review\n", "utf8");
+    fs.writeFileSync(
+      logPath,
+      "[wave-security] state=blocked findings=1 approvals=0 detail=unreviewed-authz-regression\n",
+      "utf8",
+    );
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+
+    expect(
+      readWaveSecurityGate(
+        {
+          wave: 0,
+        },
+        [
+          {
+            agent: {
+              agentId: "A7",
+              title: "Security Engineer",
+              rolePromptPaths: ["docs/agents/wave-security-role.md"],
+              ownedPaths: [path.relative(process.cwd(), reportPath)],
+            },
+            logPath,
+            statusPath,
+          },
+        ],
+      ),
+    ).toMatchObject({
+      ok: false,
+      agentId: "A7",
+      statusCode: "security-blocked",
+    });
+  });
+});
+
 describe("buildWaveIntegrationSummary", () => {
   it("derives actionable integration evidence from coordination, docs, validation, and runtime signals", () => {
     const dir = makeTempDir();
@@ -353,7 +395,6 @@ describe("buildWaveIntegrationSummary", () => {
           agentId: "A1",
           title: "Runtime",
           ownedPaths: ["src/runtime"],
-          components: ["runtime-engine"],
           exitContract: {
             completion: "integrated",
             durability: "durable",
@@ -557,6 +598,88 @@ describe("buildWaveIntegrationSummary", () => {
     expect(
       integrationSummary.proofGaps.some((entry) => entry.includes("Need integration proof.")),
     ).toBe(true);
+  });
+
+  it("surfaces advisory security concerns without turning them into an automatic integration blocker", () => {
+    const dir = makeTempDir();
+    const wave = {
+      wave: 0,
+      agents: [
+        {
+          agentId: "A1",
+          title: "Runtime",
+          ownedPaths: ["src/runtime"],
+          components: ["runtime-engine"],
+          exitContract: {
+            completion: "integrated",
+            durability: "durable",
+            proof: "integration",
+            docImpact: "owned",
+          },
+        },
+        {
+          agentId: "A7",
+          title: "Security Engineer",
+          rolePromptPaths: ["docs/agents/wave-security-role.md"],
+          ownedPaths: [".tmp/main-wave-launcher/security/wave-0-review.md"],
+        },
+        { agentId: "A8", title: "Integration" },
+        { agentId: "A9", title: "Docs" },
+        { agentId: "A0", title: "cont-QA" },
+      ],
+    };
+
+    const integrationSummary = buildWaveIntegrationSummary({
+      lanePaths: makeLanePaths(dir),
+      wave,
+      attempt: 1,
+      coordinationState: materializeCoordinationState([]),
+      summariesByAgentId: {
+        A1: {
+          proof: {
+            completion: "integrated",
+            durability: "durable",
+            proof: "integration",
+            state: "met",
+            detail: "",
+          },
+          docDelta: {
+            state: "owned",
+            paths: [],
+            detail: "",
+          },
+        },
+        A8: {
+          integration: {
+            state: "ready-for-doc-closure",
+            claims: 0,
+            conflicts: 0,
+            blockers: 0,
+            detail: "Security concerns are advisory for this wave.",
+          },
+        },
+      },
+      docsQueue: { items: [] },
+      runtimeAssignments: [],
+      agentRuns: [],
+      securitySummary: {
+        overallState: "concerns",
+        agents: [
+          {
+            agentId: "A7",
+            state: "concerns",
+            findings: 2,
+            approvals: 1,
+            detail: "manual review required for auth boundary changes",
+          },
+        ],
+      },
+    });
+
+    expect(integrationSummary.recommendation).toBe("ready-for-doc-closure");
+    expect(integrationSummary.securityState).toBe("concerns");
+    expect(integrationSummary.securityFindings[0]).toContain("A7:");
+    expect(integrationSummary.securityApprovals[0]).toContain("A7:");
   });
 });
 
@@ -927,6 +1050,93 @@ describe("resolveRelaunchRuns", () => {
       fallbackUsed: false,
     });
   });
+
+  it("keeps proof-centric agents on a sticky executor when fallback is disabled", () => {
+    const agentRuns = [
+      {
+        agent: {
+          agentId: "A6",
+          capabilities: ["deploy"],
+          executorResolved: {
+            id: "codex",
+            initialExecutorId: "codex",
+            model: null,
+            role: "implementation",
+            profile: null,
+            selectedBy: "agent-id",
+            retryPolicy: "sticky",
+            allowFallbackOnRetry: false,
+            fallbacks: ["claude"],
+            tags: [],
+            budget: null,
+            fallbackUsed: false,
+            fallbackReason: null,
+            executorHistory: [{ attempt: 0, executorId: "codex", reason: "initial" }],
+            codex: { command: "bash", sandbox: "danger-full-access" },
+            claude: {
+              command: "bash",
+              model: "claude-sonnet-4-6",
+              appendSystemPromptMode: "append",
+              permissionMode: null,
+              permissionPromptTool: null,
+              maxTurns: null,
+              mcpConfig: [],
+              strictMcpConfig: false,
+              settings: null,
+              outputFormat: "text",
+              allowedTools: [],
+              disallowedTools: [],
+            },
+            opencode: {
+              command: "missing-opencode",
+              model: null,
+              agent: null,
+              attach: null,
+              format: "default",
+              steps: null,
+              instructions: [],
+              permission: null,
+            },
+          },
+        },
+      },
+    ];
+
+    const selected = resolveRelaunchRuns(
+      agentRuns,
+      [{ agentId: "A6", statusCode: "127" }],
+      {
+        coordinationState: {
+          humanFeedback: [],
+          humanEscalations: [],
+          clarifications: [],
+          requests: [],
+          blockers: [],
+        },
+        ledger: { phase: "running", attempt: 1, tasks: [] },
+      },
+      {
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+        integrationAgentId: "A8",
+        laneProfile: {
+          runtimePolicy: {
+            runtimeMixTargets: {},
+          },
+        },
+        capabilityRouting: { preferredAgents: {} },
+      },
+    );
+
+    expect(selected.barrier).toBe(null);
+    expect(selected.runs.map((run) => run.agent.agentId)).toEqual(["A6"]);
+    expect(agentRuns[0].agent.executorResolved).toMatchObject({
+      id: "codex",
+      retryPolicy: "sticky",
+      allowFallbackOnRetry: false,
+      fallbackUsed: false,
+    });
+  });
 });
 
 describe("runClosureSweepPhase", () => {
@@ -1134,6 +1344,122 @@ describe("runClosureSweepPhase", () => {
       statusCode: "integration-needs-more-work",
     });
   });
+
+  it("runs security review after cont-EVAL and before integration", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.contEvalAgentId = "E0";
+    lanePaths.laneProfile.validation.requireComponentPromotionsFromWave = null;
+    const contEvalReportPath = path.join(dir, "wave-0-cont-eval.md");
+    const securityReportPath = path.join(dir, "wave-0-security-review.md");
+    const contQaReportPath = path.join(dir, "wave-0-cont-qa.md");
+    const closureRuns = ["E0", "A7", "A8", "A9", "A0"].map((agentId) => ({
+      agent: agentId === "A7"
+        ? {
+            agentId,
+            title: "Security Engineer",
+            rolePromptPaths: ["docs/agents/wave-security-role.md"],
+            ownedPaths: [path.relative(process.cwd(), securityReportPath)],
+          }
+        : { agentId, title: agentId },
+      sessionName: `wave-${agentId.toLowerCase()}`,
+      promptPath: path.join(dir, `${agentId}.prompt.md`),
+      logPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.log`),
+      statusPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.status`),
+      messageBoardPath: path.join(dir, "board.md"),
+      messageBoardSnapshot: "",
+      sharedSummaryPath: path.join(dir, "shared.md"),
+      sharedSummaryText: "",
+      inboxPath: path.join(dir, `${agentId}.inbox.md`),
+      inboxText: "",
+    }));
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: {
+        wave: 0,
+        contQaAgentId: "A0",
+        contQaReportPath,
+        contEvalAgentId: "E0",
+        contEvalReportPath,
+        evalTargets: [
+          {
+            id: "response-quality",
+            selection: "delegated",
+            benchmarkFamily: "service-output",
+            benchmarks: [],
+            objective: "Tune response quality",
+            threshold: "Golden response smoke passes",
+          },
+        ],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+      },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Integration is coherent.",
+        },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        fs.writeFileSync(
+          params.statusPath,
+          JSON.stringify({ code: 0, promptHash: "hash" }, null, 2),
+          "utf8",
+        );
+        if (params.agent.agentId === "E0") {
+          fs.writeFileSync(contEvalReportPath, "# cont-EVAL\n", "utf8");
+        }
+        if (params.agent.agentId === "A7") {
+          fs.writeFileSync(securityReportPath, "# Security Review\n", "utf8");
+        }
+        if (params.agent.agentId === "A0") {
+          fs.writeFileSync(contQaReportPath, "# cont-QA\n\nVerdict: PASS\n", "utf8");
+        }
+        const logText =
+          params.agent.agentId === "E0"
+            ? "[wave-eval] state=satisfied targets=1 benchmarks=1 regressions=0 target_ids=response-quality benchmark_ids=golden-response-smoke detail=targets-satisfied\n"
+            : params.agent.agentId === "A7"
+              ? "[wave-security] state=clear findings=0 approvals=0 detail=security-clear\n"
+              : params.agent.agentId === "A8"
+                ? "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=ready\n"
+                : params.agent.agentId === "A9"
+                  ? "[wave-doc-closure] state=closed paths=docs/plans/current-state.md detail=shared-plan-updated\n"
+                  : [
+                      "[wave-gate] architecture=pass integration=pass durability=pass live=pass docs=pass detail=ready",
+                      "[wave-verdict] pass detail=ready",
+                    ].join("\n");
+        fs.writeFileSync(params.logPath, `${logText}\n`, "utf8");
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual(["E0", "A7", "A8", "A9", "A0"]);
+    expect(result.failures).toEqual([]);
+  });
 });
 
 describe("selectInitialWaveRuns", () => {
@@ -1141,6 +1467,13 @@ describe("selectInitialWaveRuns", () => {
     const lanePaths = makeLanePaths(makeTempDir());
     const runs = [
       { agent: { agentId: "A1", title: "Implementation" } },
+      {
+        agent: {
+          agentId: "A7",
+          title: "Security Engineer",
+          rolePromptPaths: ["docs/agents/wave-security-role.md"],
+        },
+      },
       { agent: { agentId: "A8", title: "Integration" } },
       { agent: { agentId: "A9", title: "Docs" } },
       { agent: { agentId: "A0", title: "cont-QA" } },
@@ -1379,6 +1712,100 @@ describe("hasReusableSuccessStatus", () => {
     };
     expect(hashAgentPromptFingerprint(changedAgent)).not.toBe(hashAgentPromptFingerprint(agent));
     expect(hasReusableSuccessStatus(changedAgent, statusPath)).toBe(false);
+  });
+
+  it("rejects proof-centric reuse when required proof artifacts are missing", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-8-a6.status");
+    const summaryPath = statusPath.replace(/\.status$/, ".summary.json");
+    const agent = {
+      agentId: "A6",
+      prompt: "Validate live proof.",
+      components: ["learning-memory-action-plane"],
+      componentTargets: {
+        "learning-memory-action-plane": "pilot-live",
+      },
+      exitContract: {
+        completion: "live",
+        durability: "durable",
+        proof: "live",
+        docImpact: "none",
+      },
+      proofArtifacts: [
+        {
+          path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+          kind: "restart-check",
+          requiredFor: ["pilot-live"],
+        },
+      ],
+    };
+
+    fs.writeFileSync(
+      statusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(agent),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          proof: {
+            completion: "live",
+            durability: "durable",
+            proof: "live",
+            state: "met",
+          },
+          docDelta: {
+            state: "none",
+            paths: [],
+          },
+          proofArtifacts: [
+            {
+              path: ".tmp/wave-8-learning-proof/learning-plane-after-restart.json",
+              kind: "restart-check",
+              requiredFor: ["pilot-live"],
+              exists: false,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      hasReusableSuccessStatus(agent, statusPath, {
+        wave: {
+          componentPromotions: [
+            {
+              componentId: "learning-memory-action-plane",
+              targetLevel: "pilot-live",
+            },
+          ],
+        },
+        derivedState: {
+          coordinationState: {
+            clarifications: [],
+            humanEscalations: [],
+            humanFeedback: [],
+          },
+          capabilityAssignments: [],
+          dependencySnapshot: {
+            requiredInbound: [],
+            requiredOutbound: [],
+            unresolvedInboundAssignments: [],
+          },
+        },
+      }),
+    ).toBe(false);
   });
 });
 

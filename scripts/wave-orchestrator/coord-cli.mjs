@@ -2,6 +2,11 @@ import path from "node:path";
 import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
 import { readWaveLedger, writeWaveLedger } from "./ledger.mjs";
 import {
+  buildDependencySnapshot,
+  buildRequestAssignments,
+  writeDependencySnapshotMarkdown,
+} from "./routing-state.mjs";
+import {
   appendCoordinationRecord,
   compileAgentInbox,
   compileSharedSummary,
@@ -106,6 +111,18 @@ function ledgerPath(lanePaths, waveNumber) {
   return path.join(lanePaths.ledgerDir, `wave-${waveNumber}.json`);
 }
 
+function assignmentsPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.assignmentsDir, `wave-${waveNumber}.json`);
+}
+
+function dependencySnapshotPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.dependencySnapshotsDir, `wave-${waveNumber}.json`);
+}
+
+function dependencySnapshotMarkdownPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.dependencySnapshotsDir, `wave-${waveNumber}.md`);
+}
+
 function integrationPath(lanePaths, waveNumber) {
   return path.join(lanePaths.integrationDir, `wave-${waveNumber}.json`);
 }
@@ -120,11 +137,13 @@ export async function runCoordinationCli(argv) {
     runVariant: options.dryRun ? "dry-run" : undefined,
   });
   ensureDirectory(lanePaths.coordinationDir);
+  ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.docsQueueDir);
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
+  ensureDirectory(lanePaths.dependencySnapshotsDir);
   if (options.wave === null) {
     throw new Error("--wave is required");
   }
@@ -181,6 +200,26 @@ export async function runCoordinationCli(argv) {
   };
   writeWaveLedger(ledgerPath(lanePaths, wave.wave), ledger);
   const integrationSummary = readJsonArtifact(integrationPath(lanePaths, wave.wave));
+  const capabilityAssignments = buildRequestAssignments({
+    coordinationState: state,
+    agents: wave.agents,
+    ledger,
+    capabilityRouting: lanePaths.capabilityRouting,
+  });
+  const dependencySnapshot = buildDependencySnapshot({
+    dirPath: lanePaths.crossLaneDependenciesDir,
+    lane: lanePaths.lane,
+    waveNumber: wave.wave,
+    agents: wave.agents,
+    ledger,
+    capabilityRouting: lanePaths.capabilityRouting,
+  });
+  writeJsonArtifact(assignmentsPath(lanePaths, wave.wave), capabilityAssignments);
+  writeJsonArtifact(dependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot);
+  writeDependencySnapshotMarkdown(
+    dependencySnapshotMarkdownPath(lanePaths, wave.wave),
+    dependencySnapshot,
+  );
   if (subcommand === "show") {
     if (options.json) {
       console.log(JSON.stringify(serializeCoordinationState(state), null, 2));
@@ -198,6 +237,8 @@ export async function runCoordinationCli(argv) {
       waveFile: wave.file,
       agents: wave.agents,
       state,
+      capabilityAssignments,
+      dependencySnapshot,
     });
     console.log(path.relative(process.cwd(), boardPath));
     return;
@@ -215,6 +256,8 @@ export async function runCoordinationCli(argv) {
       state,
       ledger,
       integrationSummary,
+      capabilityAssignments,
+      dependencySnapshot,
     });
     const inbox = compileAgentInbox({
       wave,
@@ -223,6 +266,8 @@ export async function runCoordinationCli(argv) {
       ledger,
       docsQueue: queue,
       integrationSummary,
+      capabilityAssignments,
+      dependencySnapshot,
     });
     const baseDir = path.join(lanePaths.inboxesDir, `wave-${wave.wave}`);
     ensureDirectory(baseDir);

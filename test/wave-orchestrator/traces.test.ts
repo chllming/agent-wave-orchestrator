@@ -115,7 +115,7 @@ function updateWaveConfig(repoDir, mutate) {
 }
 
 function configureRepoExecutorsForLiveTrace(repoDir, options = {}) {
-  return updateWaveConfig(repoDir, (config) => {
+  const updated = updateWaveConfig(repoDir, (config) => {
     config.executors.default = options.defaultExecutor || "local";
     config.executors.profiles["deep-review"] = {
       ...config.executors.profiles["deep-review"],
@@ -152,6 +152,26 @@ function configureRepoExecutorsForLiveTrace(repoDir, options = {}) {
       options.fallbackExecutorOrder || ["local"];
     return config;
   });
+  const waveFilePath = path.join(repoDir, "docs", "plans", "waves", "wave-0.md");
+  const waveText = fs.readFileSync(waveFilePath, "utf8");
+  fs.writeFileSync(
+    waveFilePath,
+    waveText
+      .replace(
+        /(## Agent A0:[\s\S]*?### Executor\s*\n\n)([\s\S]*?)(\n### Context7)/,
+        "$1- id: local$3",
+      )
+      .replace(
+        /(## Agent A8:[\s\S]*?### Executor\s*\n\n)([\s\S]*?)(\n### Context7)/,
+        "$1- id: local$3",
+      )
+      .replace(
+        /(## Agent A9:[\s\S]*?### Executor\s*\n\n)([\s\S]*?)(\n### Context7)/,
+        "$1- id: local$3",
+      ),
+    "utf8",
+  );
+  return updated;
 }
 
 function seedCoordinationRecord(repoDir, payload) {
@@ -1296,11 +1316,11 @@ describe("trace bundles", () => {
         ],
         repoDir,
       );
-      expect(launchResult.status).not.toBe(0);
+      expect(launchResult.status).toBe(0);
 
       const traceDir = traceAttemptDirForRepo(repoDir, 2);
       const replay = replayTraceBundle(traceDir);
-      expect(replay.ok).toBe(false);
+      expect(replay.ok).toBe(true);
       expect(replay.matchesStoredGateSnapshot).toBe(true);
       expect(replay.matchesStoredQuality).toBe(true);
       expect(replay.quality.runtimeFallbackCount).toBeGreaterThan(0);
@@ -1311,7 +1331,7 @@ describe("trace bundles", () => {
 
       fs.rmSync(traceAttemptDirForRepo(repoDir, 1), { recursive: true, force: true });
       const isolatedReplay = replayTraceBundle(traceDir);
-      expect(isolatedReplay.ok).toBe(false);
+      expect(isolatedReplay.ok).toBe(true);
       expect(isolatedReplay.quality).toEqual(replay.quality);
     },
     30000,

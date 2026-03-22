@@ -301,6 +301,51 @@ function computeAckAndBlockerTimings(coordinationRecords) {
   };
 }
 
+function computeAssignmentAndDependencyTimings(coordinationRecords, dependencySnapshot = null) {
+  const grouped = groupCoordinationHistory(coordinationRecords);
+  const requestStartById = new Map();
+  for (const history of grouped.values()) {
+    const first = history[0];
+    if (first?.kind === "request") {
+      const startMs = Date.parse(first.createdAt || first.updatedAt || "");
+      if (Number.isFinite(startMs)) {
+        requestStartById.set(first.id, startMs);
+      }
+    }
+  }
+  const assignmentDurations = [];
+  for (const history of grouped.values()) {
+    const first = history[0];
+    if (first?.kind !== "decision" || !String(first.id || "").startsWith("assignment:")) {
+      continue;
+    }
+    const requestId = Array.isArray(first.dependsOn) ? first.dependsOn[0] : null;
+    const startMs = requestStartById.get(requestId);
+    const assignedMs = Date.parse(first.updatedAt || first.createdAt || "");
+    if (Number.isFinite(startMs) && Number.isFinite(assignedMs) && assignedMs >= startMs) {
+      assignmentDurations.push(assignedMs - startMs);
+    }
+  }
+  const dependencyDurations = [];
+  for (const item of [
+    ...(dependencySnapshot?.inbound || []),
+    ...(dependencySnapshot?.outbound || []),
+  ]) {
+    if (!["resolved", "closed", "superseded", "cancelled"].includes(String(item.status || ""))) {
+      continue;
+    }
+    const startMs = Date.parse(item.createdAt || "");
+    const endMs = Date.parse(item.updatedAt || "");
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs) {
+      dependencyDurations.push(endMs - startMs);
+    }
+  }
+  return {
+    meanTimeToCapabilityAssignmentMs: averageOrNull(assignmentDurations),
+    meanTimeToDependencyResolutionMs: averageOrNull(dependencyDurations),
+  };
+}
+
 function computeProofCompletenessRatio(wave, summariesByAgentId) {
   const evaluatorAgentId = wave?.evaluatorAgentId || "A0";
   const integrationAgentId = wave?.integrationAgentId || "A8";
@@ -373,6 +418,8 @@ export function buildQualityMetrics({
   docsQueue,
   summariesByAgentId,
   agentRuns,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
   gateSnapshot = null,
 }) {
   const effectiveHistory = resolveHistorySnapshot({
@@ -387,6 +434,10 @@ export function buildQualityMetrics({
   const fallbackCount = countRuntimeFallbacks(agentRuns);
   const coordinationRecords = coordinationLogPath ? readCoordinationLog(coordinationLogPath) : [];
   const timings = computeAckAndBlockerTimings(coordinationRecords);
+  const assignmentTimings = computeAssignmentAndDependencyTimings(
+    coordinationRecords,
+    dependencySnapshot,
+  );
   const documentationItems = Array.isArray(docsQueue?.items) ? docsQueue.items : [];
   const unresolvedClarificationCount = (coordinationState?.clarifications || []).filter((record) =>
     ["open", "acknowledged", "in_progress"].includes(record.status),
@@ -419,6 +470,13 @@ export function buildQualityMetrics({
       relaunchCounts.totalLaunches > 0
         ? Number((fallbackCount / relaunchCounts.totalLaunches).toFixed(2))
         : 0,
+    openCapabilityRequestCount: (capabilityAssignments || []).filter((assignment) => assignment.blocking).length,
+    openRequiredDependencyCount:
+      (dependencySnapshot?.requiredInbound || []).length +
+      (dependencySnapshot?.requiredOutbound || []).length,
+    meanTimeToCapabilityAssignmentMs: assignmentTimings.meanTimeToCapabilityAssignmentMs,
+    meanTimeToDependencyResolutionMs: assignmentTimings.meanTimeToDependencyResolutionMs,
+    helperTaskAssignmentCount: (capabilityAssignments || []).filter((assignment) => assignment.assignedAgentId).length,
     meanTimeToFirstAckMs: timings.meanTimeToFirstAckMs,
     meanTimeToBlockerResolutionMs: timings.meanTimeToBlockerResolutionMs,
     evaluatorReversal: evaluatorReversalFromHistory(effectiveHistory, gateSnapshot),
@@ -477,6 +535,8 @@ export function normalizeGateSnapshotForBundle(gateSnapshot, agentArtifacts) {
   for (const key of [
     "implementationGate",
     "componentGate",
+    "helperAssignmentBarrier",
+    "dependencyBarrier",
     "integrationGate",
     "integrationBarrier",
     "documentationGate",
@@ -625,6 +685,8 @@ export function writeTraceBundle({
   coordinationState,
   ledger,
   docsQueue,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
   integrationSummary,
   integrationMarkdownPath,
   clarificationTriage,
@@ -661,6 +723,20 @@ export function writeTraceBundle({
     dir,
     path.join(dir, "docs-queue.json"),
     docsQueue,
+    "json",
+    true,
+  );
+  const capabilityAssignmentsArtifact = writeArtifactDescriptor(
+    dir,
+    path.join(dir, "capability-assignments.json"),
+    capabilityAssignments,
+    "json",
+    true,
+  );
+  const dependencySnapshotArtifact = writeArtifactDescriptor(
+    dir,
+    path.join(dir, "dependency-snapshot.json"),
+    dependencySnapshot || {},
     "json",
     true,
   );
@@ -808,6 +884,8 @@ export function writeTraceBundle({
       coordinationMaterialized: coordinationMaterializedArtifact,
       ledger: ledgerArtifact,
       docsQueue: docsQueueArtifact,
+      capabilityAssignments: capabilityAssignmentsArtifact,
+      dependencySnapshot: dependencySnapshotArtifact,
       integration: integrationArtifact,
       integrationMarkdown: integrationMarkdownArtifact,
       componentMatrix: componentMatrixArtifact,
@@ -846,6 +924,8 @@ export function loadTraceBundle(dir) {
     coordinationRecords,
     ledger: readJsonOrNull(path.join(dir, "ledger.json")),
     docsQueue: readJsonOrNull(path.join(dir, "docs-queue.json")),
+    capabilityAssignments: readJsonOrNull(path.join(dir, "capability-assignments.json")),
+    dependencySnapshot: readJsonOrNull(path.join(dir, "dependency-snapshot.json")),
     integrationSummary: readJsonOrNull(path.join(dir, "integration.json")),
     quality: readJsonOrNull(path.join(dir, "quality.json")),
     storedOutcome: readJsonOrNull(path.join(dir, "outcome.json")),

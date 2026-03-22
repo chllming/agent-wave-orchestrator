@@ -9,6 +9,7 @@ import {
   validateImplementationSummary,
 } from "./agent-state.mjs";
 import { openClarificationLinkedRequests } from "./coordination-store.mjs";
+import { buildHelperTasks } from "./routing-state.mjs";
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
 
 function taskId(prefix, suffix) {
@@ -113,7 +114,14 @@ export function buildSeedWaveLedger({
   };
 }
 
-function derivePhase({ tasks, integrationSummary, docValidation, evaluatorValidation, state }) {
+function derivePhase({
+  tasks,
+  integrationSummary,
+  docValidation,
+  evaluatorValidation,
+  state,
+  dependencySnapshot = null,
+}) {
   const blockers = openHighPriorityBlockers(state);
   if (blockers.length > 0) {
     return "blocked";
@@ -123,6 +131,18 @@ function derivePhase({ tasks, integrationSummary, docValidation, evaluatorValida
     openClarificationLinkedRequests(state).length > 0
   ) {
     return "clarifying";
+  }
+  const dependencyBlockers =
+    (dependencySnapshot?.requiredInbound || []).length + (dependencySnapshot?.requiredOutbound || []).length;
+  if (dependencyBlockers > 0) {
+    return "blocked";
+  }
+  const blockingHelperTasks = tasks.filter((task) =>
+    ["helper", "dependency", "dependency-outbound"].includes(task.kind) &&
+    !["done", "closed", "resolved"].includes(task.state),
+  );
+  if (blockingHelperTasks.length > 0) {
+    return blockingHelperTasks.some((task) => task.state === "blocked") ? "blocked" : "running";
   }
   const implementationTasks = tasks.filter((task) => task.kind === "implementation");
   const allImplementationDone = implementationTasks.every((task) => task.state === "done");
@@ -152,6 +172,8 @@ export function deriveWaveLedger({
   evaluatorAgentId = DEFAULT_EVALUATOR_AGENT_ID,
   integrationAgentId = DEFAULT_INTEGRATION_AGENT_ID,
   documentationAgentId = DEFAULT_DOCUMENTATION_AGENT_ID,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
 }) {
   const seed = buildSeedWaveLedger({
     lane,
@@ -160,7 +182,7 @@ export function deriveWaveLedger({
     integrationAgentId,
     documentationAgentId,
   });
-  const tasks = seed.tasks.map((task) => {
+  const primaryTasks = seed.tasks.map((task) => {
     const agent = wave.agents.find((item) => item.agentId === task.owner);
     const summary = task.owner ? summariesByAgentId[task.owner] : null;
     if (task.kind === "implementation" && agent) {
@@ -224,6 +246,14 @@ export function deriveWaveLedger({
     }
     return task;
   });
+  const helperTasks = buildHelperTasks({
+    wave,
+    assignments: capabilityAssignments,
+    dependencySnapshot,
+    docsQueue,
+    documentationAgentId,
+  });
+  const tasks = [...primaryTasks, ...helperTasks];
   const docAgent = wave.agents.find((agent) => agent.agentId === documentationAgentId);
   const evaluatorAgent = wave.agents.find((agent) => agent.agentId === evaluatorAgentId);
   const docValidation = docAgent
@@ -242,6 +272,7 @@ export function deriveWaveLedger({
       docValidation,
       evaluatorValidation,
       state: coordinationState,
+      dependencySnapshot,
     }),
     tasks,
     blockers: (coordinationState?.blockers || []).map((record) => record.id),
@@ -252,6 +283,28 @@ export function deriveWaveLedger({
     openRequests: (coordinationState?.requests || [])
       .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
       .map((record) => record.id),
+    capabilityAssignments: (capabilityAssignments || []).map((assignment) => ({
+      id: assignment.id,
+      requestId: assignment.requestId,
+      assignedAgentId: assignment.assignedAgentId,
+      target: assignment.target,
+      targetType: assignment.targetType,
+      capability: assignment.capability,
+      blocking: assignment.blocking,
+      assignmentReason: assignment.assignmentReason,
+      state: assignment.state,
+    })),
+    dependencySnapshot: dependencySnapshot
+      ? {
+          openInbound: dependencySnapshot.openInbound.map((record) => record.id),
+          openOutbound: dependencySnapshot.openOutbound.map((record) => record.id),
+          requiredInbound: dependencySnapshot.requiredInbound.map((record) => record.id),
+          requiredOutbound: dependencySnapshot.requiredOutbound.map((record) => record.id),
+          unresolvedInboundAssignments: dependencySnapshot.unresolvedInboundAssignments.map(
+            (record) => record.id,
+          ),
+        }
+      : null,
     humanFeedback: [
       ...(coordinationState?.humanFeedback || [])
         .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))

@@ -176,6 +176,8 @@ export function replayTraceBundle(dir) {
     coordinationState: bundle.coordinationState,
     ledger: bundle.ledger,
     docsQueue: bundle.docsQueue,
+    capabilityAssignments: bundle.capabilityAssignments || [],
+    dependencySnapshot: bundle.dependencySnapshot || null,
     integrationSummary: bundle.integrationSummary,
   };
   const gateSnapshot = normalizeGateSnapshotForBundle(
@@ -216,6 +218,8 @@ export function replayTraceBundle(dir) {
     integrationSummary: bundle.integrationSummary,
     ledger: bundle.ledger,
     docsQueue: bundle.docsQueue,
+    capabilityAssignments: bundle.capabilityAssignments || [],
+    dependencySnapshot: bundle.dependencySnapshot || null,
     summariesByAgentId,
     agentRuns,
     gateSnapshot,

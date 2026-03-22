@@ -6,8 +6,9 @@ It includes:
 
 - wave parsing and validation
 - launcher, dashboard, autonomous, and human-feedback CLIs
-- coordination log, generated board projection, compiled inboxes, and a per-wave ledger
+- coordination log, helper-assignment decisions, generated board projection, compiled inboxes, and a per-wave ledger
 - integration stewardship, docs queues, and versioned trace bundles under `.tmp/`
+- typed cross-lane dependency tickets plus `wave dep` operator commands
 - role prompt imports and closure-sweep gating
 - component-cutover tracking and promotion gates
 - Context7 bundle selection, prefetch, caching, and prompt injection
@@ -172,6 +173,7 @@ Dry-run now writes compiled prompts and executor previews under `.tmp/<lane>-wav
 ```bash
 pnpm exec wave coord show --lane main --wave 0 --dry-run
 pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
+pnpm exec wave dep show --lane main --wave 0 --json
 ```
 
 8. Reconcile stale state if needed:
@@ -187,6 +189,14 @@ pnpm exec wave feedback list --lane main --pending
 ```
 
 The harness now tries to resolve clarification requests before asking a human. Agents should emit `clarification-request` coordination records first; unresolved items are written into `.tmp/<lane>-wave-launcher/feedback/triage/` and only then become human feedback tickets. Routed clarification follow-ups stay blocking until the linked request or escalation is fully resolved.
+
+Cross-lane work is also explicit and operator-visible:
+
+```bash
+pnpm exec wave dep post --owner-lane main --requester-lane release --owner-wave 0 --requester-wave 2 --agent launcher --summary "Need shared-plan reconciliation" --target capability:docs-shared-plan --required
+pnpm exec wave dep show --lane main --wave 0 --json
+pnpm exec wave dep resolve --lane main --id <dependency-id> --agent A8
+```
 
 10. Launch one wave at a time until the plan is stable:
 
@@ -205,10 +215,12 @@ pnpm exec wave autonomous --lane main --executor codex --codex-sandbox danger-fu
 The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
 
 - `coordination/wave-<n>.jsonl`: append-only coordination upsert log
+- `assignments/wave-<n>.json`: resolved helper-assignment snapshot derived from open requests
 - `messageboards/wave-<n>.md`: generated board projection for humans
 - `inboxes/wave-<n>/`: compiled shared summary plus per-agent inboxes
 - `ledger/wave-<n>.json`: derived task/blocker/closure state
 - `integration/wave-<n>.json|md`: explicit or synthesized integration summary
+- `dependencies/wave-<n>.json|md`: per-wave inbound/outbound dependency snapshot
 - `docs-queue/wave-<n>.json`: documentation reconciliation queue
 - `traces/wave-<n>/attempt-<k>/`: versioned attempt bundle with run metadata, quality metrics, prompts, logs, statuses, inboxes, and structured signals
 - `feedback/triage/wave-<n>.jsonl|/pending-human.md`: clarification triage log plus unresolved human escalations
@@ -224,7 +236,7 @@ The launcher writes runtime state under `.tmp/<lane>-wave-launcher/`:
 - `run-metadata.json` is the canonical bundle index. It records the wave hash, attempt number, launcher settings, agent prompt hashes, executor history, Context7 snippet hashes, gate snapshot, artifact-presence map, `replayContext`, and `historySnapshot`.
 - `outcome.json` is the stored replay baseline for the bundle. It carries the normalized stored gate snapshot plus the stored cumulative quality report so replay can compare recomputed results against a hashed bundle-local source of truth.
 - For `traceVersion: 2`, every launched agent must have copied prompt, log, status, inbox, and summary artifacts inside the bundle. Waves with `## Component promotions` must also carry the copied component matrix JSON.
-- `quality.json` is cumulative through the current attempt. It reports unresolved request and clarification counts, human-escalation and orchestrator-resolution counts, contradiction and documentation-drift counts, proof completeness, relaunch counts, fallback rate, acknowledgement and blocker timing, evaluator reversal, and the final integration recommendation.
+- `quality.json` is cumulative through the current attempt. It reports unresolved request and clarification counts, human-escalation and orchestrator-resolution counts, contradiction and documentation-drift counts, proof completeness, relaunch counts, fallback rate, acknowledgement and blocker timing, evaluator reversal, helper-assignment and dependency timing, and the final integration recommendation.
 - Hermetic replay is read-only. Replay uses only the stored bundle contents, ignores inline summary duplicates in `run-metadata.json`, revalidates recorded artifact hashes, reports stored-vs-recomputed diffs for gate and quality state, and does not rewrite summaries or other bundle files.
 - Legacy `traceVersion: 1` bundles are still accepted in best-effort mode with explicit warnings. They are not treated as fully hermetic.
 - Replay validation is internal today. The source tree exposes helper modules for loading, validating, and replaying trace bundles, but there is no supported `wave replay` public CLI yet.
@@ -331,6 +343,8 @@ File ownership (only touch these paths):
 `## Component promotions` declares the component levels this wave is responsible for proving. `### Components` assigns each promoted component to one or more implementation agents.
 
 `### Capabilities` is optional. It lets the coordination layer route targeted follow-up work to a capability rather than a single hard-coded agent.
+
+Open capability-targeted requests now become explicit helper assignments. The launcher resolves them deterministically, writes the assignment snapshot under `.tmp/`, mirrors the decision into the coordination log for the board and replay surface, and keeps the wave blocked until the linked follow-up resolves.
 
 The component matrix is also expected to reflect the landed state. Before a promoted wave closes, `docs/plans/component-cutover-matrix.json` should advance each promoted component's `currentLevel` to the proved target.
 

@@ -124,6 +124,13 @@ import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs"
 import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
 import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
+import {
+  buildDependencySnapshot,
+  buildRequestAssignments,
+  renderDependencySnapshotMarkdown,
+  syncAssignmentRecords,
+  writeDependencySnapshotMarkdown,
+} from "./routing-state.mjs";
 export { CODEX_SANDBOX_MODES, DEFAULT_CODEX_SANDBOX_MODE, normalizeCodexSandboxMode, buildCodexExecInvocation };
 
 function printUsage(lanePaths) {
@@ -424,8 +431,20 @@ function waveInboxDir(lanePaths, waveNumber) {
   return path.join(lanePaths.inboxesDir, `wave-${waveNumber}`);
 }
 
+function waveAssignmentsPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.assignmentsDir, `wave-${waveNumber}.json`);
+}
+
 function waveLedgerPath(lanePaths, waveNumber) {
   return path.join(lanePaths.ledgerDir, `wave-${waveNumber}.json`);
+}
+
+function waveDependencySnapshotPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.dependencySnapshotsDir, `wave-${waveNumber}.json`);
+}
+
+function waveDependencySnapshotMarkdownPath(lanePaths, waveNumber) {
+  return path.join(lanePaths.dependencySnapshotsDir, `wave-${waveNumber}.md`);
 }
 
 function waveDocsQueuePath(lanePaths, waveNumber) {
@@ -570,6 +589,8 @@ function buildIntegrationEvidence({
   summariesByAgentId,
   docsQueue,
   agentRuns,
+  dependencySnapshot = null,
+  capabilityAssignments = [],
 }) {
   const openClaims = (coordinationState?.claims || [])
     .filter((record) => isOpenCoordinationStatus(record.status))
@@ -685,6 +706,21 @@ function buildIntegrationEvidence({
     }
   }
 
+  const inboundDependencies = (dependencySnapshot?.openInbound || []).map(
+    (record) =>
+      `${record.id}: ${compactSingleLine(record.summary || record.detail || "inbound dependency", 180)}${record.assignedAgentId ? ` -> ${record.assignedAgentId}` : ""}`,
+  );
+  const outboundDependencies = (dependencySnapshot?.openOutbound || []).map(
+    (record) =>
+      `${record.id}: ${compactSingleLine(record.summary || record.detail || "outbound dependency", 180)}`,
+  );
+  const helperAssignments = (capabilityAssignments || [])
+    .filter((assignment) => assignment.blocking)
+    .map(
+      (assignment) =>
+        `${assignment.requestId}: ${assignment.target}${assignment.assignedAgentId ? ` -> ${assignment.assignedAgentId}` : " -> unresolved"} (${assignment.assignmentReason || "n/a"})`,
+    );
+
   return {
     openClaims: uniqueStringEntries(openClaims),
     conflictingClaims: uniqueStringEntries(conflictingClaims),
@@ -694,6 +730,9 @@ function buildIntegrationEvidence({
     proofGaps: uniqueStringEntries(proofGapEntries),
     docGaps: uniqueStringEntries(docGapEntries),
     deployRisks: uniqueStringEntries(deployRiskEntries),
+    inboundDependencies: uniqueStringEntries(inboundDependencies),
+    outboundDependencies: uniqueStringEntries(outboundDependencies),
+    helperAssignments: uniqueStringEntries(helperAssignments),
   };
 }
 
@@ -706,6 +745,8 @@ export function buildWaveIntegrationSummary({
   docsQueue,
   runtimeAssignments,
   agentRuns,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
 }) {
   const explicitIntegration = summariesByAgentId[lanePaths.integrationAgentId]?.integration || null;
   const evidence = buildIntegrationEvidence({
@@ -715,6 +756,8 @@ export function buildWaveIntegrationSummary({
     summariesByAgentId,
     docsQueue,
     agentRuns,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   if (explicitIntegration) {
     return {
@@ -742,6 +785,9 @@ export function buildWaveIntegrationSummary({
       proofGaps: evidence.proofGaps,
       docGaps: evidence.docGaps,
       deployRisks: evidence.deployRisks,
+      inboundDependencies: evidence.inboundDependencies,
+      outboundDependencies: evidence.outboundDependencies,
+      helperAssignments: evidence.helperAssignments,
       runtimeAssignments,
       recommendation: explicitIntegration.state,
       detail: explicitIntegration.detail || "",
@@ -786,6 +832,9 @@ function renderIntegrationSummaryMarkdown(integrationSummary) {
     `- Proof gaps: ${(integrationSummary.proofGaps || []).length}`,
     `- Deploy risks: ${(integrationSummary.deployRisks || []).length}`,
     `- Documentation gaps: ${(integrationSummary.docGaps || []).length}`,
+    `- Inbound dependencies: ${(integrationSummary.inboundDependencies || []).length}`,
+    `- Outbound dependencies: ${(integrationSummary.outboundDependencies || []).length}`,
+    `- Helper assignments: ${(integrationSummary.helperAssignments || []).length}`,
     "",
     ...renderIntegrationSection("## Open Claims", integrationSummary.openClaims),
     ...renderIntegrationSection("## Conflicting Claims", integrationSummary.conflictingClaims),
@@ -797,6 +846,9 @@ function renderIntegrationSummaryMarkdown(integrationSummary) {
     ),
     ...renderIntegrationSection("## Proof Gaps", integrationSummary.proofGaps),
     ...renderIntegrationSection("## Deploy Risks", integrationSummary.deployRisks),
+    ...renderIntegrationSection("## Inbound Dependencies", integrationSummary.inboundDependencies),
+    ...renderIntegrationSection("## Outbound Dependencies", integrationSummary.outboundDependencies),
+    ...renderIntegrationSection("## Helper Assignments", integrationSummary.helperAssignments),
     "## Runtime Assignments",
     ...((integrationSummary.runtimeAssignments || []).length > 0
       ? integrationSummary.runtimeAssignments.map(
@@ -851,6 +903,32 @@ function writeWaveDerivedState({
   if (clarificationTriage.changed) {
     coordinationState = readMaterializedCoordinationState(coordinationLogPath);
   }
+  const capabilityAssignments = buildRequestAssignments({
+    coordinationState,
+    agents: wave.agents,
+    ledger: existingLedger,
+    capabilityRouting: lanePaths.capabilityRouting,
+  });
+  syncAssignmentRecords(coordinationLogPath, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+    assignments: capabilityAssignments,
+  });
+  coordinationState = readMaterializedCoordinationState(coordinationLogPath);
+  const dependencySnapshot = buildDependencySnapshot({
+    dirPath: lanePaths.crossLaneDependenciesDir,
+    lane: lanePaths.lane,
+    waveNumber: wave.wave,
+    agents: wave.agents,
+    ledger: existingLedger,
+    capabilityRouting: lanePaths.capabilityRouting,
+  });
+  writeJsonArtifact(waveAssignmentsPath(lanePaths, wave.wave), capabilityAssignments);
+  writeJsonArtifact(waveDependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot);
+  writeDependencySnapshotMarkdown(
+    waveDependencySnapshotMarkdownPath(lanePaths, wave.wave),
+    dependencySnapshot,
+  );
   const runtimeAssignments = wave.agents.map((agent) => ({
     agentId: agent.agentId,
     role: agent.executorResolved?.role || null,
@@ -881,6 +959,8 @@ function writeWaveDerivedState({
     docsQueue,
     runtimeAssignments,
     agentRuns,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   writeJsonArtifact(waveIntegrationPath(lanePaths, wave.wave), integrationSummary);
   writeTextAtomic(
@@ -898,6 +978,8 @@ function writeWaveDerivedState({
     evaluatorAgentId: lanePaths.evaluatorAgentId,
     integrationAgentId: lanePaths.integrationAgentId,
     documentationAgentId: lanePaths.documentationAgentId,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   writeWaveLedger(waveLedgerPath(lanePaths, wave.wave), ledger);
   const inboxDir = waveInboxDir(lanePaths, wave.wave);
@@ -907,6 +989,8 @@ function writeWaveDerivedState({
     state: coordinationState,
     ledger,
     integrationSummary,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   const sharedSummaryPath = path.join(inboxDir, "shared-summary.md");
   writeCompiledInbox(sharedSummaryPath, sharedSummary.text);
@@ -919,6 +1003,8 @@ function writeWaveDerivedState({
       ledger,
       docsQueue,
       integrationSummary,
+      capabilityAssignments,
+      dependencySnapshot,
     });
     const inboxPath = path.join(inboxDir, `${agent.agentId}.md`);
     writeCompiledInbox(inboxPath, inbox.text);
@@ -929,6 +1015,8 @@ function writeWaveDerivedState({
     waveFile: wave.file,
     agents: wave.agents,
     state: coordinationState,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   const messageBoardPath = path.join(lanePaths.messageboardsDir, `wave-${wave.wave}.md`);
   writeCoordinationBoardProjection(messageBoardPath, {
@@ -936,12 +1024,16 @@ function writeWaveDerivedState({
     waveFile: wave.file,
     agents: wave.agents,
     state: coordinationState,
+    capabilityAssignments,
+    dependencySnapshot,
   });
   return {
     coordinationLogPath,
     coordinationState,
     clarificationTriage,
     docsQueue,
+    capabilityAssignments,
+    dependencySnapshot,
     integrationSummary,
     integrationMarkdownPath: waveIntegrationMarkdownPath(lanePaths, wave.wave),
     ledger,
@@ -951,6 +1043,17 @@ function writeWaveDerivedState({
     messageBoardPath,
     messageBoardText: boardText,
   };
+}
+
+function applyDerivedStateToDashboard(dashboardState, derivedState) {
+  if (!dashboardState || !derivedState) {
+    return;
+  }
+  dashboardState.helperAssignmentsOpen = (derivedState.capabilityAssignments || []).filter(
+    (assignment) => assignment.blocking,
+  ).length;
+  dashboardState.inboundDependenciesOpen = (derivedState.dependencySnapshot?.openInbound || []).length;
+  dashboardState.outboundDependenciesOpen = (derivedState.dependencySnapshot?.openOutbound || []).length;
 }
 
 export function readWaveImplementationGate(wave, agentRuns) {
@@ -2039,12 +2142,6 @@ function isLauncherSeedRequest(record) {
   );
 }
 
-function openTaskCountForAgent(ledger, agentId) {
-  return (ledger?.tasks || []).filter(
-    (task) => task.owner === agentId && !["done", "closed", "resolved"].includes(task.state),
-  ).length;
-}
-
 function runtimeMixValidationForRuns(agentRuns, lanePaths) {
   return validateWaveRuntimeMixAssignments(
     {
@@ -2252,6 +2349,58 @@ export function readClarificationBarrier(derivedState) {
   };
 }
 
+export function readWaveAssignmentBarrier(derivedState) {
+  const blockingAssignments = (derivedState?.capabilityAssignments || []).filter(
+    (assignment) => assignment.blocking,
+  );
+  if (blockingAssignments.length === 0) {
+    return {
+      ok: true,
+      statusCode: "pass",
+      detail: "",
+    };
+  }
+  const unresolvedAssignments = blockingAssignments.filter((assignment) => !assignment.assignedAgentId);
+  if (unresolvedAssignments.length > 0) {
+    return {
+      ok: false,
+      statusCode: "helper-assignment-unresolved",
+      detail: `Helper assignments remain unresolved (${unresolvedAssignments.map((assignment) => assignment.requestId).join(", ")}).`,
+    };
+  }
+  return {
+    ok: false,
+    statusCode: "helper-assignment-open",
+    detail: `Helper assignments remain open (${blockingAssignments.map((assignment) => assignment.requestId).join(", ")}).`,
+  };
+}
+
+export function readWaveDependencyBarrier(derivedState) {
+  const requiredInbound = derivedState?.dependencySnapshot?.requiredInbound || [];
+  const requiredOutbound = derivedState?.dependencySnapshot?.requiredOutbound || [];
+  const unresolvedInboundAssignments =
+    derivedState?.dependencySnapshot?.unresolvedInboundAssignments || [];
+  if (unresolvedInboundAssignments.length > 0) {
+    return {
+      ok: false,
+      statusCode: "dependency-assignment-unresolved",
+      detail: `Required inbound dependencies are unassigned (${unresolvedInboundAssignments.map((record) => record.id).join(", ")}).`,
+    };
+  }
+  if (requiredInbound.length > 0 || requiredOutbound.length > 0) {
+    return {
+      ok: false,
+      statusCode: "dependency-open",
+      detail: `Open required dependencies remain (${[...requiredInbound, ...requiredOutbound].map((record) => record.id).join(", ")}).`,
+    };
+  }
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail: "",
+  };
+}
+
 export function buildGateSnapshot({
   wave,
   agentRuns,
@@ -2284,9 +2433,13 @@ export function buildGateSnapshot({
   });
   const infraGate = readWaveInfraGate(agentRuns);
   const clarificationBarrier = readClarificationBarrier(derivedState);
+  const helperAssignmentBarrier = readWaveAssignmentBarrier(derivedState);
+  const dependencyBarrier = readWaveDependencyBarrier(derivedState);
   const orderedGates = [
     ["implementationGate", implementationGate],
     ["componentGate", componentGate],
+    ["helperAssignmentBarrier", helperAssignmentBarrier],
+    ["dependencyBarrier", dependencyBarrier],
     ["integrationBarrier", integrationBarrier],
     ["documentationGate", documentationGate],
     ["componentMatrixGate", componentMatrixGate],
@@ -2305,6 +2458,8 @@ export function buildGateSnapshot({
     evaluatorGate,
     infraGate,
     clarificationBarrier,
+    helperAssignmentBarrier,
+    dependencyBarrier,
     overall: firstFailure
       ? {
           ok: false,
@@ -2363,63 +2518,75 @@ export function resolveRelaunchRuns(agentRuns, failures, derivedState, lanePaths
       barrier: null,
     };
   }
-  const targetedAgentIds = new Set();
-  const capabilityTargets = new Set();
-  for (const record of derivedState?.coordinationState?.requests || []) {
-    if (!isOpenCoordinationStatus(record.status) || isLauncherSeedRequest(record)) {
-      continue;
-    }
-    for (const target of record.targets || []) {
-      if (String(target).startsWith("agent:")) {
-        targetedAgentIds.add(String(target).slice("agent:".length));
-      } else if (String(target).startsWith("capability:")) {
-        capabilityTargets.add(String(target).slice("capability:".length));
-      } else if (runsByAgentId.has(target)) {
-        targetedAgentIds.add(target);
-      }
-    }
-  }
-  if (targetedAgentIds.size > 0) {
+  const blockingAssignments = (derivedState?.capabilityAssignments || []).filter(
+    (assignment) => assignment.blocking,
+  );
+  const effectiveAssignments =
+    blockingAssignments.length > 0
+      ? blockingAssignments
+      : buildRequestAssignments({
+          coordinationState: derivedState?.coordinationState,
+          agents: agentRuns.map((run) => run.agent),
+          ledger: derivedState?.ledger,
+          capabilityRouting: lanePaths?.capabilityRouting,
+        }).filter((assignment) => assignment.blocking);
+  const assignmentSource = effectiveAssignments.length > 0 ? effectiveAssignments : blockingAssignments;
+  const unresolvedFromSource = assignmentSource.filter((assignment) => !assignment.assignedAgentId);
+  if (unresolvedFromSource.length > 0) {
     return {
-      runs: Array.from(targetedAgentIds)
+      runs: [],
+      barrier: {
+        statusCode: "helper-assignment-unresolved",
+        detail: `No matching assignee exists for helper requests (${unresolvedFromSource.map((assignment) => assignment.requestId).join(", ")}).`,
+        failures: unresolvedFromSource.map((assignment) => ({
+          agentId: null,
+          statusCode: "helper-assignment-unresolved",
+          logPath: null,
+          detail: assignment.assignmentDetail || assignment.summary || assignment.requestId,
+        })),
+      },
+    };
+  }
+  const assignedAgentIds = new Set(
+    assignmentSource.map((assignment) => assignment.assignedAgentId).filter(Boolean),
+  );
+  if (assignedAgentIds.size > 0) {
+    return {
+      runs: Array.from(assignedAgentIds)
         .map((agentId) => runsByAgentId.get(agentId))
         .filter(Boolean),
       barrier: null,
     };
   }
-  if (capabilityTargets.size > 0) {
-    const selectedRuns = [];
-    for (const capability of capabilityTargets) {
-      const preferred = lanePaths.capabilityRouting?.preferredAgents?.[capability] || [];
-      const preferredRun = preferred
+  const unresolvedInboundAssignments =
+    derivedState?.dependencySnapshot?.unresolvedInboundAssignments || [];
+  if (unresolvedInboundAssignments.length > 0) {
+    return {
+      runs: [],
+      barrier: {
+        statusCode: "dependency-assignment-unresolved",
+        detail: `Required inbound dependencies are not assigned (${unresolvedInboundAssignments.map((record) => record.id).join(", ")}).`,
+        failures: unresolvedInboundAssignments.map((record) => ({
+          agentId: null,
+          statusCode: "dependency-assignment-unresolved",
+          logPath: null,
+          detail: record.assignmentDetail || record.summary || record.id,
+        })),
+      },
+    };
+  }
+  const inboundDependencyAgentIds = new Set(
+    (derivedState?.dependencySnapshot?.openInbound || [])
+      .map((record) => record.assignedAgentId)
+      .filter(Boolean),
+  );
+  if (inboundDependencyAgentIds.size > 0) {
+    return {
+      runs: Array.from(inboundDependencyAgentIds)
         .map((agentId) => runsByAgentId.get(agentId))
-        .find((run) => run && Array.isArray(run.agent.capabilities) && run.agent.capabilities.includes(capability));
-      if (preferredRun) {
-        selectedRuns.push(preferredRun);
-        continue;
-      }
-      const matchingRuns = agentRuns.filter(
-        (run) => Array.isArray(run.agent.capabilities) && run.agent.capabilities.includes(capability),
-      );
-      matchingRuns.sort((left, right) => {
-        const taskDiff =
-          openTaskCountForAgent(derivedState?.ledger, left.agent.agentId) -
-          openTaskCountForAgent(derivedState?.ledger, right.agent.agentId);
-        if (taskDiff !== 0) {
-          return taskDiff;
-        }
-        return String(left.agent.agentId).localeCompare(String(right.agent.agentId));
-      });
-      if (matchingRuns[0]) {
-        selectedRuns.push(matchingRuns[0]);
-      }
-    }
-    if (selectedRuns.length > 0) {
-      return {
-        runs: Array.from(new Map(selectedRuns.map((run) => [run.agent.agentId, run])).values()),
-        barrier: null,
-      };
-    }
+        .filter(Boolean),
+      barrier: null,
+    };
   }
   const blockerAgentIds = new Set();
   for (const record of derivedState?.coordinationState?.blockers || []) {
@@ -2532,9 +2699,11 @@ export async function runLauncherCli(argv) {
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.dashboardsDir);
   ensureDirectory(lanePaths.coordinationDir);
+  ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
+  ensureDirectory(lanePaths.dependencySnapshotsDir);
   ensureDirectory(lanePaths.docsQueueDir);
   ensureDirectory(lanePaths.tracesDir);
   ensureDirectory(lanePaths.context7CacheDir);
@@ -2904,15 +3073,15 @@ export async function runLauncherCli(argv) {
             agentIds: agentRuns.map((run) => run.agent.agentId),
             orchestratorId: options.orchestratorId,
           });
-        derivedState = writeWaveDerivedState({
-          lanePaths,
-          wave,
-          agentRuns,
-          summariesByAgentId,
-          feedbackRequests,
-          attempt: attemptNumber,
-          orchestratorId: options.orchestratorId,
-        });
+          derivedState = writeWaveDerivedState({
+            lanePaths,
+            wave,
+            agentRuns,
+            summariesByAgentId,
+            feedbackRequests,
+            attempt: attemptNumber,
+            orchestratorId: options.orchestratorId,
+          });
           for (const run of agentRuns) {
             run.messageBoardSnapshot = derivedState.messageBoardText;
             run.sharedSummaryPath = derivedState.sharedSummaryPath;
@@ -2920,6 +3089,7 @@ export async function runLauncherCli(argv) {
             run.inboxPath = derivedState.inboxesByAgentId[run.agent.agentId]?.path || null;
             run.inboxText = derivedState.inboxesByAgentId[run.agent.agentId]?.text || "";
           }
+          applyDerivedStateToDashboard(dashboardState, derivedState);
           return derivedState;
         };
 
@@ -2934,6 +3104,7 @@ export async function runLauncherCli(argv) {
           messageBoardPath,
           agentRuns,
         });
+        applyDerivedStateToDashboard(dashboardState, derivedState);
 
         const preCompletedAgentIds = new Set(
           agentRuns
@@ -3188,39 +3359,133 @@ export async function runLauncherCli(argv) {
                   actionRequested: `Lane ${lanePaths.lane} owners should close the component promotion gap before wave progression.`,
                 });
               } else if (launchedImplementationRuns.length > 0) {
-                recordCombinedEvent({
-                  message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
-                });
-                const closureResult = await runClosureSweepPhase({
-                  lanePaths,
-                  wave,
-                  closureRuns: agentRuns.filter((run) =>
-                    [
-                      lanePaths.evaluatorAgentId,
-                      lanePaths.integrationAgentId,
-                      lanePaths.documentationAgentId,
-                    ].includes(
-                      run.agent.agentId,
+                const helperAssignmentBarrier = readWaveAssignmentBarrier(derivedState);
+                const dependencyBarrier = readWaveDependencyBarrier(derivedState);
+                if (!helperAssignmentBarrier.ok) {
+                  failures = [
+                    {
+                      agentId: null,
+                      statusCode: helperAssignmentBarrier.statusCode,
+                      logPath: path.relative(REPO_ROOT, messageBoardPath),
+                      detail: helperAssignmentBarrier.detail,
+                    },
+                  ];
+                  recordCombinedEvent({
+                    level: "error",
+                    message: `Helper assignment barrier blocked wave ${wave.wave}: ${helperAssignmentBarrier.detail}`,
+                  });
+                  appendCoordination({
+                    event: "wave_gate_blocked",
+                    waves: [wave.wave],
+                    status: "blocked",
+                    details: `reason=${helperAssignmentBarrier.statusCode}; ${helperAssignmentBarrier.detail}`,
+                    actionRequested: `Lane ${lanePaths.lane} owners should resolve helper assignments before closure.`,
+                  });
+                } else if (!dependencyBarrier.ok) {
+                  failures = [
+                    {
+                      agentId: null,
+                      statusCode: dependencyBarrier.statusCode,
+                      logPath: path.relative(REPO_ROOT, messageBoardPath),
+                      detail: dependencyBarrier.detail,
+                    },
+                  ];
+                  recordCombinedEvent({
+                    level: "error",
+                    message: `Dependency barrier blocked wave ${wave.wave}: ${dependencyBarrier.detail}`,
+                  });
+                  appendCoordination({
+                    event: "wave_gate_blocked",
+                    waves: [wave.wave],
+                    status: "blocked",
+                    details: `reason=${dependencyBarrier.statusCode}; ${dependencyBarrier.detail}`,
+                    actionRequested: `Lane ${lanePaths.lane} owners should resolve required dependency tickets before closure.`,
+                  });
+                } else {
+                  recordCombinedEvent({
+                    message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
+                  });
+                  const closureResult = await runClosureSweepPhase({
+                    lanePaths,
+                    wave,
+                    closureRuns: agentRuns.filter((run) =>
+                      [
+                        lanePaths.evaluatorAgentId,
+                        lanePaths.integrationAgentId,
+                        lanePaths.documentationAgentId,
+                      ].includes(
+                        run.agent.agentId,
+                      ),
                     ),
-                  ),
-                  coordinationLogPath: derivedState.coordinationLogPath,
-                  refreshDerivedState,
-                  dashboardState,
-                  recordCombinedEvent,
-                  flushDashboards,
-                  options,
-                  feedbackStateByRequestId,
-                  appendCoordination,
-                });
-                failures = closureResult.failures;
-                timedOut = timedOut || closureResult.timedOut;
-                materializeAgentExecutionSummaries(wave, agentRuns);
-                refreshDerivedState(attempt);
+                    coordinationLogPath: derivedState.coordinationLogPath,
+                    refreshDerivedState,
+                    dashboardState,
+                    recordCombinedEvent,
+                    flushDashboards,
+                    options,
+                    feedbackStateByRequestId,
+                    appendCoordination,
+                  });
+                  failures = closureResult.failures;
+                  timedOut = timedOut || closureResult.timedOut;
+                  materializeAgentExecutionSummaries(wave, agentRuns);
+                  refreshDerivedState(attempt);
+                }
               } else {
                 recordCombinedEvent({
                   message: "Implementation exit contracts and component promotions are satisfied.",
                 });
               }
+            }
+          }
+
+          if (failures.length === 0) {
+            const helperAssignmentBarrier = readWaveAssignmentBarrier(derivedState);
+            if (!helperAssignmentBarrier.ok) {
+              failures = [
+                {
+                  agentId: null,
+                  statusCode: helperAssignmentBarrier.statusCode,
+                  logPath: path.relative(REPO_ROOT, messageBoardPath),
+                  detail: helperAssignmentBarrier.detail,
+                },
+              ];
+              recordCombinedEvent({
+                level: "error",
+                message: `Helper assignment barrier blocked wave ${wave.wave}: ${helperAssignmentBarrier.detail}`,
+              });
+              appendCoordination({
+                event: "wave_gate_blocked",
+                waves: [wave.wave],
+                status: "blocked",
+                details: `reason=${helperAssignmentBarrier.statusCode}; ${helperAssignmentBarrier.detail}`,
+                actionRequested: `Lane ${lanePaths.lane} owners should resolve helper assignments before wave progression.`,
+              });
+            }
+          }
+
+          if (failures.length === 0) {
+            const dependencyBarrier = readWaveDependencyBarrier(derivedState);
+            if (!dependencyBarrier.ok) {
+              failures = [
+                {
+                  agentId: null,
+                  statusCode: dependencyBarrier.statusCode,
+                  logPath: path.relative(REPO_ROOT, messageBoardPath),
+                  detail: dependencyBarrier.detail,
+                },
+              ];
+              recordCombinedEvent({
+                level: "error",
+                message: `Dependency barrier blocked wave ${wave.wave}: ${dependencyBarrier.detail}`,
+              });
+              appendCoordination({
+                event: "wave_gate_blocked",
+                waves: [wave.wave],
+                status: "blocked",
+                details: `reason=${dependencyBarrier.statusCode}; ${dependencyBarrier.detail}`,
+                actionRequested: `Lane ${lanePaths.lane} owners should resolve required dependencies before wave progression.`,
+              });
             }
           }
 
@@ -3419,6 +3684,8 @@ export async function runLauncherCli(argv) {
             coordinationState: derivedState.coordinationState,
             ledger: derivedState.ledger,
             docsQueue: derivedState.docsQueue,
+            capabilityAssignments: derivedState.capabilityAssignments,
+            dependencySnapshot: derivedState.dependencySnapshot,
             integrationSummary: derivedState.integrationSummary,
             integrationMarkdownPath: derivedState.integrationMarkdownPath,
             clarificationTriage: derivedState.clarificationTriage,
@@ -3432,6 +3699,8 @@ export async function runLauncherCli(argv) {
               integrationSummary: derivedState.integrationSummary,
               ledger: derivedState.ledger,
               docsQueue: derivedState.docsQueue,
+              capabilityAssignments: derivedState.capabilityAssignments,
+              dependencySnapshot: derivedState.dependencySnapshot,
               summariesByAgentId,
               agentRuns,
               gateSnapshot,

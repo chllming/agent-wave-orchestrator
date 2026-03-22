@@ -31,6 +31,8 @@ The Wave Orchestrator coordinates repository work as bounded execution waves.
 - `pnpm exec wave coord show --lane main --wave 0 --dry-run`
 - `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`
 - `pnpm exec wave coord post --lane main --wave 0 --agent A1 --kind blocker --summary "Need repository decision"`
+- `pnpm exec wave dep show --lane main --wave 0 --json`
+- `pnpm exec wave dep post --owner-lane main --requester-lane release --owner-wave 0 --requester-wave 2 --agent launcher --summary "Need shared-plan reconciliation" --target capability:docs-shared-plan --required`
 - `pnpm exec wave upgrade`
 
 ## Configuration
@@ -86,6 +88,8 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 
 The canonical state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not the scheduler's source of truth.
 
+Capability-targeted requests now become deterministic helper assignments. The launcher resolves the assignee from explicit targets, `capabilityRouting.preferredAgents`, then least-busy matching capability owners, writes that assignment into `.tmp/<lane>-wave-launcher/assignments/`, mirrors the decision into coordination state, and keeps the wave blocked until the linked follow-up resolves.
+
 Clarification flow is orchestrator-first:
 
 1. Agent emits `clarification-request` through `wave coord post`.
@@ -93,6 +97,15 @@ Clarification flow is orchestrator-first:
 3. Only unresolved items become human feedback tickets.
 4. Routed clarification follow-up requests remain blocking until they resolve.
 5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
+
+## Cross-Lane Dependencies
+
+- `wave dep post` appends a typed dependency ticket under `.tmp/wave-orchestrator/dependencies/`.
+- `wave dep show` materializes the inbound/outbound dependency snapshot for a lane and wave.
+- `wave dep resolve` closes or updates an existing dependency ticket.
+- `wave dep render` writes a markdown dependency projection next to the JSONL store for human review.
+
+Required inbound dependencies block autonomous next-wave start and lane finalization. Required outbound dependencies are surfaced in the per-wave dependency snapshot and keep the requester wave from closing while they remain part of that wave's exit conditions.
 
 ## Upgrade Flow
 
@@ -117,11 +130,13 @@ pnpm exec wave changelog --since-installed
 - logs: `.tmp/<lane>-wave-launcher/logs/`
 - status summaries: `.tmp/<lane>-wave-launcher/status/`
 - coordination logs: `.tmp/<lane>-wave-launcher/coordination/`
+- helper-assignment snapshots: `.tmp/<lane>-wave-launcher/assignments/`
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
 - compiled inboxes: `.tmp/<lane>-wave-launcher/inboxes/`
 - ledger: `.tmp/<lane>-wave-launcher/ledger/`
 - integration summaries: `.tmp/<lane>-wave-launcher/integration/`
   These summaries now carry actionable evidence for conflicting claims, changed interfaces, cross-component impacts, proof gaps, documentation gaps, and deploy or ops risk.
+- dependency snapshots: `.tmp/<lane>-wave-launcher/dependencies/`
 - docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
 - clarification triage: `.tmp/<lane>-wave-launcher/feedback/triage/`
@@ -153,6 +168,7 @@ pnpm exec wave changelog --since-installed
 - `outcome.json` is the stored replay baseline. Replay compares recomputed gates and quality against it instead of trusting only inline metadata.
 - For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
 - `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
+- `quality.json` also reports capability-assignment and dependency-resolution metrics in addition to the Phase 2/3 communication, fallback, and closure metrics.
 - Replay support is internal. The source tree contains helpers to load, validate, and replay trace bundles against the same gate logic the launcher uses, but there is no public replay CLI yet.
 - Replay is read-only and hash-validating for `traceVersion: 2` bundles. It ignores inline summary duplicates in `run-metadata.json` and returns a stored-vs-recomputed comparison report for gate and quality state. Legacy `traceVersion: 1` bundles remain best-effort and emit warnings instead of claiming full hermetic replay.
 
@@ -235,4 +251,4 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, and the integration recommendation first. Documentation and evaluator closure only run after integration is explicitly ready for doc closure; if integration reports `needs-more-work`, the wave stops there and retries only the implicated owners plus the integration steward.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. Documentation and evaluator closure only run after integration is explicitly ready for doc closure; if integration reports `needs-more-work`, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the integration steward.

@@ -142,6 +142,9 @@ export function buildWaveDashboardState({
     updatedAt: now,
     messageBoardPath: path.relative(REPO_ROOT, messageBoardPath),
     messageBoardTail: readRollingMessageBoardLines(messageBoardPath),
+    helperAssignmentsOpen: 0,
+    inboundDependenciesOpen: 0,
+    outboundDependenciesOpen: 0,
     agents: agentRuns.map((run) => ({
       agentId: run.agent.agentId,
       title: run.agent.title,
@@ -223,6 +226,9 @@ export function buildGlobalDashboardState({
       agentsTotal: wave.agents.length,
       agentsCompleted: 0,
       agentsFailed: 0,
+      helperAssignmentsOpen: 0,
+      inboundDependenciesOpen: 0,
+      outboundDependenciesOpen: 0,
       lastMessage: "",
       deployments: [],
       infraFindings: [],
@@ -294,6 +300,9 @@ export function syncGlobalWaveFromWaveDashboard(globalState, waveDashboard) {
   ).length;
   const latestEvent = waveDashboard.events.at(-1);
   entry.lastMessage = latestEvent?.message || entry.lastMessage || "";
+  entry.helperAssignmentsOpen = waveDashboard.helperAssignmentsOpen || 0;
+  entry.inboundDependenciesOpen = waveDashboard.inboundDependenciesOpen || 0;
+  entry.outboundDependenciesOpen = waveDashboard.outboundDependenciesOpen || 0;
   entry.deployments = agents
     .filter((agent) => agent.deploymentState)
     .map((agent) => ({

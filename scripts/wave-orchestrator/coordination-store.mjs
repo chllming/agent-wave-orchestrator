@@ -343,10 +343,15 @@ export function renderCoordinationBoardProjection({
   waveFile,
   agents,
   state,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
 }) {
   const latestRecords = Array.isArray(state?.latestRecords) ? state.latestRecords : [];
   const openRecords = latestRecords.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
   const activityRecords = [...latestRecords].sort(coordinationSort);
+  const openAssignments = (capabilityAssignments || []).filter((assignment) => assignment.blocking);
+  const openInboundDependencies = dependencySnapshot?.openInbound || [];
+  const openOutboundDependencies = dependencySnapshot?.openOutbound || [];
   return [
     `# Wave ${wave} Message Board`,
     "",
@@ -357,6 +362,28 @@ export function renderCoordinationBoardProjection({
     "## Open Coordination State",
     ...(openRecords.length > 0
       ? openRecords.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
+    "## Helper Assignments",
+    ...(openAssignments.length > 0
+      ? openAssignments.map(
+          (assignment) =>
+            `- [${assignment.priority || "normal"}] ${assignment.requestId} -> ${assignment.target}${assignment.assignedAgentId ? ` => ${assignment.assignedAgentId}` : " => unresolved"} (${assignment.assignmentReason || "n/a"})`,
+        )
+      : ["- None."]),
+    "",
+    "## Cross-Lane Dependencies",
+    ...(openInboundDependencies.length + openOutboundDependencies.length > 0
+      ? [
+          ...openInboundDependencies.map(
+            (record) =>
+              `- [inbound${record.required ? ", required" : ""}] ${record.id}: ${compactSingleLine(record.summary || record.detail || "dependency", 160)}${record.assignedAgentId ? ` -> ${record.assignedAgentId}` : ""}`,
+          ),
+          ...openOutboundDependencies.map(
+            (record) =>
+              `- [outbound${record.required ? ", required" : ""}] ${record.id}: ${compactSingleLine(record.summary || record.detail || "dependency", 160)}`,
+          ),
+        ]
       : ["- None."]),
     "",
     "## Activity Feed",
@@ -427,6 +454,8 @@ export function compileSharedSummary({
   state,
   ledger = null,
   integrationSummary = null,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
   maxChars = 4000,
 }) {
   const openBlockers = state.blockers.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
@@ -437,6 +466,9 @@ export function compileSharedSummary({
   const openHumanEscalations = state.humanEscalations.filter((record) =>
     OPEN_COORDINATION_STATUSES.has(record.status),
   );
+  const openHelperAssignments = (capabilityAssignments || []).filter((assignment) => assignment.blocking);
+  const openInboundDependencies = dependencySnapshot?.openInbound || [];
+  const openOutboundDependencies = dependencySnapshot?.openOutbound || [];
   const summary = [
     `# Wave ${wave.wave} Shared Summary`,
     "",
@@ -445,6 +477,9 @@ export function compileSharedSummary({
     `- Open clarifications: ${openClarifications.length}`,
     `- Open human escalations: ${openHumanEscalations.length}`,
     `- Open coordination items: ${state.openRecords.length}`,
+    `- Open helper assignments: ${openHelperAssignments.length}`,
+    `- Open inbound dependencies: ${openInboundDependencies.length}`,
+    `- Open outbound dependencies: ${openOutboundDependencies.length}`,
     ...(integrationSummary
       ? [`- Integration recommendation: ${integrationSummary.recommendation || "n/a"}`]
       : []),
@@ -466,6 +501,28 @@ export function compileSharedSummary({
     "## Current clarifications",
     ...(openClarifications.length > 0
       ? openClarifications.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
+    "## Helper assignments",
+    ...(openHelperAssignments.length > 0
+      ? openHelperAssignments.map(
+          (assignment) =>
+            `- ${assignment.requestId}: ${assignment.target}${assignment.assignedAgentId ? ` -> ${assignment.assignedAgentId}` : " -> unresolved"} (${assignment.assignmentReason || "n/a"})`,
+        )
+      : ["- None."]),
+    "",
+    "## Cross-lane dependencies",
+    ...(openInboundDependencies.length + openOutboundDependencies.length > 0
+      ? [
+          ...openInboundDependencies.map(
+            (item) =>
+              `- inbound${item.required ? " required" : ""}: ${compactSingleLine(item.summary || item.detail || item.id, 160)}${item.assignedAgentId ? ` -> ${item.assignedAgentId}` : ""}`,
+          ),
+          ...openOutboundDependencies.map(
+            (item) =>
+              `- outbound${item.required ? " required" : ""}: ${compactSingleLine(item.summary || item.detail || item.id, 160)}`,
+          ),
+        ]
       : ["- None."]),
     "",
     "## Current decisions",
@@ -521,6 +578,8 @@ export function compileAgentInbox({
   ledger = null,
   docsQueue = null,
   integrationSummary = null,
+  capabilityAssignments = [],
+  dependencySnapshot = null,
   maxChars = 8000,
 }) {
   const targetedRecords = state.openRecords.filter((record) => isTargetedToAgent(record, agent));
@@ -555,6 +614,23 @@ export function compileAgentInbox({
     Array.isArray(ledger?.tasks) && ledger.tasks.length > 0
       ? ledger.tasks.filter((task) => task.owner === agent.agentId)
       : [];
+  const helperAssignments = (capabilityAssignments || []).filter(
+    (assignment) => assignment.blocking && assignment.assignedAgentId === agent.agentId,
+  );
+  const dependencyItems = [
+    ...((dependencySnapshot?.inbound || []).filter(
+      (record) =>
+        isOpenCoordinationStatus(record.status) &&
+        (record.assignedAgentId === agent.agentId ||
+          isArtifactRelevantToAgent(record, agent) ||
+          isTargetedToAgent(record, agent)),
+    )),
+    ...((dependencySnapshot?.outbound || []).filter(
+      (record) =>
+        isOpenCoordinationStatus(record.status) &&
+        (isArtifactRelevantToAgent(record, agent) || isTargetedToAgent(record, agent)),
+    )),
+  ];
   const text = [
     `# Wave ${wave.wave} Inbox for ${agent.agentId}`,
     "",
@@ -576,6 +652,22 @@ export function compileAgentInbox({
     "## Relevant open coordination",
     ...(relevantRecords.length > 0
       ? relevantRecords.map((record) => renderOpenRecord(record))
+      : ["- None."]),
+    "",
+    "## Helper assignments",
+    ...(helperAssignments.length > 0
+      ? helperAssignments.map(
+          (assignment) =>
+            `- [${assignment.priority || "normal"}] ${compactSingleLine(assignment.summary || assignment.requestId, 140)} (${assignment.target}${assignment.assignmentReason ? `; ${assignment.assignmentReason}` : ""})`,
+        )
+      : ["- None."]),
+    "",
+    "## Cross-lane dependencies",
+    ...(dependencyItems.length > 0
+      ? dependencyItems.map(
+          (record) =>
+            `- [${record.priority || "normal"}] ${record.direction || "dependency"}${record.required ? " required" : ""}: ${compactSingleLine(record.summary || record.detail || record.id, 140)}${record.assignedAgentId ? ` -> ${record.assignedAgentId}` : ""}`,
+        )
       : ["- None."]),
     "",
     "## Ledger tasks",

@@ -20,6 +20,7 @@ function printHelp() {
   wave dashboard [dashboard options]
   wave local [local executor options]
   wave coord [coordination options]
+  wave dep [dependency options]
 
 Global options:
   --repo-root <path>   Run the command against a target workspace root
@@ -83,6 +84,14 @@ if (["init", "upgrade", "changelog", "doctor"].includes(subcommand)) {
   try {
     const { runCoordinationCli } = await import("./wave-orchestrator/coord-cli.mjs");
     await runCoordinationCli(rest);
+  } catch (error) {
+    console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+} else if (subcommand === "dep") {
+  try {
+    const { runDependencyCli } = await import("./wave-orchestrator/dep-cli.mjs");
+    await runDependencyCli(rest);
   } catch (error) {
     console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);

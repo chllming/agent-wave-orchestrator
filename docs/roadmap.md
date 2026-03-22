@@ -21,6 +21,8 @@ As of the current repository state:
 - required inbound cross-lane dependency tickets now block both autonomous wave launch and lane finalization
 - integration summaries now carry actionable evidence for claims, interface drift, proof gaps, docs gaps, and deploy or ops risk
 - cumulative `quality.json` metrics and internal, read-only hermetic trace replay validation are shipped
+- capability-targeted requests now become explicit helper assignments with deterministic assignee selection, ledger/traces coverage, and closure barriers
+- typed cross-lane dependency workflows now have operator commands, per-wave dependency snapshots, and replay-visible gating
 
 The remaining roadmap work is mostly about extending those foundations rather than inventing a new orchestration model.
 
@@ -583,13 +585,20 @@ Why third:
 
 ### Phase 4: Capability Routing And Cross-Lane Dependencies
 
-- capability tags
-- volunteer or dynamic assignment for helper roles
-- broader operator workflows around typed cross-lane dependency tickets
+- shipped:
+  - capability tags
+  - deterministic helper-assignment routing from open requests
+  - helper-assignment snapshots under `.tmp/<lane>-wave-launcher/assignments/`
+  - typed `wave dep post|show|resolve|render` operator workflows
+  - per-wave inbound/outbound dependency snapshots under `.tmp/<lane>-wave-launcher/dependencies/`
+  - dependency-aware gating, inboxes, dashboards, and trace/replay artifacts
+- still open:
+  - larger multi-lane benchmark scenarios that stress dependency resolution across more than one wave
+  - richer dependency-specific operator dashboards if the current JSON and markdown projections prove insufficient
 
 Why fourth:
 
-- this is valuable, but only after the coordination core is trustworthy
+- this only became high leverage once the coordination, integration, and replay layers were already trustworthy
 
 ## Immediate Recommendation
 

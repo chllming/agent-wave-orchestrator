@@ -27,9 +27,17 @@
   - hard runtime mix targets
   - retry-time fallback order
   - generic runtime budgets
+- Capability routing is now first-class:
+  - open capability-targeted requests become explicit helper assignments
+  - helper assignments are written into coordination state, the ledger, summaries, and traces
+  - helper assignments remain blocking until the linked follow-up resolves
 - Closure now runs in staged order: implementation and proof, then `A8` integration, then `A9` documentation, then `A0` evaluator.
 - Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
 - Required inbound cross-lane dependency tickets under `.tmp/wave-orchestrator/dependencies/` block both autonomous wave launch and lane finalization while they remain unresolved.
+- Cross-lane dependency workflows now include:
+  - `wave dep post|show|resolve|render`
+  - per-wave inbound/outbound dependency snapshots under `.tmp/<lane>-wave-launcher/dependencies/`
+  - dependency-aware gating, inboxes, dashboards, and replay artifacts
 - Dry-run remains pre-attempt only: it seeds derived state under `.tmp/<lane>-wave-launcher/dry-run/` and leaves `traces/` file-empty.
 - Component maturity and starter wave promotions are tracked in `docs/plans/component-cutover-matrix.md` and `docs/plans/component-cutover-matrix.json`.
 - Context7 bundle selection and launcher-side prompt injection are enabled through `docs/context7/bundles.json`.

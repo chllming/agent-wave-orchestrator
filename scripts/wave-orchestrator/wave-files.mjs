@@ -13,6 +13,7 @@ import {
   DEFAULT_INTEGRATION_ROLE_PROMPT_PATH,
   DEFAULT_SECURITY_ROLE_PROMPT_PATH,
   DEFAULT_WAVE_LANE,
+  normalizeClaudeEffort,
   loadWaveConfig,
   normalizeCodexSandboxMode,
   normalizeExecutorMode,
@@ -700,6 +701,7 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
     "claude.agent",
     "claude.permission_mode",
     "claude.permission_prompt_tool",
+    "claude.effort",
     "claude.max_turns",
     "claude.mcp_config",
     "claude.settings",
@@ -826,6 +828,11 @@ export function normalizeAgentExecutorConfig(rawSettings, filePath, label) {
       executorConfig.claude = {
         ...(executorConfig.claude || {}),
         permissionPromptTool: value,
+      };
+    } else if (key === "claude.effort") {
+      executorConfig.claude = {
+        ...(executorConfig.claude || {}),
+        effort: normalizeClaudeEffort(value, `${label}.claude.effort`),
       };
     } else if (key === "claude.max_turns") {
       executorConfig.claude = {
@@ -2038,6 +2045,28 @@ export function resolveAgentExecutor(agent, options = {}) {
       profile?.budget?.minutes ??
       null,
   };
+  const claudeMaxTurnsSource =
+    executorConfig?.claude?.maxTurns !== null && executorConfig?.claude?.maxTurns !== undefined
+      ? "claude.maxTurns"
+      : profile?.claude?.maxTurns !== null && profile?.claude?.maxTurns !== undefined
+        ? "claude.maxTurns"
+        : runtimeBudget.turns !== null
+          ? "budget.turns"
+          : laneProfile.executors.claude.maxTurns !== null &&
+              laneProfile.executors.claude.maxTurns !== undefined
+            ? "claude.maxTurns"
+            : null;
+  const opencodeStepsSource =
+    executorConfig?.opencode?.steps !== null && executorConfig?.opencode?.steps !== undefined
+      ? "opencode.steps"
+      : profile?.opencode?.steps !== null && profile?.opencode?.steps !== undefined
+        ? "opencode.steps"
+        : runtimeBudget.turns !== null
+          ? "budget.turns"
+          : laneProfile.executors.opencode.steps !== null &&
+              laneProfile.executors.opencode.steps !== undefined
+            ? "opencode.steps"
+            : null;
   return {
     id: executorId,
     initialExecutorId: executorId,
@@ -2122,6 +2151,7 @@ export function resolveAgentExecutor(agent, options = {}) {
         profile?.claude?.maxTurns ??
         runtimeBudget.turns ??
         laneProfile.executors.claude.maxTurns,
+      maxTurnsSource: claudeMaxTurnsSource,
     },
     opencode: {
       ...mergeExecutorSections(
@@ -2139,6 +2169,7 @@ export function resolveAgentExecutor(agent, options = {}) {
         profile?.opencode?.steps ??
         runtimeBudget.turns ??
         laneProfile.executors.opencode.steps,
+      stepsSource: opencodeStepsSource,
     },
   };
 }

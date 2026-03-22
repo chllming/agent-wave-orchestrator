@@ -24,12 +24,12 @@
     "CHANGELOG.md"
   ],
   "bin": {
-    "wave": "./scripts/wave.mjs",
-    "wave-launch": "./scripts/wave-launcher.mjs",
-    "wave-autonomous": "./scripts/wave-autonomous.mjs",
-    "wave-feedback": "./scripts/wave-human-feedback.mjs",
-    "wave-dashboard": "./scripts/wave-dashboard.mjs",
-    "wave-local-executor": "./scripts/wave-local-executor.mjs"
+    "wave": "scripts/wave.mjs",
+    "wave-launch": "scripts/wave-launcher.mjs",
+    "wave-autonomous": "scripts/wave-autonomous.mjs",
+    "wave-feedback": "scripts/wave-human-feedback.mjs",
+    "wave-dashboard": "scripts/wave-dashboard.mjs",
+    "wave-local-executor": "scripts/wave-local-executor.mjs"
   },
   "scripts": {
     "context7:api-check": "bash scripts/context7-export-env.sh run bash scripts/context7-api-check.sh",

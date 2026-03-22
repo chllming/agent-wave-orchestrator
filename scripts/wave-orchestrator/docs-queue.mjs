@@ -8,6 +8,8 @@ export function buildDocsQueue({
   componentPromotions = [],
   runtimeAssignments = [],
 }) {
+  const waveNumber =
+    typeof wave === "object" && wave !== null && Object.hasOwn(wave, "wave") ? wave.wave : wave;
   const items = [];
   for (const [agentId, summary] of Object.entries(summariesByAgentId || {})) {
     if (!summary?.docDelta) {
@@ -28,7 +30,11 @@ export function buildDocsQueue({
       }
     }
     if (summary.docDelta.state === "shared-plan") {
-      for (const docPath of summary.docDelta.paths || sharedPlanDocs) {
+      const sharedPlanPaths =
+        Array.isArray(summary.docDelta.paths) && summary.docDelta.paths.length > 0
+          ? summary.docDelta.paths
+          : sharedPlanDocs;
+      for (const docPath of sharedPlanPaths) {
         items.push({
           id: `${agentId}:shared:${docPath}`,
           kind: "shared-plan",
@@ -57,7 +63,7 @@ export function buildDocsQueue({
   const releaseNotesRequired = items.some((item) => item.kind === "shared-plan");
   return {
     lane,
-    wave: wave.wave || wave,
+    wave: waveNumber,
     createdAt: toIsoTimestamp(),
     updatedAt: toIsoTimestamp(),
     releaseNotesRequired,

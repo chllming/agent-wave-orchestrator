@@ -13,6 +13,9 @@
   - requests, generated specs, rendered markdown, and final results live under `.wave/adhoc/runs/<run-id>/`
   - runtime state stays isolated under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`
   - ad-hoc runs always keep integration, documentation, and cont-QA closure, while `cont-EVAL` and security review are synthesized only when the request needs them
+  - documentation closure still queues canonical shared-plan docs when a run reports a shared-plan delta, alongside the ad-hoc closure report
+  - `wave adhoc promote` copies the stored ad-hoc spec into numbered roadmap artifacts instead of re-deriving it from the current project profile
+  - repo-local path hints become owned paths; external references such as URLs are ignored
 - The harness supports `codex`, `claude`, `opencode`, and `local` executors.
 - Cross-runtime skills are now first-class:
   - canonical bundles live under `skills/`

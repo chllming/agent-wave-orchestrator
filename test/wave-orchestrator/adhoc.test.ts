@@ -18,6 +18,10 @@ function writeJson(filePath, payload) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
 function runWaveCli(args, cwd) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd,
@@ -69,6 +73,15 @@ describe("adhoc task generation", () => {
       expect.arrayContaining(["A0", "A8", "A9", "A1"]),
     );
     expect(spec.agents.map((agent) => agent.agentId)).not.toContain("A7");
+    const documentationAgent = spec.agents.find((agent) => agent.agentId === "A9");
+    expect(documentationAgent.ownedPaths).toEqual(
+      expect.arrayContaining([
+        `.wave/adhoc/runs/${summary.runId}/reports/wave-0-doc-closure.md`,
+        "docs/plans/current-state.md",
+        "docs/plans/master-plan.md",
+        "docs/plans/migration.md",
+      ]),
+    );
 
     const result = JSON.parse(fs.readFileSync(path.join(runDir, "result.json"), "utf8"));
     expect(result.status).toBe("planned");
@@ -79,6 +92,33 @@ describe("adhoc task generation", () => {
     const shown = JSON.parse(showResult.stdout);
     expect(shown.runId).toBe(summary.runId);
     expect(shown.status).toBe("planned");
+  });
+
+  it("filters external path hints and keeps repo-local new paths", () => {
+    const repoDir = initFixtureRepo();
+    const planResult = runWaveCli(
+      [
+        "adhoc",
+        "plan",
+        "--task",
+        "Update `https://example.com/foo/bar`, `docs/reference/runtime-config/README.md`, and `docs/generated/new-guide.md`",
+        "--json",
+      ],
+      repoDir,
+    );
+    expect(planResult.status).toBe(0);
+
+    const summary = JSON.parse(planResult.stdout);
+    const spec = readJson(path.join(repoDir, ".wave", "adhoc", "runs", summary.runId, "spec.json"));
+    const worker = spec.agents.find((agent) => agent.agentId === "A1");
+
+    expect(worker.ownedPaths).toEqual(
+      expect.arrayContaining([
+        "docs/reference/runtime-config/README.md",
+        "docs/generated/new-guide.md",
+      ]),
+    );
+    expect(worker.ownedPaths).not.toContain("https://example.com/foo/bar/");
   });
 
   it("runs dry-run in an isolated adhoc state root and synthesizes security review when needed", () => {
@@ -126,6 +166,8 @@ describe("adhoc task generation", () => {
     expect(
       fs.existsSync(path.join(repoDir, ".tmp", "main-wave-launcher", "dry-run", "executors", "wave-0")),
     ).toBe(false);
+    const docsQueue = readJson(path.join(dryRunRoot, "docs-queue", "wave-0.json"));
+    expect(docsQueue.wave).toBe(0);
 
     const showResult = runWaveCli(["adhoc", "show", "--run", runId, "--json"], repoDir);
     expect(showResult.status).toBe(0);
@@ -134,20 +176,39 @@ describe("adhoc task generation", () => {
     expect(shown.agents.map((agent) => agent.agentId)).toContain("A7");
   });
 
-  it("promotes an adhoc run into numbered roadmap artifacts and records the promotion", () => {
+  it("promotes the stored adhoc spec into numbered roadmap artifacts and records the promotion", () => {
     const repoDir = initFixtureRepo();
     const planResult = runWaveCli(
       [
         "adhoc",
         "plan",
         "--task",
-        "Investigate and document the root cause in `docs/plans/current-state.md`",
+        "Benchmark auth token handling in `scripts/wave-orchestrator/launcher.mjs` and update `docs/plans/current-state.md`",
         "--json",
       ],
       repoDir,
     );
     expect(planResult.status).toBe(0);
     const summary = JSON.parse(planResult.stdout);
+    const runDir = path.join(repoDir, ".wave", "adhoc", "runs", summary.runId);
+    const originalSpec = readJson(path.join(runDir, "spec.json"));
+    writeJson(path.join(repoDir, ".wave", "project-profile.json"), {
+      schemaVersion: 1,
+      initializedAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+      newProject: false,
+      defaultOversightMode: "dark-factory",
+      defaultTerminalSurface: "vscode",
+      deployEnvironments: [],
+      plannerDefaults: {
+        template: "implementation",
+        lane: "main",
+      },
+      source: {
+        projectName: "fixture-repo",
+        configPath: "wave.config.json",
+      },
+    });
 
     const promoteResult = runWaveCli(
       ["adhoc", "promote", "--run", summary.runId, "--wave", "3", "--json"],
@@ -158,6 +219,31 @@ describe("adhoc task generation", () => {
 
     expect(fs.existsSync(path.join(repoDir, promoted.specPath))).toBe(true);
     expect(fs.existsSync(path.join(repoDir, promoted.wavePath))).toBe(true);
+    const promotedSpec = readJson(path.join(repoDir, promoted.specPath));
+    expect(promotedSpec.runKind).toBe("roadmap");
+    expect(promotedSpec.runId).toBe(null);
+    expect(promotedSpec.sourceRunId).toBe(summary.runId);
+    expect(promotedSpec.wave).toBe(3);
+    expect(promotedSpec.oversightMode).toBe(originalSpec.oversightMode);
+    expect(promotedSpec.agents.map((agent) => agent.agentId)).toEqual(
+      expect.arrayContaining(["E0", "A7", "A8", "A9"]),
+    );
+    const documentationAgent = promotedSpec.agents.find((agent) => agent.agentId === "A9");
+    expect(documentationAgent.primaryGoal).toContain("Keep shared plan docs aligned with Wave 3");
+    expect(documentationAgent.ownedPaths).toEqual(
+      expect.arrayContaining([
+        "docs/plans/current-state.md",
+        "docs/plans/master-plan.md",
+        "docs/plans/migration.md",
+      ]),
+    );
+    expect(documentationAgent.ownedPaths.some((ownedPath) => ownedPath.startsWith(".wave/adhoc/"))).toBe(
+      false,
+    );
+    const securityAgent = promotedSpec.agents.find((agent) => agent.agentId === "A7");
+    expect(securityAgent.ownedPaths).toEqual([".tmp/main-wave-launcher/security/wave-3-review.md"]);
+    const evalAgent = promotedSpec.agents.find((agent) => agent.agentId === "E0");
+    expect(evalAgent.ownedPaths).toEqual(["docs/plans/waves/reviews/wave-3-cont-eval.md"]);
 
     const storedResult = JSON.parse(
       fs.readFileSync(path.join(repoDir, ".wave", "adhoc", "runs", summary.runId, "result.json"), "utf8"),

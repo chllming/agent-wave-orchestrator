@@ -127,6 +127,13 @@ const PROVIDER_KEYWORDS = [
   ["release artifact", "github-release"],
   ["ssh", "ssh-manual"],
 ];
+const GENERATED_SPECIAL_AGENT_TITLES = new Set([
+  "cont-QA",
+  "cont-EVAL",
+  "Integration Steward",
+  "Documentation Steward",
+  "Security Reviewer",
+]);
 
 function cleanText(value) {
   return String(value ?? "").trim();
@@ -157,6 +164,21 @@ function normalizeRepoRelativePath(value, label) {
     throw new Error(`${label} must stay inside the repository`);
   }
   return normalized;
+}
+
+function isLikelyExternalPathHint(value) {
+  const normalized = cleanText(value).replaceAll("\\", "/");
+  if (!normalized) {
+    return false;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || normalized.startsWith("//")) {
+    return true;
+  }
+  const firstSegment = normalized.split("/")[0] || "";
+  return (
+    !firstSegment.startsWith(".") &&
+    /^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(firstSegment)
+  );
 }
 
 function buildAdhocRunId() {
@@ -197,7 +219,7 @@ function extractRepoPathHints(task) {
   const matches = [];
   const pushPath = (value) => {
     const normalized = cleanText(value).replace(/^["'`(]+|["'`),.:;]+$/g, "");
-    if (!normalized) {
+    if (!normalized || isLikelyExternalPathHint(normalized)) {
       return;
     }
     const looksLikePath =
@@ -208,7 +230,12 @@ function extractRepoPathHints(task) {
     if (!looksLikePath) {
       return;
     }
-    const repoPath = normalizeRepoRelativePath(normalized, "task path hint");
+    let repoPath = null;
+    try {
+      repoPath = normalizeRepoRelativePath(normalized, "task path hint");
+    } catch {
+      return;
+    }
     const lastSegment = repoPath.split("/").at(-1) || repoPath;
     const looksLikeFile = lastSegment.includes(".");
     matches.push(looksLikeFile || repoPath.endsWith("/") ? repoPath : `${repoPath}/`);
@@ -336,12 +363,16 @@ function deriveTemplate(workerRoles) {
   return "implementation";
 }
 
-function analyzeTask(task, index, profile) {
+function analyzeTask(task, index, profile, lanePaths) {
   const normalizedTask = cleanText(task);
   const loweredTask = normalizedTask.toLowerCase();
   const roleKind = inferTaskRole(loweredTask);
   const pathHints = extractRepoPathHints(normalizedTask);
-  const ownedPaths = pathHints.length > 0 ? pathHints : fallbackOwnedPathsForRole(roleKind);
+  const sharedPlanDocs = new Set(lanePaths?.sharedPlanDocs || []);
+  const nonSharedPlanPathHints = pathHints.filter((ownedPath) => !sharedPlanDocs.has(ownedPath));
+  const touchesSharedPlanDocs = pathHints.some((ownedPath) => sharedPlanDocs.has(ownedPath));
+  const ownedPaths =
+    nonSharedPlanPathHints.length > 0 ? nonSharedPlanPathHints : fallbackOwnedPathsForRole(roleKind);
   return {
     index,
     task: normalizedTask,
@@ -354,6 +385,7 @@ function analyzeTask(task, index, profile) {
       roleKind === "infra",
     needsEval: detectKeyword(loweredTask, EVAL_KEYWORDS),
     docsHeavy:
+      touchesSharedPlanDocs ||
       detectKeyword(loweredTask, DOC_KEYWORDS) ||
       ownedPaths.every((ownedPath) =>
         ["docs/", "README.md", "CHANGELOG.md"].some((prefix) => ownedPath.startsWith(prefix)),
@@ -401,6 +433,19 @@ function buildCommonRequiredContext() {
   );
 }
 
+function buildDocumentationOwnedPaths({ lanePaths, waveNumber, mode }) {
+  const canonicalPaths = requiredDocumentationStewardPathsForWave(waveNumber, {
+    laneProfile: lanePaths.laneProfile,
+  });
+  if (mode === "roadmap") {
+    return canonicalPaths;
+  }
+  return uniqueStrings([
+    `.wave/adhoc/runs/${lanePaths.runId}/reports/wave-${waveNumber}-doc-closure.md`,
+    ...canonicalPaths,
+  ]);
+}
+
 function buildSpecialAgents({
   lanePaths,
   waveNumber,
@@ -418,10 +463,11 @@ function buildSpecialAgents({
     mode === "roadmap"
       ? `docs/plans/waves/reviews/wave-${waveNumber}-cont-eval.md`
       : `.wave/adhoc/runs/${lanePaths.runId}/reports/wave-${waveNumber}-cont-eval.md`;
-  const documentationOwnedPaths =
-    mode === "roadmap"
-      ? requiredDocumentationStewardPathsForWave(waveNumber, { laneProfile: lanePaths.laneProfile })
-      : [`.wave/adhoc/runs/${lanePaths.runId}/reports/wave-${waveNumber}-doc-closure.md`];
+  const documentationOwnedPaths = buildDocumentationOwnedPaths({
+    lanePaths,
+    waveNumber,
+    mode,
+  });
   const securityReportPath =
     mode === "roadmap"
       ? relativeStatePath(path.join(lanePaths.securityDir, `wave-${waveNumber}-review.md`))
@@ -498,7 +544,7 @@ function buildSpecialAgents({
       primaryGoal:
         mode === "roadmap"
           ? `Keep shared plan docs aligned with Wave ${waveNumber} end-to-end.`
-          : `Close the ad-hoc run documentation surface and record whether shared-plan docs stay unchanged.`,
+          : `Close the ad-hoc run documentation surface and reconcile canonical shared-plan docs when the run changes them.`,
       collaborationNotes: [
         `Coordinate with implementation-facing agents and ${lanePaths.integrationAgentId} before final output.`,
         "When no shared-plan delta is required, leave an exact-scope `no-change` closure note instead of editing shared docs.",
@@ -677,7 +723,7 @@ function buildAdhocRequest({ runId, lanePaths, profile, tasks, launcherArgs = []
 
 function buildAdhocSpec({ runId, lanePaths, profile, request, mode = "adhoc", waveNumber = ADHOC_WAVE_NUMBER }) {
   const tasks = request.tasks.map((task) => task.text);
-  const analyzedTasks = tasks.map((task, index) => analyzeTask(task, index, profile));
+  const analyzedTasks = tasks.map((task, index) => analyzeTask(task, index, profile, lanePaths));
   const deployEnvironments = resolveDeployEnvironments(profile, analyzedTasks);
   const evalTargets = buildEvalTargets(analyzedTasks);
   const workerAgents = analyzedTasks.map((taskSpec, index) =>
@@ -723,6 +769,39 @@ function buildAdhocSpec({ runId, lanePaths, profile, request, mode = "adhoc", wa
         includeSecurity,
         evalTargets,
         mode,
+      }),
+      ...workerAgents,
+    ],
+  };
+}
+
+function isGeneratedSpecialAgent(agent) {
+  return GENERATED_SPECIAL_AGENT_TITLES.has(cleanText(agent?.title));
+}
+
+function buildPromotedRoadmapSpec(storedSpec, lanePaths, waveNumber, runId) {
+  const includeContEval =
+    (Array.isArray(storedSpec?.evalTargets) && storedSpec.evalTargets.length > 0) ||
+    (storedSpec?.agents || []).some((agent) => cleanText(agent?.title) === "cont-EVAL");
+  const includeSecurity = (storedSpec?.agents || []).some(
+    (agent) => cleanText(agent?.title) === "Security Reviewer",
+  );
+  const workerAgents = (storedSpec?.agents || []).filter((agent) => !isGeneratedSpecialAgent(agent));
+  return {
+    ...storedSpec,
+    runKind: "roadmap",
+    runId: null,
+    sourceRunId: cleanText(storedSpec?.sourceRunId) || cleanText(storedSpec?.runId) || runId || null,
+    lane: lanePaths.lane,
+    wave: waveNumber,
+    agents: [
+      ...buildSpecialAgents({
+        lanePaths,
+        waveNumber,
+        includeContEval,
+        includeSecurity,
+        evalTargets: storedSpec?.evalTargets || [],
+        mode: "roadmap",
       }),
       ...workerAgents,
     ],
@@ -1199,15 +1278,12 @@ export async function runAdhocCli(argv) {
         `Wave ${options.wave} already exists. Re-run with --force to overwrite ${repoRelativePath(wavePath)} and ${repoRelativePath(specPath)}.`,
       );
     }
-    const profile = readEffectiveProjectProfile(config);
-    const promotedSpec = buildAdhocSpec({
-      runId: stored.result.runId,
+    const promotedSpec = buildPromotedRoadmapSpec(
+      stored.spec,
       lanePaths,
-      profile,
-      request: stored.request,
-      mode: "roadmap",
-      waveNumber: options.wave,
-    });
+      options.wave,
+      stored.result.runId,
+    );
     ensureDirectory(path.dirname(specPath));
     writeJsonAtomic(specPath, promotedSpec);
     writeTextAtomic(wavePath, `${renderWaveMarkdown(promotedSpec, lanePaths)}\n`);

@@ -100,7 +100,6 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
   const laneProfile = adhocRunId
     ? {
         ...baseLaneProfile,
-        sharedPlanDocs: [],
         validation: {
           ...baseLaneProfile.validation,
           requireComponentPromotionsFromWave: null,

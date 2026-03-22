@@ -11,14 +11,14 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
 - seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
-- derives a per-wave ledger, docs queue, integration summary, and versioned per-attempt trace bundle
+- derives a per-wave ledger, security summary, docs queue, integration summary, and versioned per-attempt trace bundle
 - validates Context7 declarations and exit contracts from configurable wave thresholds
 - validates component promotions and component-owned proof from configurable wave thresholds
 - writes prompts, logs, dashboards, coordination state, and status summaries under `.tmp/`
 - supports launcher-side Context7 prefetch and injection for headless runs
 - supports headless execution through `codex`, `claude`, `opencode`, and the local smoke executor
 - supports a file-backed human feedback queue
-- performs a closure sweep so optional `cont-EVAL`, integration, documentation, and cont-QA gates reflect final landed state
+- performs a closure sweep so optional `cont-EVAL`, optional security review, integration, documentation, and cont-QA gates reflect final landed state
 
 ## Main Commands
 
@@ -47,7 +47,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location. The starter config also wires the optional security reviewer prompt at `docs/agents/wave-security-role.md` and the `security-review` executor profile.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/evals/README.md` explains how to author delegated versus pinned `## Eval targets`, including the coordination-oriented benchmark families.
 - `docs/reference/live-proof-waves.md` explains how to author proof-first `pilot-live` and higher-maturity waves with `### Proof artifacts`, sticky executors, and operator command capture.
@@ -56,6 +56,9 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
 - `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
 - `.wave/adhoc/runs/<run-id>/` stores transient ad-hoc request, spec, rendered markdown, and result artifacts.
+- ad-hoc documentation closure always writes `.wave/adhoc/runs/<run-id>/reports/`, but shared-plan deltas still queue the canonical lane shared-plan docs.
+- ad-hoc task ownership inference only accepts repo-local paths; URLs and other external references are ignored.
+- `wave adhoc promote` promotes the stored ad-hoc spec into `docs/plans/waves/` instead of re-reading the current project profile.
 
 ## Skill Packs
 
@@ -67,7 +70,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 - Starter bundles in this repo cover:
   - core Wave coordination and repo coding rules
   - runtime packs for Codex, Claude, OpenCode, and local execution
-  - role packs for implementation, `cont-EVAL`, integration, documentation, cont-QA, infra, deploy, and research work
+  - role packs for implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, deploy, and research work
   - deploy and environment packs for Railway, Docker Compose, Kubernetes, SSH/manual rollout, and generic custom deploys
   - explicit provider packs for GitHub release flow and AWS norms when a wave or lane wants to attach them
 
@@ -163,6 +166,8 @@ pnpm exec wave changelog --since-installed
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
 - compiled inboxes: `.tmp/<lane>-wave-launcher/inboxes/`
 - ledger: `.tmp/<lane>-wave-launcher/ledger/`
+- security summaries: `.tmp/<lane>-wave-launcher/security/`
+  The launcher writes `wave-<n>.json` and `wave-<n>.md` summaries here, and the starter planner also places the reviewer-owned security report in this directory.
 - integration summaries: `.tmp/<lane>-wave-launcher/integration/`
   These summaries now carry actionable evidence for conflicting claims, changed interfaces, cross-component impacts, proof gaps, documentation gaps, and deploy or ops risk.
 - dependency snapshots: `.tmp/<lane>-wave-launcher/dependencies/`
@@ -177,7 +182,7 @@ pnpm exec wave changelog --since-installed
   Required inbound tickets in this directory block both autonomous wave launch and lane finalization until they resolve.
 - cross-wave orchestration board: `.tmp/wave-orchestrator/messageboards/orchestrator.md`
 
-Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`, including dry-run previews at `.tmp/<lane>-wave-launcher/adhoc/<run-id>/dry-run/`.
+Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`, including dry-run previews at `.tmp/<lane>-wave-launcher/adhoc/<run-id>/dry-run/`. Their docs queue can still point at canonical shared-plan docs when the run reports a shared-plan delta.
 
 ## Trace Contract
 
@@ -189,6 +194,7 @@ Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<
   - `coordination.materialized.json`
   - `ledger.json`
   - `docs-queue.json`
+  - `security.json`
   - `integration.json`
   - `outcome.json`
   - `shared-summary.md`
@@ -199,6 +205,7 @@ Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<
 - `run-metadata.json` is the canonical trace index. It records attempt settings, artifact presence, executor history, prompt hashes, Context7 snippet hashes, resolved skill ids and bundle metadata, the gate snapshot, `replayContext`, and the cumulative `historySnapshot` for that attempt.
 - `outcome.json` is the stored replay baseline. Replay compares recomputed gates and quality against it instead of trusting only inline metadata.
 - For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
+- `security.json` stores the derived per-wave security state that feeds integration summaries, gate snapshots, and replay.
 - `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
 - `quality.json` also reports capability-assignment and dependency-resolution metrics in addition to the Phase 2/3 communication, fallback, and closure metrics.
 - Replay support is internal. The source tree contains helpers to load, validate, and replay trace bundles against the same gate logic the launcher uses, but there is no public replay CLI yet.
@@ -218,6 +225,10 @@ Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<
 - `## Deploy environments` lets the wave declare named deployment targets. The default deploy environment kind is also used for deploy-kind skill attachment.
 - Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
+- Optional security review is declared by importing `docs/agents/wave-security-role.md` on a report-owning reviewer agent. The starter planner uses a report path under `.tmp/<lane>-wave-launcher/security/` and the `security-review` executor profile.
+- A security reviewer must own at least one security report path. Any owned `.md` or `.txt` path containing `security` is accepted by the validator.
+- Security reviewers are report-only by default. They should route fixes to the owning implementation agent instead of taking over product-code ownership.
+- Security closure requires one final structured marker: `[wave-security] state=<clear|concerns|blocked> findings=<n> approvals=<n> detail=<short-note>`.
 - Optional standing roles available in this repo include `docs/agents/wave-infra-role.md` for infra proof and `docs/agents/wave-deploy-verifier-role.md` for rollout verification.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
@@ -239,6 +250,7 @@ Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<
 - `--executor local` exists only for smoke-testing prompt and closure behavior.
 - `--codex-sandbox danger-full-access` is the default because it avoids host bubblewrap assumptions.
 - Resolution order is: per-agent explicit executor id, executor profile id, lane role default, CLI `--executor`, then `executors.default`.
+- The starter config includes a `security-review` profile for the optional security reviewer. It is intended for read-heavy closure passes and pairs with `docs/agents/wave-security-role.md`.
 - Skills resolve only after that executor choice is known. Runtime-specific skill overlays are regenerated whenever retry-time fallback changes the selected executor.
 - Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
 - Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
@@ -290,10 +302,11 @@ pnpm exec wave feedback respond --id <request-id> --response "..."
 
 ## Closure Sweep
 
-If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. When present, `cont-EVAL` must satisfy its declared eval targets before integration can close. In the default planner shape `E0` is report-only; if a wave explicitly assigns `E0` non-report files, the launcher also applies the normal implementation proof gates to that role. Documentation and cont-QA closure only run after integration is explicitly ready for doc closure; if `cont-EVAL` or integration reports more work, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the relevant closure steward.
+If implementation agents ran, the launcher does not stop at `exit 0`. It checks implementation exit contracts, promoted component proof, helper assignments, required dependencies, and the integration recommendation first. When present, `cont-EVAL` must satisfy its declared eval targets before integration can close. Optional security review then runs before integration so the reviewer can publish findings and approval-sensitive actions while the wave is still active. In the default planner shape `E0` is report-only; if a wave explicitly assigns `E0` non-report files, the launcher also applies the normal implementation proof gates to that role. Security reviewers stay report-only by default. Documentation and cont-QA closure only run after integration is explicitly ready for doc closure; if `cont-EVAL`, security review, or integration reports more work, or if helper assignments or required dependency tickets remain open, the wave stops there and retries only the implicated owners plus the relevant closure steward.
 
 Live closure is fail-closed:
 
 - `cont-EVAL` PASS requires a report artifact plus a structured `[wave-eval]` marker whose `target_ids` exactly matches the wave contract and whose `benchmark_ids` stays within the declared benchmark catalog surface.
+- Security review requires a report artifact plus a structured `[wave-security]` marker. `state=blocked` stops the wave before integration, while `state=concerns` is preserved in summaries and traces without automatically failing closure.
 - `cont-QA` PASS requires both the final verdict and the final `[wave-gate]` marker.
 - Legacy evaluator-era or underspecified closure artifacts are still readable in replay and trace analysis, but they no longer satisfy live completion.

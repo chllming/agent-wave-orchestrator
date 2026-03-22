@@ -154,4 +154,40 @@ File ownership (only touch these paths):
       ),
     ).toBe(true);
   });
+
+  it("prefers explicit deliverables over inferred file ownership", () => {
+    const promptFile = registerTempPath(
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
+    );
+    const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}/explicit.md`;
+    registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
+
+    fs.writeFileSync(
+      promptFile,
+      `You are the Wave executor running Wave 0 / Agent A1: Worker.
+
+Deliverables required for this agent:
+- ${deliverable}
+
+Assigned implementation prompt:
+\`\`\`text
+Primary goal:
+- Keep the prompt simple.
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const logs = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+
+    runLocalExecutorCli(["--prompt-file", promptFile]);
+
+    expect(fs.existsSync(path.join(REPO_ROOT, deliverable))).toBe(true);
+    expect(logs.some((line) => line.includes(deliverable))).toBe(true);
+  });
 });

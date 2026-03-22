@@ -18,11 +18,11 @@ It includes:
 
 Published package:
 - `@chllming/wave-orchestration@0.5.1`
-- Current release registry: `https://npm.pkg.github.com`
+- Current release registry: `https://registry.npmjs.org`
 - Release: [v0.5.1](https://github.com/chllming/wave-orchestration/releases/tag/v0.5.1)
 - npmjs trusted publishing workflow: [publish-npm.yml](./.github/workflows/publish-npm.yml)
 
-Install after configuring the current GitHub Packages path from [github-packages-setup.md](./docs/reference/github-packages-setup.md):
+Install directly from npmjs:
 
 ```bash
 pnpm add -D @chllming/wave-orchestration
@@ -42,14 +42,14 @@ pnpm exec wave init --adopt-existing
 
 - Phase 4 finalization now correctly stays blocked on unresolved human feedback and escalation items from completed waves.
 - Hermetic trace fixtures now force local executor coverage for seeded control-plane agents, so replay tests cannot accidentally launch real Codex, Claude Code, or OpenCode sessions.
-- npmjs trusted publishing is now wired in parallel with GitHub Packages, with maintainer docs for the first public npmjs release bootstrap.
+- npmjs is now the primary public install path.
 
 ## New In 0.5.0
 
 - Capability-targeted work is now first-class: open capability requests become explicit helper assignments with deterministic assignee resolution, ledger visibility, inbox coverage, and closure barriers.
 - Cross-lane work is now first-class too: `wave dep post|show|resolve|render` manages typed dependency tickets, and required inbound or outbound dependencies now surface directly in lane state and gating.
 - Hermetic replay acceptance is now stronger around the runtime-orchestration layer, with stored outcome snapshots and launcher-generated local trace fixtures covering fallback, clarification, and dependency paths.
-- The package now carries explicit repository metadata so GitHub Packages can link it back to this repo cleanly.
+- The package now carries explicit repository metadata for package and release provenance.
 
 ## Requirements
 
@@ -61,11 +61,7 @@ pnpm exec wave init --adopt-existing
 
 ## Install Into Another Repo
 
-1. Use the current GitHub Packages install path from [github-packages-setup.md](./docs/reference/github-packages-setup.md).
-
-   npmjs trusted publishing is prepared in this repo, but zero-token npmjs installs only become available after the first npmjs release is published.
-
-   GitHub Packages npm installs still require authentication, even for public packages on `npm.pkg.github.com`.
+1. Install from the public npmjs release:
 
 2. Add the package:
 
@@ -265,6 +261,7 @@ Each wave is regular markdown. The harness looks for:
 - `### Context7`
 - `### Components`
 - `### Capabilities`
+- `### Deliverables`
 - `### Exit contract`
 - `### Prompt`
 
@@ -341,6 +338,11 @@ File ownership (only touch these paths):
 - proof: integration
 - doc-impact: owned
 
+### Deliverables
+
+- src/example.ts
+- test/example.test.ts
+
 ### Prompt
 ```text
 Read docs/reference/repository-guidance.md.
@@ -355,6 +357,8 @@ File ownership (only touch these paths):
 `## Component promotions` declares the component levels this wave is responsible for proving. `### Components` assigns each promoted component to one or more implementation agents.
 
 `### Capabilities` is optional. It lets the coordination layer route targeted follow-up work to a capability rather than a single hard-coded agent.
+
+`### Deliverables` is also optional. When present, the launcher validates that each listed repo-relative file both exists and stays within the implementation agent's declared file ownership before the exit contract can pass.
 
 Open capability-targeted requests now become explicit helper assignments. The launcher resolves them deterministically, writes the assignment snapshot under `.tmp/`, mirrors the decision into the coordination log for the board and replay surface, and keeps the wave blocked until the linked follow-up resolves.
 

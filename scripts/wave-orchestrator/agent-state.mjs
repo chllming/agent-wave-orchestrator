@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import {
   REPO_ROOT,
@@ -34,6 +35,28 @@ const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
 const WAVE_COMPONENT_REGEX =
   /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
+
+function normalizeStructuredSignalText(text) {
+  if (!text) {
+    return "";
+  }
+  const normalizedLines = [];
+  let inFence = false;
+  for (const rawLine of String(text).split(/\r?\n/)) {
+    const trimmed = rawLine.trim();
+    if (/^```/.test(trimmed)) {
+      inFence = !inFence;
+      continue;
+    }
+    let line = inFence ? trimmed : rawLine;
+    const wrappedMatch = String(line).trim().match(/^`(\[wave-[^`]+)`$/);
+    if (wrappedMatch) {
+      line = wrappedMatch[1];
+    }
+    normalizedLines.push(line);
+  }
+  return normalizedLines.join("\n");
+}
 
 function cleanText(value) {
   return String(value || "").trim();
@@ -86,6 +109,51 @@ function findLatestComponentMatches(text) {
     byComponent.set(match.componentId, match);
   }
   return Array.from(byComponent.values());
+}
+
+function detectTermination(logText, statusRecord) {
+  const patterns = [
+    { reason: "max-turns", regex: /(Reached max turns \(\d+\))/i },
+    { reason: "timeout", regex: /(timed out(?: after [^\n.]+)?)/i },
+    { reason: "session-missing", regex: /(session [^\n]+ disappeared before [^\n]+ was written)/i },
+  ];
+  for (const pattern of patterns) {
+    const match = String(logText || "").match(pattern.regex);
+    if (match) {
+      return {
+        reason: pattern.reason,
+        hint: cleanText(match[1] || match[0]),
+      };
+    }
+  }
+  const statusHint = cleanText(
+    statusRecord?.detail || statusRecord?.message || statusRecord?.error || statusRecord?.reason,
+  );
+  if (statusHint) {
+    return {
+      reason: "status-detail",
+      hint: statusHint,
+    };
+  }
+  const exitCode = Number.isFinite(Number(statusRecord?.code)) ? Number(statusRecord.code) : null;
+  if (exitCode !== null && exitCode !== 0) {
+    return {
+      reason: "exit-code",
+      hint: `Exit code ${exitCode}.`,
+    };
+  }
+  return {
+    reason: null,
+    hint: "",
+  };
+}
+
+function appendTerminationHint(detail, summary) {
+  const hint = cleanText(summary?.terminationHint || summary?.terminationReason);
+  if (!hint) {
+    return detail;
+  }
+  return `${detail} Termination: ${hint}`;
 }
 
 function meetsOrExceeds(actual, required, orderMap) {
@@ -153,6 +221,7 @@ export function readAgentExecutionSummary(summaryPathOrStatusPath) {
 
 export function buildAgentExecutionSummary({ agent, statusRecord, logPath, reportPath = null }) {
   const logText = readFileTail(logPath, 60000);
+  const signalText = normalizeStructuredSignalText(logText);
   const reportText =
     reportPath && readJsonOrNull(reportPath) === null
       ? readFileTail(reportPath, 60000)
@@ -160,38 +229,39 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
         ? readFileTail(reportPath, 60000)
         : "";
   const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
-  const logVerdict = parseVerdictFromText(logText, WAVE_VERDICT_REGEX);
+  const logVerdict = parseVerdictFromText(signalText, WAVE_VERDICT_REGEX);
   const verdict = reportVerdict.verdict ? reportVerdict : logVerdict;
+  const termination = detectTermination(logText, statusRecord);
   return {
     agentId: agent?.agentId || null,
     promptHash: statusRecord?.promptHash || null,
     exitCode: Number.isFinite(Number(statusRecord?.code)) ? Number(statusRecord.code) : null,
     completedAt: statusRecord?.completedAt || null,
-    proof: findLastMatch(logText, WAVE_PROOF_REGEX, (match) => ({
+    proof: findLastMatch(signalText, WAVE_PROOF_REGEX, (match) => ({
       completion: match[1],
       durability: match[2],
       proof: match[3],
       state: match[4],
       detail: cleanText(match[5]),
     })),
-    docDelta: findLastMatch(logText, WAVE_DOC_DELTA_REGEX, (match) => ({
+    docDelta: findLastMatch(signalText, WAVE_DOC_DELTA_REGEX, (match) => ({
       state: match[1],
       paths: parsePaths(match[2]),
       detail: cleanText(match[3]),
     })),
-    docClosure: findLastMatch(logText, WAVE_DOC_CLOSURE_REGEX, (match) => ({
+    docClosure: findLastMatch(signalText, WAVE_DOC_CLOSURE_REGEX, (match) => ({
       state: match[1],
       paths: parsePaths(match[2]),
       detail: cleanText(match[3]),
     })),
-    integration: findLastMatch(logText, WAVE_INTEGRATION_REGEX, (match) => ({
+    integration: findLastMatch(signalText, WAVE_INTEGRATION_REGEX, (match) => ({
       state: match[1],
       claims: Number.parseInt(String(match[2] || "0"), 10) || 0,
       conflicts: Number.parseInt(String(match[3] || "0"), 10) || 0,
       blockers: Number.parseInt(String(match[4] || "0"), 10) || 0,
       detail: cleanText(match[5]),
     })),
-    gate: findLastMatch(logText, WAVE_GATE_REGEX, (match) => ({
+    gate: findLastMatch(signalText, WAVE_GATE_REGEX, (match) => ({
       architecture: match[1],
       integration: match[2],
       durability: match[3],
@@ -199,17 +269,25 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       docs: match[5],
       detail: cleanText(match[6]),
     })),
-    components: findLatestComponentMatches(logText),
-    gaps: findAllMatches(logText, WAVE_GAP_REGEX, (match) => ({
+    components: findLatestComponentMatches(signalText),
+    gaps: findAllMatches(signalText, WAVE_GAP_REGEX, (match) => ({
       kind: match[1],
       detail: cleanText(match[2]),
     })),
+    deliverables: Array.isArray(agent?.deliverables)
+      ? agent.deliverables.map((deliverable) => ({
+          path: deliverable,
+          exists: fs.existsSync(path.resolve(REPO_ROOT, deliverable)),
+        }))
+      : [],
     verdict: verdict.verdict
       ? {
           verdict: verdict.verdict,
           detail: cleanText(verdict.detail),
         }
       : null,
+    terminationReason: termination.reason,
+    terminationHint: termination.hint,
     logPath: path.relative(REPO_ROOT, logPath),
     reportPath: reportPath ? path.relative(REPO_ROOT, reportPath) : null,
   };
@@ -239,7 +317,7 @@ export function validateImplementationSummary(agent, summary) {
     return {
       ok: false,
       statusCode: "missing-wave-proof",
-      detail: `Missing [wave-proof] marker for ${agent.agentId}.`,
+      detail: appendTerminationHint(`Missing [wave-proof] marker for ${agent.agentId}.`, summary),
     };
   }
   if (summary.proof.state !== "met") {
@@ -274,7 +352,7 @@ export function validateImplementationSummary(agent, summary) {
     return {
       ok: false,
       statusCode: "missing-doc-delta",
-      detail: `Missing [wave-doc-delta] marker for ${agent.agentId}.`,
+      detail: appendTerminationHint(`Missing [wave-doc-delta] marker for ${agent.agentId}.`, summary),
     };
   }
   if (!meetsOrExceeds(summary.docDelta.state, contract.docImpact, DOC_IMPACT_ORDER)) {
@@ -319,6 +397,31 @@ export function validateImplementationSummary(agent, summary) {
       }
     }
   }
+  const deliverables = Array.isArray(agent?.deliverables) ? agent.deliverables : [];
+  if (deliverables.length > 0) {
+    const deliverableState = new Map(
+      Array.isArray(summary.deliverables)
+        ? summary.deliverables.map((deliverable) => [deliverable.path, deliverable])
+        : [],
+    );
+    for (const deliverablePath of deliverables) {
+      const deliverable = deliverableState.get(deliverablePath);
+      if (!deliverable) {
+        return {
+          ok: false,
+          statusCode: "missing-deliverable-summary",
+          detail: `Missing deliverable presence record for ${agent.agentId} path ${deliverablePath}.`,
+        };
+      }
+      if (deliverable.exists !== true) {
+        return {
+          ok: false,
+          statusCode: "missing-deliverable",
+          detail: `Agent ${agent.agentId} did not land required deliverable ${deliverablePath}.`,
+        };
+      }
+    }
+  }
   return {
     ok: true,
     statusCode: "pass",
@@ -331,7 +434,10 @@ export function validateDocumentationClosureSummary(agent, summary) {
     return {
       ok: false,
       statusCode: "missing-doc-closure",
-      detail: `Missing [wave-doc-closure] marker for ${agent?.agentId || "A9"}.`,
+      detail: appendTerminationHint(
+        `Missing [wave-doc-closure] marker for ${agent?.agentId || "A9"}.`,
+        summary,
+      ),
     };
   }
   if (summary.docClosure.state === "delta") {
@@ -356,7 +462,10 @@ export function validateIntegrationSummary(agent, summary) {
     return {
       ok: false,
       statusCode: "missing-wave-integration",
-      detail: `Missing [wave-integration] marker for ${agent?.agentId || "A8"}.`,
+      detail: appendTerminationHint(
+        `Missing [wave-integration] marker for ${agent?.agentId || "A8"}.`,
+        summary,
+      ),
     };
   }
   if (summary.integration.state !== "ready-for-doc-closure") {
@@ -380,14 +489,20 @@ export function validateEvaluatorSummary(agent, summary) {
     return {
       ok: false,
       statusCode: "missing-wave-gate",
-      detail: `Missing [wave-gate] marker for ${agent?.agentId || "A0"}.`,
+      detail: appendTerminationHint(
+        `Missing [wave-gate] marker for ${agent?.agentId || "A0"}.`,
+        summary,
+      ),
     };
   }
   if (!summary?.verdict?.verdict) {
     return {
       ok: false,
       statusCode: "missing-evaluator-verdict",
-      detail: `Missing Verdict line or [wave-verdict] marker for ${agent?.agentId || "A0"}.`,
+      detail: appendTerminationHint(
+        `Missing Verdict line or [wave-verdict] marker for ${agent?.agentId || "A0"}.`,
+        summary,
+      ),
     };
   }
   if (summary.verdict.verdict !== "pass") {

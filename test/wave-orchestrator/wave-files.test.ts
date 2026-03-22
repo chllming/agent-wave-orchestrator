@@ -120,6 +120,113 @@ File ownership (only touch these paths):
     expect(wave.evaluatorReportPath).toBe("docs/plans/waves/reviews/wave-0-evaluator.md");
   });
 
+  it("extracts optional deliverables separately from file ownership", () => {
+    const wave = parseWaveContent(
+      `# Wave 7 - Sample
+
+**Commit message**: \`Test: deliverables\`
+
+## Component promotions
+
+- wave-parser-and-launcher: repo-landed
+
+## Context7 defaults
+
+- bundle: none
+
+## Agent A0: Evaluator
+
+### Role prompts
+
+- ${WAVE_EVALUATOR_ROLE_PROMPT_PATH}
+
+### Context7
+
+- bundle: none
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+
+File ownership (only touch these paths):
+- docs/plans/waves/reviews/wave-7-evaluator.md
+\`\`\`
+
+## Agent A8: Integration
+
+### Role prompts
+
+- ${WAVE_INTEGRATION_ROLE_PROMPT_PATH}
+
+### Context7
+
+- bundle: none
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- .tmp/main-wave-launcher/integration/wave-7.md
+\`\`\`
+
+## Agent A9: Docs
+
+### Role prompts
+
+- ${WAVE_DOCUMENTATION_ROLE_PROMPT_PATH}
+
+### Context7
+
+- bundle: none
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- docs/plans/current-state.md
+- docs/plans/master-plan.md
+- docs/plans/migration.md
+\`\`\`
+
+## Agent A1: Worker
+
+### Context7
+
+- bundle: none
+
+### Components
+
+- wave-parser-and-launcher
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Deliverables
+
+- src/example.ts
+- test/example.test.ts
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+
+File ownership (only touch these paths):
+- src/
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-7.md"),
+      { lane: "main" },
+    );
+
+    expect(wave.agents.find((agent) => agent.agentId === "A1")?.deliverables).toEqual([
+      "src/example.ts",
+      "test/example.test.ts",
+    ]);
+    expect(wave.agents.find((agent) => agent.agentId === "A1")?.ownedPaths).toEqual(["src/"]);
+  });
+
   it("composes imported standing role prompts while keeping ownership local", () => {
     const overlayPrompt = [
       "Primary goal:",

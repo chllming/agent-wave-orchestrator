@@ -173,6 +173,34 @@ function parseComponentList(blockText, filePath, label) {
   return components;
 }
 
+function parsePathList(blockText, filePath, label) {
+  if (!blockText) {
+    return [];
+  }
+  const paths = [];
+  const seen = new Set();
+  for (const line of String(blockText || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^-\s+(.+?)\s*$/);
+    if (!bulletMatch) {
+      throw new Error(`Malformed path entry "${trimmed}" in ${label} (${filePath})`);
+    }
+    const relPath = bulletMatch[1].replace(/[`"']/g, "").trim();
+    if (!isRepoContainedPath(relPath)) {
+      throw new Error(`Path "${relPath}" in ${label} (${filePath}) must stay within the repo root`);
+    }
+    if (seen.has(relPath)) {
+      throw new Error(`Duplicate path "${relPath}" in ${label} (${filePath})`);
+    }
+    seen.add(relPath);
+    paths.push(relPath);
+  }
+  return paths;
+}
+
 function extractFencedBlock(blockText, messagePrefix) {
   const fencedBlockMatch = String(blockText || "").match(
     /```(?:[a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)\r?\n```/,
@@ -634,6 +662,13 @@ export function extractAgentCapabilitiesFromSection(sectionText, filePath, agent
     required: false,
   });
   return parseComponentList(block, filePath, `agent ${agentId} capabilities`);
+}
+
+export function extractAgentDeliverablesFromSection(sectionText, filePath, agentId) {
+  const block = extractSectionBody(sectionText, "Deliverables", filePath, agentId, {
+    required: false,
+  });
+  return parsePathList(block, filePath, `agent ${agentId} deliverables`);
 }
 
 export function slugify(value) {
@@ -1202,6 +1237,11 @@ export function parseWaveContent(content, filePath, options = {}) {
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
     const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
     const capabilities = extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId);
+    const deliverables = extractAgentDeliverablesFromSection(
+      sectionText,
+      filePath,
+      current.agentId,
+    );
     const promptOverlay = extractPromptFromSection(sectionText, filePath, current.agentId);
     const prompt = composeResolvedPrompt(
       rolePromptPaths,
@@ -1225,6 +1265,7 @@ export function parseWaveContent(content, filePath, options = {}) {
       executorConfig,
       components,
       capabilities,
+      deliverables,
       ownedPaths,
     });
   }

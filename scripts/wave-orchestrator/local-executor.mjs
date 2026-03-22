@@ -63,30 +63,45 @@ function extractOwnedComponents(rawPrompt) {
   return components;
 }
 
-function extractDeliverables(promptText) {
+function extractDeliverablesFromList(text, headingPattern) {
   const out = [];
-  let inFileOwnership = false;
-  for (const line of promptText.split(/\r?\n/)) {
-    if (/^\s*File ownership\b/i.test(line)) {
-      inFileOwnership = true;
+  let inList = false;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (headingPattern.test(line)) {
+      inList = true;
       continue;
     }
-    if (inFileOwnership && /^\s*[A-Za-z][A-Za-z0-9 _-]*:\s*$/.test(line)) {
-      inFileOwnership = false;
+    if (inList && /^\s*[A-Za-z][A-Za-z0-9 _-]*:\s*$/.test(line)) {
+      inList = false;
     }
-    if (inFileOwnership) {
-      const bulletMatch = line.match(/^\s*-\s+(.+?)\s*$/);
-      if (bulletMatch) {
-        const cleaned = bulletMatch[1].replace(/[`"']/g, "").trim();
-        if (
-          cleaned.includes("/") ||
-          /\.(md|mdx|js|mjs|ts|go|json|yaml|yml|sh|sql)$/.test(cleaned)
-        ) {
-          out.push(cleaned);
-          continue;
-        }
-      }
+    if (!inList) {
+      continue;
     }
+    const bulletMatch = line.match(/^\s*-\s+(.+?)\s*$/);
+    if (!bulletMatch) {
+      continue;
+    }
+    const cleaned = bulletMatch[1].replace(/[`"']/g, "").trim();
+    if (
+      cleaned.includes("/") ||
+      /\.(md|mdx|js|mjs|ts|go|json|yaml|yml|sh|sql)$/.test(cleaned)
+    ) {
+      out.push(cleaned);
+    }
+  }
+  return out;
+}
+
+function extractDeliverables(rawPrompt, promptText) {
+  const explicit = extractDeliverablesFromList(
+    rawPrompt,
+    /^\s*Deliverables required for this agent:\s*$/i,
+  );
+  if (explicit.length > 0) {
+    return Array.from(new Set(explicit));
+  }
+  const out = extractDeliverablesFromList(promptText, /^\s*File ownership\b/i);
+  for (const line of String(promptText || "").split(/\r?\n/)) {
     const match = line.match(/^\s*\d+[.)]\s*(.+?)\s*$/);
     if (!match) {
       continue;
@@ -203,7 +218,7 @@ export function runLocalExecutorCli(argv) {
   const integrationAgent = agentId === integrationAgentId;
   const ownedComponents = extractOwnedComponents(rawPrompt);
   const assignedPrompt = extractAssignedPrompt(rawPrompt);
-  const deliverables = extractDeliverables(assignedPrompt);
+  const deliverables = extractDeliverables(rawPrompt, assignedPrompt);
   if (deliverables.length === 0) {
     console.log("[local-executor] no deliverables detected; nothing to do.");
     if (evaluatorAgent) {

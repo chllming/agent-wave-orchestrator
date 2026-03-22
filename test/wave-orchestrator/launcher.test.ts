@@ -8,6 +8,7 @@ import {
   buildCodexExecInvocation,
   collectUnexpectedSessionFailures,
   DEFAULT_CODEX_SANDBOX_MODE,
+  formatReconcileBlockedWaveLine,
   hasReusableSuccessStatus,
   markLauncherFailed,
   readWaveComponentGate,
@@ -1294,5 +1295,27 @@ describe("collectUnexpectedSessionFailures", () => {
         statusCode: "session-missing",
       },
     ]);
+  });
+});
+
+describe("formatReconcileBlockedWaveLine", () => {
+  it("renders blocked reconciliation reasons in a single operator-facing line", () => {
+    expect(
+      formatReconcileBlockedWaveLine({
+        wave: 200,
+        reasons: [
+          {
+            code: "missing-status",
+            detail: "Missing status files for A0, A9.",
+          },
+          {
+            code: "open-human-escalation",
+            detail: "Open human escalation records: escalation-1.",
+          },
+        ],
+      }),
+    ).toBe(
+      "[reconcile] wave 200 not reconstructable: missing-status=Missing status files for A0, A9.; open-human-escalation=Open human escalation records: escalation-1.",
+    );
   });
 });

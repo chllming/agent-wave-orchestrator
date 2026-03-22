@@ -1571,6 +1571,72 @@ describe("validateWaveComponentPromotions", () => {
 });
 
 describe("reconcileRunStateFromStatusFiles", () => {
+  function makeReconcileWave(tempRoot) {
+    return {
+      wave: 200,
+      file: "docs/research/runtime-waves/wave-200.md",
+      agents: [
+        {
+          agentId: "A0",
+          slug: "200-a0",
+          prompt: [
+            "Read docs/code-guidance.md.",
+            "",
+            "File ownership (only touch these paths):",
+            "- docs/research/runtime-waves/reviews/wave-200-evaluator.md",
+          ].join("\n"),
+        },
+        {
+          agentId: "A1",
+          slug: "200-a1",
+          prompt: [
+            "Read docs/code-guidance.md.",
+            "",
+            "File ownership (only touch these paths):",
+            "- docs/research/runtime-waves/wave-200.md",
+          ].join("\n"),
+        },
+        {
+          agentId: "A8",
+          slug: "200-a8",
+          prompt: [
+            "Read docs/code-guidance.md.",
+            "",
+            "File ownership (only touch these paths):",
+            "- docs/research/runtime-waves/reviews/wave-200-integration.md",
+          ].join("\n"),
+        },
+        {
+          agentId: "A9",
+          slug: "200-a9",
+          prompt: [
+            "Read docs/code-guidance.md.",
+            "",
+            "File ownership (only touch these paths):",
+            "- docs/research/runtime-waves/reviews/wave-200-docs.md",
+          ].join("\n"),
+        },
+      ],
+      evaluatorReportPath: `.tmp/${path.basename(tempRoot)}/wave-200-evaluator.md`,
+    };
+  }
+
+  function writeStatus(statusDir, agent, payload) {
+    fs.writeFileSync(
+      path.join(statusDir, `wave-200-${agent.slug}.status`),
+      JSON.stringify(payload, null, 2),
+      "utf8",
+    );
+  }
+
+  function writeSummary(statusDir, agent, payload) {
+    fs.writeFileSync(
+      path.join(statusDir, `wave-200-${agent.slug}.summary.json`),
+      JSON.stringify({ agentId: agent.agentId, ...payload }, null, 2),
+      "utf8",
+    );
+  }
+
   it("does not mark waves complete from legacy plain-int status files without metadata", () => {
     const tempRoot = registerTempPath(
       path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile`),
@@ -1615,5 +1681,152 @@ describe("reconcileRunStateFromStatusFiles", () => {
     const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir);
     expect(reconciliation.completedFromStatus).toEqual([]);
     expect(readRunState(runStatePath).completedWaves).toEqual([]);
+  });
+
+  it("reports missing closure-agent statuses as blocked-from-status reasons", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile-blocked`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    const wave = makeReconcileWave(tempRoot);
+    const [evaluator, implementation, integration] = wave.agents;
+    fs.writeFileSync(
+      path.join(REPO_ROOT, wave.evaluatorReportPath),
+      "# Evaluator\n\nVerdict: PASS\n",
+      "utf8",
+    );
+    writeStatus(statusDir, evaluator, {
+      code: 0,
+      promptHash: hashAgentPromptFingerprint(evaluator),
+    });
+    writeSummary(statusDir, evaluator, {
+      gate: {
+        architecture: "pass",
+        integration: "pass",
+        durability: "pass",
+        live: "pass",
+        docs: "pass",
+      },
+      verdict: { verdict: "pass", detail: "ready" },
+    });
+    writeStatus(statusDir, implementation, {
+      code: 0,
+      promptHash: hashAgentPromptFingerprint(implementation),
+    });
+    writeStatus(statusDir, integration, {
+      code: 0,
+      promptHash: hashAgentPromptFingerprint(integration),
+    });
+    writeSummary(statusDir, integration, {
+      integration: { state: "ready-for-doc-closure", detail: "all lanes landed" },
+    });
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      requireIntegrationStewardFromWave: 0,
+    });
+    expect(reconciliation.completedFromStatus).toEqual([]);
+    expect(reconciliation.blockedFromStatus).toMatchObject([
+      {
+        wave: 200,
+        reasons: [
+          {
+            code: "missing-status",
+            detail: "Missing status files for A9.",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("surfaces evaluator artifact and open coordination blockers during reconciliation", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile-reasons`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+
+    const wave = makeReconcileWave(tempRoot);
+    fs.writeFileSync(
+      path.join(REPO_ROOT, wave.evaluatorReportPath),
+      "# Evaluator\n\nNotes only.\n",
+      "utf8",
+    );
+    for (const agent of wave.agents) {
+      writeStatus(statusDir, agent, {
+        code: 0,
+        promptHash: hashAgentPromptFingerprint(agent),
+      });
+    }
+    writeSummary(statusDir, wave.agents[0], {
+      gate: {
+        architecture: "pass",
+        integration: "pass",
+        durability: "pass",
+        live: "pass",
+        docs: "pass",
+      },
+      verdict: { verdict: "pass", detail: "ready" },
+    });
+    writeSummary(statusDir, wave.agents[2], {
+      integration: { state: "ready-for-doc-closure", detail: "all lanes landed" },
+    });
+    writeSummary(statusDir, wave.agents[3], {
+      docClosure: { state: "closed", detail: "docs reconciled" },
+    });
+    fs.writeFileSync(
+      path.join(coordinationDir, "wave-200.jsonl"),
+      `${JSON.stringify({
+        id: "escalation-1",
+        kind: "human-escalation",
+        wave: 200,
+        lane: "research",
+        agentId: "launcher",
+        status: "open",
+        summary: "Need operator input",
+        detail: "still waiting",
+        createdAt: "2026-03-22T10:00:00.000Z",
+        updatedAt: "2026-03-22T10:00:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      coordinationDir,
+      requireIntegrationStewardFromWave: 0,
+      laneProfile: {
+        validation: {
+          requireComponentPromotionsFromWave: null,
+          requireIntegrationStewardFromWave: 0,
+        },
+      },
+    });
+    expect(reconciliation.completedFromStatus).toEqual([]);
+    expect(reconciliation.blockedFromStatus).toMatchObject([
+      {
+        wave: 200,
+        reasons: expect.arrayContaining([
+          {
+            code: "missing-evaluator-verdict",
+            detail: expect.stringContaining("Missing evaluator verdict"),
+          },
+          {
+            code: "open-human-escalation",
+            detail: "Open human escalation records: escalation-1.",
+          },
+        ]),
+      },
+    ]);
   });
 });

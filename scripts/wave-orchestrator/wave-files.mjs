@@ -30,6 +30,7 @@ import {
 } from "./shared.mjs";
 import { normalizeContext7Config, hashAgentPromptFingerprint } from "./context7.mjs";
 import {
+  isOpenCoordinationStatus,
   openClarificationLinkedRequests,
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
@@ -1878,7 +1879,21 @@ export function readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId } =
   };
 }
 
-export function completedWavesFromStatusFiles(allWaves, statusDir, options = {}) {
+function pushWaveCompletionReason(reasons, code, detail) {
+  const normalizedCode = String(code || "").trim();
+  const normalizedDetail = String(detail || "").trim();
+  if (!normalizedCode || !normalizedDetail) {
+    return;
+  }
+  if (
+    reasons.some((reason) => reason.code === normalizedCode && reason.detail === normalizedDetail)
+  ) {
+    return;
+  }
+  reasons.push({ code: normalizedCode, detail: normalizedDetail });
+}
+
+function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
   const coordinationDir =
     options.coordinationDir || path.join(path.resolve(statusDir, ".."), "coordination");
@@ -1893,96 +1908,195 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
   const componentThreshold =
     options.requireComponentPromotionsFromWave ??
     laneProfile.validation.requireComponentPromotionsFromWave;
+
+  const reasons = [];
+  const summariesByAgentId = {};
+  const missingStatusAgents = [];
+  let statusesReady = wave.agents.length > 0;
+
+  for (const agent of wave.agents) {
+    const statusPath = path.join(statusDir, `wave-${wave.wave}-${agent.slug}.status`);
+    const statusRecord = readStatusRecordIfPresent(statusPath);
+    if (!statusRecord) {
+      missingStatusAgents.push(agent.agentId);
+      statusesReady = false;
+      continue;
+    }
+    const expectedPromptHash = hashAgentPromptFingerprint(agent);
+    if (statusRecord.code !== 0) {
+      pushWaveCompletionReason(
+        reasons,
+        "nonzero-status",
+        `${agent.agentId} exited ${statusRecord.code} in ${path.relative(REPO_ROOT, statusPath)}.`,
+      );
+      statusesReady = false;
+      continue;
+    }
+    if (statusRecord.promptHash !== expectedPromptHash) {
+      pushWaveCompletionReason(
+        reasons,
+        "prompt-hash-mismatch",
+        `${agent.agentId} status in ${path.relative(REPO_ROOT, statusPath)} does not match the current prompt fingerprint.`,
+      );
+      statusesReady = false;
+      continue;
+    }
+    const summary = readAgentExecutionSummary(statusPath);
+    summariesByAgentId[agent.agentId] = summary;
+    if (agent.agentId === evaluatorAgentId) {
+      if (summary) {
+        const validation = validateEvaluatorSummary(agent, summary);
+        if (!validation.ok) {
+          pushWaveCompletionReason(
+            reasons,
+            "invalid-evaluator-summary",
+            `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+          );
+          statusesReady = false;
+        }
+      }
+      continue;
+    }
+    if (
+      agent.agentId === integrationAgentId &&
+      integrationThreshold !== null &&
+      wave.wave >= integrationThreshold
+    ) {
+      const validation = validateIntegrationSummary(agent, summary);
+      if (!validation.ok) {
+        pushWaveCompletionReason(
+          reasons,
+          "invalid-integration-summary",
+          `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+        );
+        statusesReady = false;
+      }
+      continue;
+    }
+    if (agent.agentId === documentationAgentId) {
+      const validation = validateDocumentationClosureSummary(agent, summary);
+      if (!validation.ok) {
+        pushWaveCompletionReason(
+          reasons,
+          "invalid-documentation-summary",
+          `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+        );
+        statusesReady = false;
+      }
+      continue;
+    }
+    const validation = validateImplementationSummary(agent, summary);
+    if (!validation.ok) {
+      pushWaveCompletionReason(
+        reasons,
+        "invalid-implementation-summary",
+        `${agent.agentId}: ${validation.statusCode}: ${validation.detail}`,
+      );
+      statusesReady = false;
+    }
+  }
+
+  if (missingStatusAgents.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "missing-status",
+      `Missing status files for ${missingStatusAgents.join(", ")}.`,
+    );
+  }
+
+  if (
+    statusesReady &&
+    componentThreshold !== null &&
+    wave.wave >= componentThreshold
+  ) {
+    const promotionsValidation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
+    if (!promotionsValidation.ok) {
+      pushWaveCompletionReason(
+        reasons,
+        "component-promotions-invalid",
+        promotionsValidation.detail,
+      );
+      statusesReady = false;
+    }
+    const matrixValidation = validateWaveComponentMatrixCurrentLevels(wave, {
+      ...options,
+      laneProfile,
+    });
+    if (!matrixValidation.ok) {
+      pushWaveCompletionReason(
+        reasons,
+        "component-matrix-invalid",
+        matrixValidation.detail,
+      );
+      statusesReady = false;
+    }
+  }
+
+  if (statusesReady) {
+    const evaluatorArtifacts = readWaveEvaluatorArtifacts(wave, {
+      logsDir,
+      evaluatorAgentId,
+    });
+    if (!evaluatorArtifacts.ok) {
+      pushWaveCompletionReason(reasons, evaluatorArtifacts.statusCode, evaluatorArtifacts.detail);
+      statusesReady = false;
+    }
+  }
+
+  const coordinationState = readMaterializedCoordinationState(
+    path.join(coordinationDir, `wave-${wave.wave}.jsonl`),
+  );
+  const openClarificationIds = coordinationState.clarifications
+    .filter((record) => isOpenCoordinationStatus(record.status))
+    .map((record) => record.id);
+  if (openClarificationIds.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "open-clarification",
+      `Open clarification records: ${openClarificationIds.join(", ")}.`,
+    );
+  }
+  const openClarificationRequestIds = openClarificationLinkedRequests(coordinationState).map(
+    (record) => record.id,
+  );
+  if (openClarificationRequestIds.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "open-clarification-request",
+      `Open clarification-linked requests: ${openClarificationRequestIds.join(", ")}.`,
+    );
+  }
+  const openHumanEscalationIds = coordinationState.humanEscalations
+    .filter((record) => isOpenCoordinationStatus(record.status))
+    .map((record) => record.id);
+  if (openHumanEscalationIds.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "open-human-escalation",
+      `Open human escalation records: ${openHumanEscalationIds.join(", ")}.`,
+    );
+  }
+  const openHumanFeedbackIds = coordinationState.humanFeedback
+    .filter((record) => isOpenCoordinationStatus(record.status))
+    .map((record) => record.id);
+  if (openHumanFeedbackIds.length > 0) {
+    pushWaveCompletionReason(
+      reasons,
+      "open-human-feedback",
+      `Open human feedback records: ${openHumanFeedbackIds.join(", ")}.`,
+    );
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+  };
+}
+
+export function completedWavesFromStatusFiles(allWaves, statusDir, options = {}) {
   const completed = [];
   for (const wave of allWaves) {
-    let waveIsComplete = wave.agents.length > 0;
-    const summariesByAgentId = {};
-    for (const agent of wave.agents) {
-      const statusPath = path.join(statusDir, `wave-${wave.wave}-${agent.slug}.status`);
-      const statusRecord = readStatusRecordIfPresent(statusPath);
-      if (!statusRecord) {
-        waveIsComplete = false;
-        break;
-      }
-      const expectedPromptHash = hashAgentPromptFingerprint(agent);
-      if (statusRecord.code !== 0 || statusRecord.promptHash !== expectedPromptHash) {
-        waveIsComplete = false;
-        break;
-      }
-      const summary = readAgentExecutionSummary(statusPath);
-      summariesByAgentId[agent.agentId] = summary;
-      if (agent.agentId === evaluatorAgentId && summary) {
-        if (!validateEvaluatorSummary(agent, summary).ok) {
-          waveIsComplete = false;
-          break;
-        }
-        continue;
-      }
-      if (
-        agent.agentId === integrationAgentId &&
-        integrationThreshold !== null &&
-        wave.wave >= integrationThreshold
-      ) {
-        if (!validateIntegrationSummary(agent, summary).ok) {
-          waveIsComplete = false;
-          break;
-        }
-        continue;
-      }
-      if (agent.agentId === documentationAgentId) {
-        if (!validateDocumentationClosureSummary(agent, summary).ok) {
-          waveIsComplete = false;
-          break;
-        }
-        continue;
-      }
-      if (!validateImplementationSummary(agent, summary).ok) {
-        waveIsComplete = false;
-        break;
-      }
-    }
-    if (
-      waveIsComplete &&
-      componentThreshold !== null &&
-      wave.wave >= componentThreshold &&
-      !validateWaveComponentPromotions(wave, summariesByAgentId, options).ok
-    ) {
-      waveIsComplete = false;
-    }
-    if (
-      waveIsComplete &&
-      componentThreshold !== null &&
-      wave.wave >= componentThreshold &&
-      !validateWaveComponentMatrixCurrentLevels(wave, { ...options, laneProfile }).ok
-    ) {
-      waveIsComplete = false;
-    }
-    if (
-      waveIsComplete &&
-      !readWaveEvaluatorArtifacts(wave, { logsDir, evaluatorAgentId }).ok
-    ) {
-      waveIsComplete = false;
-    }
-    if (waveIsComplete) {
-      const coordinationState = readMaterializedCoordinationState(
-        path.join(coordinationDir, `wave-${wave.wave}.jsonl`),
-      );
-      if (
-        coordinationState.clarifications.some((record) =>
-          ["open", "acknowledged", "in_progress"].includes(record.status),
-        ) ||
-        openClarificationLinkedRequests(coordinationState).length > 0 ||
-        coordinationState.humanEscalations.some((record) =>
-          ["open", "acknowledged", "in_progress"].includes(record.status),
-        ) ||
-        coordinationState.humanFeedback.some((record) =>
-          ["open", "acknowledged", "in_progress"].includes(record.status),
-        )
-      ) {
-        waveIsComplete = false;
-      }
-    }
-    if (waveIsComplete) {
+    if (analyzeWaveCompletionFromStatusFiles(wave, statusDir, options).ok) {
       completed.push(wave.wave);
     }
   }
@@ -1990,7 +2104,13 @@ export function completedWavesFromStatusFiles(allWaves, statusDir, options = {})
 }
 
 export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusDir, options = {}) {
-  const completedFromStatus = completedWavesFromStatusFiles(allWaves, statusDir, options);
+  const diagnostics = allWaves.map((wave) => ({
+    wave: wave.wave,
+    ...analyzeWaveCompletionFromStatusFiles(wave, statusDir, options),
+  }));
+  const completedFromStatus = diagnostics
+    .filter((diagnostic) => diagnostic.ok)
+    .map((diagnostic) => diagnostic.wave);
   const before = readRunState(runStatePath);
   const firstMerge = normalizeCompletedWaves([...before.completedWaves, ...completedFromStatus]);
   const latest = readRunState(runStatePath);
@@ -2003,6 +2123,7 @@ export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusD
     completedFromStatus,
     addedFromBefore: firstMerge.filter((waveNumber) => !before.completedWaves.includes(waveNumber)),
     addedFromLatest: merged.filter((waveNumber) => !latest.completedWaves.includes(waveNumber)),
+    blockedFromStatus: diagnostics.filter((diagnostic) => !diagnostic.ok),
     state,
   };
 }

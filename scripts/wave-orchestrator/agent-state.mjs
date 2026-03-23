@@ -1169,13 +1169,43 @@ export function validateContQaSummary(agent, summary, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Agent Result Envelope — Wave 3
+// Agent Result Envelope — P1-6 End-State (schemaVersion 2)
 // ---------------------------------------------------------------------------
 
 import { toIsoTimestamp } from "./shared.mjs";
 
 /**
- * Path to the envelope file derived from the status path.
+ * Valid roles for the agent result envelope.
+ */
+export const ENVELOPE_VALID_ROLES = [
+  "implementation",
+  "integration",
+  "documentation",
+  "cont-qa",
+  "cont-eval",
+  "security",
+  "deploy",
+];
+
+/**
+ * Compute the attempt-scoped canonical envelope path.
+ *
+ * End-state path: .tmp/<lane>/results/wave-<N>/attempt-<A>/<agentId>.json
+ *
+ * @param {object} options - { lane, waveNumber, attempt, agentId }
+ * @returns {string} The envelope file path
+ */
+export function agentEnvelopePath({ lane, waveNumber, attempt, agentId }) {
+  const safeLane = lane || "main";
+  const safeWave = waveNumber ?? 0;
+  const safeAttempt = attempt ?? 1;
+  const safeAgent = agentId || "unknown";
+  return `.tmp/${safeLane}-wave-launcher/results/wave-${safeWave}/attempt-${safeAttempt}/${safeAgent}.json`;
+}
+
+/**
+ * Legacy path derivation from status path.
+ * Retained for backward compatibility during migration.
  *
  * @param {string} statusPath - Path to the .status or .summary file
  * @returns {string} The envelope file path
@@ -1194,129 +1224,215 @@ export function agentEnvelopePathFromStatusPath(statusPath) {
  * Build a structured result envelope from an already-parsed execution summary.
  * Pure function — the envelope is a normalized projection of the summary.
  *
- * @param {object} agent - Agent definition from wave
+ * End-state P1-6: common header + role-specific typed optional payloads.
+ * Absent role sections are NOT included (not null, not empty object).
+ *
+ * @param {object} agent - Agent definition from wave (must include .role)
  * @param {object} summary - Execution summary from buildAgentExecutionSummary
- * @returns {object} AgentResultEnvelope
+ * @param {object} [options] - { waveNumber, attempt, exitCode }
+ * @returns {object} AgentResultEnvelope (schemaVersion 2)
  */
-export function buildAgentResultEnvelope(agent, summary) {
+export function buildAgentResultEnvelope(agent, summary, options = {}) {
   const safeAgent = agent || {};
   const safeSummary = summary || {};
+  const safeOptions = options || {};
 
-  // Exit contract from proof dimensions + doc delta
+  const agentId = safeAgent.agentId || safeSummary.agentId || null;
+  const role = safeAgent.role || safeSummary.role || null;
+
+  // --- Common header ---
   const proof = safeSummary.proof || {};
-  const docDelta = safeSummary.docDelta || {};
-  const exitContract = {
+  const proofSection = {
+    state: proof.state === "met" ? "satisfied"
+      : proof.state === "gap" ? "partial"
+      : proof.state === "failed" ? "failed"
+      : "not_applicable",
     completion: proof.completion || null,
     durability: proof.durability || null,
-    proof: proof.proof || null,
-    docImpact: docDelta.state || null,
+    proofLevel: proof.proof || null,
+    detail: proof.detail || null,
   };
 
-  // Proof artifacts
-  const proofArtifacts = Array.isArray(safeSummary.proofArtifacts)
-    ? safeSummary.proofArtifacts.map((artifact) => ({
-        path: artifact.path || null,
-        kind: artifact.kind || null,
-        sha256: artifact.sha256 || null,
-        exists: artifact.exists === true,
-      }))
-    : [];
-
-  // Deliverables
+  // Deliverables — with sha256
   const deliverables = Array.isArray(safeSummary.deliverables)
     ? safeSummary.deliverables.map((d) => ({
         path: d.path || null,
         exists: d.exists === true,
+        sha256: d.sha256 || null,
       }))
     : [];
 
-  // Components
-  const components = Array.isArray(safeSummary.components)
-    ? safeSummary.components.map((c) => ({
-        componentId: c.componentId || null,
-        level: c.level || null,
-        state: c.state || null,
+  // Proof artifacts — with sha256 and requiredFor
+  const proofArtifacts = Array.isArray(safeSummary.proofArtifacts)
+    ? safeSummary.proofArtifacts.map((artifact) => ({
+        path: artifact.path || null,
+        kind: artifact.kind || null,
+        exists: artifact.exists === true,
+        sha256: artifact.sha256 || null,
+        requiredFor: artifact.requiredFor || null,
       }))
     : [];
 
-  // Gate claims from the gate marker
-  const gateClaims = [];
-  if (safeSummary.gate) {
-    const gateKeys = ["architecture", "integration", "durability", "live", "docs"];
-    for (const key of gateKeys) {
-      if (safeSummary.gate[key]) {
-        gateClaims.push({
-          gateId: key,
-          claim: safeSummary.gate[key],
-          detail: safeSummary.gate.detail || null,
-        });
-      }
-    }
-  }
+  // Gaps
+  const gaps = Array.isArray(safeSummary.gaps)
+    ? safeSummary.gaps.map((g) => ({
+        kind: g.kind || null,
+        detail: g.detail || null,
+      }))
+    : [];
 
-  // Validation outputs from proof state
-  const validationOutputs = {
-    testsPassed: proof.state === "met" && proof.proof != null,
-    buildPassed: proof.state === "met",
-  };
+  // Unresolved blockers
+  const unresolvedBlockers = Array.isArray(safeSummary.unresolvedBlockers)
+    ? safeSummary.unresolvedBlockers.map((b) =>
+        typeof b === "object" ? { kind: b.kind || null, detail: b.detail || null, blocking: b.blocking || null } : { kind: null, detail: String(b), blocking: null },
+      )
+    : [];
 
   // Risk notes
   const riskNotes = Array.isArray(safeSummary.riskNotes) ? safeSummary.riskNotes : [];
 
-  // Unresolved blockers
-  const unresolvedBlockers = Array.isArray(safeSummary.unresolvedBlockers)
-    ? safeSummary.unresolvedBlockers
+  // Facts
+  const facts = Array.isArray(safeSummary.facts)
+    ? safeSummary.facts.map((f) => ({
+        factId: f.factId || null,
+        kind: f.kind || null,
+        content: f.content || null,
+      }))
     : [];
 
-  // Docs deltas
-  const docsDeltas = [];
-  if (docDelta.state) {
-    docsDeltas.push({
-      state: docDelta.state,
-      paths: Array.isArray(docDelta.paths) ? docDelta.paths : [],
-      detail: docDelta.detail || null,
-    });
-  }
-
-  // Security findings
-  const securityFindings = [];
-  if (safeSummary.security) {
-    securityFindings.push({
-      state: safeSummary.security.state || null,
-      findings: safeSummary.security.findings || 0,
-      approvals: safeSummary.security.approvals || 0,
-      detail: safeSummary.security.detail || null,
-    });
-  }
-
-  // Integration claims
-  const integrationClaims = [];
-  if (safeSummary.integration) {
-    integrationClaims.push({
-      state: safeSummary.integration.state || null,
-      claims: safeSummary.integration.claims || 0,
-      conflicts: safeSummary.integration.conflicts || 0,
-      blockers: safeSummary.integration.blockers || 0,
-      detail: safeSummary.integration.detail || null,
-    });
-  }
-
-  return {
-    envelopeVersion: 1,
-    agentId: safeAgent.agentId || safeSummary.agentId || null,
-    exitContract,
-    proofArtifacts,
+  const envelope = {
+    schemaVersion: 2,
+    agentId,
+    waveNumber: safeOptions.waveNumber ?? safeSummary.waveNumber ?? null,
+    attempt: safeOptions.attempt ?? safeSummary.attempt ?? null,
+    completedAt: safeOptions.completedAt || toIsoTimestamp(),
+    exitCode: typeof safeOptions.exitCode === "number" ? safeOptions.exitCode : (typeof safeSummary.exitCode === "number" ? safeSummary.exitCode : 0),
+    role,
+    proof: proofSection,
     deliverables,
-    components,
-    gateClaims,
-    validationOutputs,
-    riskNotes,
+    proofArtifacts,
+    gaps,
     unresolvedBlockers,
-    docsDeltas,
-    securityFindings,
-    integrationClaims,
-    createdAt: toIsoTimestamp(),
+    riskNotes,
+    facts,
   };
+
+  // --- Role-specific typed payloads (absent when not applicable) ---
+
+  if (role === "implementation") {
+    const docDelta = safeSummary.docDelta || {};
+    const components = Array.isArray(safeSummary.components)
+      ? safeSummary.components.map((c) => ({
+          componentId: c.componentId || null,
+          level: c.level || null,
+          state: c.state || null,
+          detail: c.detail || null,
+        }))
+      : [];
+    envelope.implementation = {
+      docDelta: {
+        state: docDelta.state || "none",
+        paths: Array.isArray(docDelta.paths) ? docDelta.paths : [],
+        detail: docDelta.detail || null,
+      },
+      components,
+    };
+  }
+
+  if (role === "integration") {
+    const integ = safeSummary.integration || {};
+    envelope.integration = {
+      state: integ.state || null,
+      claims: integ.claims || 0,
+      conflicts: integ.conflicts || 0,
+      blockers: integ.blockers || 0,
+      detail: integ.detail || null,
+    };
+  }
+
+  if (role === "documentation") {
+    const docDelta = safeSummary.docDelta || safeSummary.docClosure || {};
+    envelope.documentation = {
+      docClosure: {
+        state: docDelta.state || "no-change",
+        paths: Array.isArray(docDelta.paths) ? docDelta.paths : [],
+        detail: docDelta.detail || null,
+      },
+    };
+  }
+
+  if (role === "cont-qa") {
+    const verdict = safeSummary.verdict || {};
+    const gate = safeSummary.gate || {};
+    envelope.contQa = {
+      verdict: {
+        verdict: verdict.verdict || null,
+        detail: verdict.detail || null,
+      },
+      gateClaims: {
+        architecture: gate.architecture || null,
+        integration: gate.integration || null,
+        durability: gate.durability || null,
+        live: gate.live || null,
+        docs: gate.docs || null,
+      },
+    };
+  }
+
+  if (role === "cont-eval") {
+    const evalSection = safeSummary.eval || {};
+    envelope.contEval = {
+      state: evalSection.state || null,
+      targets: evalSection.targets || 0,
+      benchmarks: evalSection.benchmarks || 0,
+      regressions: evalSection.regressions || 0,
+      targetIds: Array.isArray(evalSection.targetIds) ? evalSection.targetIds : [],
+      benchmarkIds: Array.isArray(evalSection.benchmarkIds) ? evalSection.benchmarkIds : [],
+      detail: evalSection.detail || null,
+    };
+  }
+
+  if (role === "security") {
+    const sec = safeSummary.security || {};
+    envelope.security = {
+      state: sec.state || null,
+      findings: sec.findings || 0,
+      approvals: sec.approvals || 0,
+      detail: sec.detail || null,
+    };
+  }
+
+  if (role === "deploy") {
+    const dep = safeSummary.deploy || {};
+    envelope.deploy = {
+      state: dep.state || "not_applicable",
+      environment: dep.environment || null,
+      healthCheck: dep.healthCheck || null,
+      rolloutArtifact: dep.rolloutArtifact || null,
+      detail: dep.detail || null,
+    };
+  }
+
+  return envelope;
+}
+
+/**
+ * Build a v2 envelope from legacy parsed log markers.
+ * Migration adapter: synthesizes the end-state envelope shape from the
+ * output of buildAgentExecutionSummary (which parses log markers).
+ *
+ * This exists so the gate engine always sees a consistent v2 shape,
+ * even when the agent emitted legacy log markers rather than a structured envelope.
+ *
+ * @param {object} agent - Agent definition (must include .agentId, .role)
+ * @param {object} legacySummary - Result from buildAgentExecutionSummary
+ * @param {object} [options] - { waveNumber, attempt, exitCode }
+ * @returns {object} AgentResultEnvelope (schemaVersion 2)
+ */
+export function buildEnvelopeFromLegacySignals(agent, legacySummary, options = {}) {
+  const envelope = buildAgentResultEnvelope(agent, legacySummary, options);
+  envelope._synthesizedFromLegacy = true;
+  return envelope;
 }
 
 /**

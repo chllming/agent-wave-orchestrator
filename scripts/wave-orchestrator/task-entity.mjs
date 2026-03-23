@@ -49,11 +49,19 @@ export const LEASE_STATES = new Set([
   "expired",
 ]);
 
+export const TASK_STATUSES = new Set([
+  "pending",
+  "in_progress",
+  "proven",
+  "blocked",
+  "completed",
+]);
+
 const VALID_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
 
 const CLOSURE_TRANSITIONS = {
   open: new Set(["owned_slice_proven", "cancelled", "superseded"]),
-  owned_slice_proven: new Set(["wave_closure_ready", "cancelled", "superseded"]),
+  owned_slice_proven: new Set(["open", "wave_closure_ready", "cancelled", "superseded"]),
   wave_closure_ready: new Set(["closed", "cancelled", "superseded"]),
   closed: new Set(),
   cancelled: new Set(),
@@ -88,6 +96,117 @@ function normalizePlainObject(value) {
     : null;
 }
 
+/**
+ * Build a stable semantic task ID.
+ * Format: "wave-{waveNumber}:{agentId}:{scope}"
+ */
+export function buildSemanticTaskId(waveNumber, agentId, scope) {
+  const safeWave = Number.isFinite(waveNumber) ? waveNumber : 0;
+  const safeAgent = normalizeText(agentId, "unassigned");
+  const safeScope = normalizeText(scope, "primary");
+  return `wave-${safeWave}:${safeAgent}:${safeScope}`;
+}
+
+/**
+ * Compute a content hash (SHA256) for change detection over a task definition subset.
+ */
+export function computeContentHash(definitionSubset) {
+  const payload = JSON.stringify(definitionSubset ?? {});
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
+/**
+ * Normalize a deliverable entry to the end-state schema: { path, exists, sha256 }.
+ */
+function normalizeDeliverable(entry) {
+  if (typeof entry === "string") {
+    return { path: entry, exists: false, sha256: null };
+  }
+  if (entry && typeof entry === "object") {
+    return {
+      path: normalizeText(entry.path),
+      exists: entry.exists === true,
+      sha256: normalizeText(entry.sha256, null),
+    };
+  }
+  return { path: "", exists: false, sha256: null };
+}
+
+/**
+ * Normalize proofRequirements to end-state object shape.
+ * Accepts both legacy string[] and new object shape.
+ */
+function normalizeProofRequirements(raw, defaults) {
+  // Already in new object shape
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return {
+      proofLevel: normalizeText(raw.proofLevel, "unit"),
+      proofCentric: raw.proofCentric === true,
+      maturityTarget: normalizeText(raw.maturityTarget, null),
+    };
+  }
+  // Legacy string array: infer from contents
+  if (Array.isArray(raw) && raw.length > 0) {
+    return {
+      proofLevel: "unit",
+      proofCentric: raw.includes("proof-artifacts-present"),
+      maturityTarget: raw.includes("component-level-met") ? "component" : null,
+    };
+  }
+  // Default from defaults arg
+  if (defaults && typeof defaults === "object" && !Array.isArray(defaults)) {
+    return {
+      proofLevel: normalizeText(defaults.proofLevel, "unit"),
+      proofCentric: defaults.proofCentric === true,
+      maturityTarget: normalizeText(defaults.maturityTarget, null),
+    };
+  }
+  return { proofLevel: "unit", proofCentric: false, maturityTarget: null };
+}
+
+/**
+ * Normalize dependencyEdges to end-state shape: [{ taskId, kind, status }].
+ * Accepts both legacy { targetTaskId, kind } and new { taskId, kind, status } shapes.
+ */
+function normalizeDependencyEdges(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((edge) => ({
+    taskId: normalizeText(edge.taskId || edge.targetTaskId),
+    kind: normalizeText(edge.kind, "blocks"),
+    status: normalizeText(edge.status, "pending"),
+  }));
+}
+
+/**
+ * Normalize components array: [{ componentId, targetLevel }].
+ */
+function normalizeComponents(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((c) => c && typeof c === "object")
+    .map((c) => ({
+      componentId: normalizeText(c.componentId),
+      targetLevel: normalizeText(c.targetLevel, null),
+    }));
+}
+
+/**
+ * Derive components from componentTargets for backward compatibility.
+ */
+function deriveComponentsFromTargets(componentTargets) {
+  if (!componentTargets || typeof componentTargets !== "object" || Array.isArray(componentTargets)) {
+    return [];
+  }
+  return Object.entries(componentTargets).map(([componentId, targetLevel]) => ({
+    componentId,
+    targetLevel: normalizeText(targetLevel, null),
+  }));
+}
+
 export function normalizeTask(rawTask, defaults = {}) {
   if (!rawTask || typeof rawTask !== "object" || Array.isArray(rawTask)) {
     throw new Error("Task must be an object");
@@ -109,28 +228,80 @@ export function normalizeTask(rawTask, defaults = {}) {
   if (!VALID_PRIORITIES.has(priority)) {
     throw new Error(`priority must be one of ${[...VALID_PRIORITIES].join(", ")} (got: ${priority})`);
   }
+
+  // Status field (end-state P0-4)
+  const rawStatus = normalizeText(rawTask.status) || defaults.status || "pending";
+  const status = TASK_STATUSES.has(rawStatus) ? rawStatus : "pending";
+
   const now = toIsoTimestamp();
-  const artifactContract = normalizePlainObject(rawTask.artifactContract) || {
-    requiredPaths: [],
-    proofArtifacts: [],
-    exitContract: null,
-    componentTargets: {},
+
+  // Normalize artifactContract with end-state deliverables shape
+  const rawContract = normalizePlainObject(rawTask.artifactContract) || {};
+  const deliverables = Array.isArray(rawContract.deliverables)
+    ? rawContract.deliverables.map(normalizeDeliverable)
+    : [];
+  const proofArtifacts = Array.isArray(rawContract.proofArtifacts)
+    ? rawContract.proofArtifacts
+    : (Array.isArray(rawContract.requiredPaths) ? [] : []);
+  const exitContract =
+    rawContract.exitContract && typeof rawContract.exitContract === "object"
+      ? { ...rawContract.exitContract }
+      : null;
+
+  // Also maintain backward-compat: if old shape had requiredPaths + proofArtifacts,
+  // keep requiredPaths in the contract for backward-compat readers
+  const requiredPaths = Array.isArray(rawContract.requiredPaths) ? rawContract.requiredPaths : [];
+  const componentTargets =
+    rawContract.componentTargets && typeof rawContract.componentTargets === "object"
+      && !Array.isArray(rawContract.componentTargets)
+      ? { ...rawContract.componentTargets }
+      : {};
+
+  const artifactContract = {
+    deliverables,
+    proofArtifacts,
+    exitContract,
+    requiredPaths,
+    componentTargets,
   };
-  if (!Array.isArray(artifactContract.requiredPaths)) {
-    artifactContract.requiredPaths = [];
-  }
-  if (!Array.isArray(artifactContract.proofArtifacts)) {
-    artifactContract.proofArtifacts = [];
-  }
-  if (!artifactContract.exitContract || typeof artifactContract.exitContract !== "object") {
-    artifactContract.exitContract = null;
-  }
-  if (!artifactContract.componentTargets || typeof artifactContract.componentTargets !== "object" || Array.isArray(artifactContract.componentTargets)) {
-    artifactContract.componentTargets = {};
-  }
+
+  // Version field
+  const version = typeof rawTask.version === "number" ? rawTask.version : 1;
+
+  // Wave number and lane
+  const waveNumber = typeof rawTask.waveNumber === "number" ? rawTask.waveNumber
+    : (typeof defaults.waveNumber === "number" ? defaults.waveNumber : null);
+  const lane = normalizeText(rawTask.lane) || defaults.lane || null;
+
+  // Content hash for change detection
+  const definitionSubset = {
+    taskType,
+    title: normalizeText(rawTask.title, defaults.title || ""),
+    ownerAgentId: normalizeText(rawTask.ownerAgentId) || defaults.ownerAgentId || null,
+    artifactContract,
+  };
+  const contentHash = normalizeText(rawTask.contentHash) || computeContentHash(definitionSubset);
+
+  // Components (end-state top-level field)
+  const components = Array.isArray(rawTask.components)
+    ? normalizeComponents(rawTask.components)
+    : deriveComponentsFromTargets(componentTargets);
+
+  // ProofRequirements as end-state object
+  const proofRequirements = normalizeProofRequirements(
+    rawTask.proofRequirements,
+    defaults.proofRequirements,
+  );
+
+  // Dependency edges with status
+  const dependencyEdges = normalizeDependencyEdges(rawTask.dependencyEdges);
 
   return {
     taskId,
+    version,
+    contentHash,
+    waveNumber,
+    lane,
     taskType,
     title: normalizeText(rawTask.title, defaults.title || ""),
     detail: normalizeText(rawTask.detail, defaults.detail || ""),
@@ -142,13 +313,10 @@ export function normalizeTask(rawTask, defaults = {}) {
     leaseExpiresAt: normalizeText(rawTask.leaseExpiresAt) || null,
     leaseHeartbeatAt: normalizeText(rawTask.leaseHeartbeatAt) || null,
     artifactContract,
-    proofRequirements: normalizeStringArray(rawTask.proofRequirements || defaults.proofRequirements || []),
-    dependencyEdges: Array.isArray(rawTask.dependencyEdges)
-      ? rawTask.dependencyEdges.map((edge) => ({
-          targetTaskId: normalizeText(edge.targetTaskId),
-          kind: normalizeText(edge.kind, "blocks"),
-        }))
-      : [],
+    proofRequirements,
+    dependencyEdges,
+    components,
+    status,
     closureState,
     sourceRecordId: normalizeText(rawTask.sourceRecordId) || defaults.sourceRecordId || null,
     priority,
@@ -211,6 +379,25 @@ export function releaseLease(task) {
   };
 }
 
+/**
+ * Expire a lease: transition from leased to expired.
+ */
+export function expireLease(task) {
+  if (!task || typeof task !== "object") {
+    throw new Error("task must be an object");
+  }
+  if (task.leaseState !== "leased") {
+    throw new Error(`Cannot expire task ${task.taskId} in leaseState ${task.leaseState}`);
+  }
+  const now = toIsoTimestamp();
+  return {
+    ...task,
+    leaseState: "expired",
+    leaseExpiresAt: now,
+    updatedAt: now,
+  };
+}
+
 export function heartbeatLease(task) {
   if (!task || typeof task !== "object") {
     throw new Error("task must be an object");
@@ -249,6 +436,8 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
   const contEvalAgentId = laneConfig.contEvalAgentId || "E0";
   const integrationAgentId = laneConfig.integrationAgentId || "A8";
   const documentationAgentId = laneConfig.documentationAgentId || "A9";
+  const waveNumber = typeof waveDefinition.wave === "number" ? waveDefinition.wave : 0;
+  const lane = laneConfig.lane || "main";
   const now = toIsoTimestamp();
   const tasks = [];
 
@@ -274,67 +463,111 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
       agent.componentTargets && typeof agent.componentTargets === "object"
         ? { ...agent.componentTargets }
         : {};
-    const proofRequirements = [];
+
+    // Build end-state proofRequirements object
+    const proofLevel = exitContract?.proof || "unit";
+    let proofCentric = false;
+    let maturityTarget = null;
     if (taskType === "implementation") {
-      proofRequirements.push("implementation-exit-met");
-      if (Object.keys(componentTargets).length > 0) {
-        proofRequirements.push("component-level-met");
-      }
       if (Array.isArray(agent.deliverables) && agent.deliverables.length > 0) {
-        proofRequirements.push("proof-artifacts-present");
+        proofCentric = true;
+      }
+      if (Object.keys(componentTargets).length > 0) {
+        maturityTarget = "component";
       }
     }
+
+    // Build deliverables in end-state shape: [{ path, exists, sha256 }]
+    const deliverables = Array.isArray(agent.deliverables)
+      ? agent.deliverables.map(normalizeDeliverable)
+      : [];
+
+    // Build proofArtifacts in existing shape
+    const proofArtifacts = Array.isArray(agent.deliverables)
+      ? agent.deliverables.map((deliverable) => ({
+          path: typeof deliverable === "string" ? deliverable : deliverable?.path || "",
+          kind: typeof deliverable === "object" ? deliverable?.kind || "file" : "file",
+          requiredFor: typeof deliverable === "object" ? deliverable?.requiredFor || null : null,
+        }))
+      : [];
+
+    // Components from componentTargets
+    const components = deriveComponentsFromTargets(componentTargets);
+
+    // Semantic task ID
+    const scope = agent.title
+      ? normalizeText(agent.title).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+      : "primary";
+    const semanticId = buildSemanticTaskId(waveNumber, agentId, scope);
+
     tasks.push(
       normalizeTask(
         {
+          taskId: semanticId,
           taskType,
           title: `${agentId}: ${agent.title || ""}`.trim(),
           detail: agent.detail || "",
           ownerAgentId: agentId,
           assigneeAgentId: agentId,
+          waveNumber,
+          lane,
           artifactContract: {
+            deliverables,
+            proofArtifacts,
             requiredPaths: normalizeStringArray(agent.ownedPaths || []),
-            proofArtifacts: Array.isArray(agent.deliverables)
-              ? agent.deliverables.map((deliverable) => ({
-                  path: typeof deliverable === "string" ? deliverable : deliverable?.path || "",
-                  kind: typeof deliverable === "object" ? deliverable?.kind || "file" : "file",
-                  requiredFor: typeof deliverable === "object" ? deliverable?.requiredFor || null : null,
-                }))
-              : [],
             exitContract,
             componentTargets,
           },
-          proofRequirements,
+          proofRequirements: {
+            proofLevel,
+            proofCentric,
+            maturityTarget,
+          },
+          dependencyEdges: [],
+          components,
+          status: "pending",
           closureState: "open",
           priority:
             taskType === "implementation"
               ? "normal"
               : "high",
         },
-        { createdAt: now },
+        { createdAt: now, waveNumber, lane },
       ),
     );
   }
 
   for (const promotion of waveDefinition.componentPromotions || []) {
+    const semanticId = buildSemanticTaskId(waveNumber, "system", `promote-${promotion.componentId}`);
     tasks.push(
       normalizeTask(
         {
+          taskId: semanticId,
           taskType: "component",
           title: `Promote ${promotion.componentId} to ${promotion.targetLevel}`,
           detail: "",
           ownerAgentId: null,
+          waveNumber,
+          lane,
           artifactContract: {
-            requiredPaths: [promotion.componentId],
+            deliverables: [],
             proofArtifacts: [],
+            requiredPaths: [promotion.componentId],
             exitContract: null,
             componentTargets: { [promotion.componentId]: promotion.targetLevel },
           },
-          proofRequirements: ["component-level-met"],
+          proofRequirements: {
+            proofLevel: "unit",
+            proofCentric: false,
+            maturityTarget: promotion.targetLevel,
+          },
+          dependencyEdges: [],
+          components: [{ componentId: promotion.componentId, targetLevel: promotion.targetLevel }],
+          status: "pending",
           closureState: "open",
           priority: "high",
         },
-        { createdAt: now },
+        { createdAt: now, waveNumber, lane },
       ),
     );
   }
@@ -489,6 +722,28 @@ export function evaluateOwnedSliceProven(task, agentResult, proofBundles = []) {
     return { proven: true, reason: "Exit contract satisfied" };
   }
 
+  if (task.taskType === "component") {
+    // Component promotion task: validate that all relevant owners have promoted
+    const componentTargets = task.artifactContract?.componentTargets || {};
+    const componentIds = Object.keys(componentTargets);
+    if (componentIds.length === 0) {
+      return { proven: false, reason: "No component targets declared" };
+    }
+    const componentMarkers = new Map(
+      Array.isArray(agentResult?.components)
+        ? agentResult.components.map((component) => [component.componentId, component])
+        : [],
+    );
+    for (const componentId of componentIds) {
+      const expectedLevel = componentTargets[componentId];
+      const marker = componentMarkers.get(componentId);
+      if (!marker || marker.state !== "met" || (expectedLevel && marker.level !== expectedLevel)) {
+        return { proven: false, reason: `Component ${componentId} not promoted to ${expectedLevel || "target level"}` };
+      }
+    }
+    return { proven: true, reason: "Component promotion validated" };
+  }
+
   if (task.taskType === "cont-qa") {
     const validation = validateContQaSummary(agent, agentResult, { mode: "live" });
     return validation.ok
@@ -500,6 +755,10 @@ export function evaluateOwnedSliceProven(task, agentResult, proofBundles = []) {
     const evalValidation = validateContEvalSummary(agent, agentResult, { mode: "live" });
     if (!evalValidation.ok) {
       return { proven: false, reason: evalValidation.detail || evalValidation.statusCode };
+    }
+    // Differentiate: report-only vs implementation-owning cont-eval
+    if (isContEvalReportOnlyAgent(agent, { contEvalAgentId: agent.agentId })) {
+      return { proven: true, reason: "Cont-EVAL report-only satisfied" };
     }
     if (isContEvalImplementationOwningAgent(agent, { contEvalAgentId: agent.agentId })) {
       const implValidation = validateImplementationSummary(agent, agentResult);

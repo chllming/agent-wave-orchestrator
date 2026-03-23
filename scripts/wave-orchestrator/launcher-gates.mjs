@@ -20,32 +20,24 @@ import {
   parseVerdictFromText,
   REPORT_VERDICT_REGEX,
   WAVE_VERDICT_REGEX,
-  toIsoTimestamp,
   writeJsonAtomic,
 } from "./shared.mjs";
 import {
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
-  isContEvalImplementationOwningAgent,
   isContEvalReportOnlyAgent,
 } from "./role-helpers.mjs";
 import {
   augmentSummaryWithProofRegistry,
 } from "./proof-registry.mjs";
 import {
-  agentRequiresProofCentricValidation,
-  waveRequiresProofCentricValidation,
   validateWaveComponentPromotions,
   validateWaveComponentMatrixCurrentLevels,
 } from "./wave-files.mjs";
 import {
   isOpenCoordinationStatus,
   openClarificationLinkedRequests,
-  buildCoordinationResponseMetrics,
 } from "./coordination-store.mjs";
-import {
-  parseStructuredSignalsFromLog,
-} from "./dashboard-state.mjs";
 
 function resolveRunReportPath(wave, runInfo) {
   if (!wave || !runInfo?.agent) {
@@ -893,7 +885,7 @@ export function readWaveComponentGatePure(wave, agentResults, options = {}) {
   }
   const componentState = analyzePromotedComponentOwnersPure(validation.componentId, agents, summariesByAgentId);
   return {
-    ok: false, agentId: componentState.ownerAgentIds[0] || null,
+    ok: false, agentId: componentState.waitingOnAgentIds[0] || componentState.ownerAgentIds[0] || null,
     componentId: validation.componentId || null,
     statusCode: validation.statusCode, detail: validation.detail, logPath: null,
     ownerAgentIds: componentState.ownerAgentIds,

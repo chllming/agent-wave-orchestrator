@@ -56,7 +56,7 @@ describe("surface class metadata", () => {
     it("surface class constants have expected string values", () => {
       expect(SURFACE_CLASS_CANONICAL_EVENT).toBe("canonical-event");
       expect(SURFACE_CLASS_CANONICAL_SNAPSHOT).toBe("canonical-snapshot");
-      expect(SURFACE_CLASS_CACHED_DERIVED).toBe("cached-derived");
+      expect(SURFACE_CLASS_CACHED_DERIVED).toBe("derived-cache");
       expect(SURFACE_CLASS_HUMAN_PROJECTION).toBe("human-projection");
     });
   });
@@ -65,7 +65,7 @@ describe("surface class metadata", () => {
     it("all Wave 4 schema version constants are 1", () => {
       expect(WAVE_STATE_SCHEMA_VERSION).toBe(1);
       expect(TASK_ENTITY_SCHEMA_VERSION).toBe(1);
-      expect(AGENT_RESULT_ENVELOPE_SCHEMA_VERSION).toBe(1);
+      expect(AGENT_RESULT_ENVELOPE_SCHEMA_VERSION).toBe(2);
       expect(RESUME_PLAN_SCHEMA_VERSION).toBe(1);
       expect(HUMAN_INPUT_WORKFLOW_SCHEMA_VERSION).toBe(1);
     });
@@ -82,11 +82,11 @@ describe("surface class metadata", () => {
   });
 
   describe("normalizeWaveStateSnapshot", () => {
-    it("wraps payload with correct schema version, kind, and surfaceClass", () => {
+    it("wraps payload with correct schema version, kind, and artifactClass", () => {
       const result = normalizeWaveStateSnapshot({ lane: "main", wave: 3, status: "running" });
       expect(result.schemaVersion).toBe(WAVE_STATE_SCHEMA_VERSION);
       expect(result.kind).toBe(WAVE_STATE_KIND);
-      expect(result._meta).toEqual({ surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT });
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
       expect(result.lane).toBe("main");
       expect(result.wave).toBe(3);
       expect(result.status).toBe("running");
@@ -97,13 +97,13 @@ describe("surface class metadata", () => {
       const result = normalizeWaveStateSnapshot({
         schemaVersion: 999,
         kind: "old-kind",
-        _meta: { surfaceClass: "wrong" },
+        _meta: { artifactClass: "wrong" },
         lane: "main",
         wave: 5,
       });
       expect(result.schemaVersion).toBe(WAVE_STATE_SCHEMA_VERSION);
       expect(result.kind).toBe(WAVE_STATE_KIND);
-      expect(result._meta.surfaceClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
     });
 
     it("uses defaults for lane and wave when not in payload", () => {
@@ -129,7 +129,7 @@ describe("surface class metadata", () => {
   });
 
   describe("normalizeAgentResultEnvelope", () => {
-    it("wraps payload with correct schema/kind/surfaceClass", () => {
+    it("wraps payload with correct schema/kind/artifactClass", () => {
       const result = normalizeAgentResultEnvelope({
         agentId: "A1",
         exitCode: 0,
@@ -137,7 +137,7 @@ describe("surface class metadata", () => {
       });
       expect(result.schemaVersion).toBe(AGENT_RESULT_ENVELOPE_SCHEMA_VERSION);
       expect(result.kind).toBe(AGENT_RESULT_ENVELOPE_KIND);
-      expect(result._meta).toEqual({ surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT });
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
       expect(result.agentId).toBe("A1");
       expect(result.exitCode).toBe(0);
       expect(result.summary).toBe("done");
@@ -147,11 +147,11 @@ describe("surface class metadata", () => {
       const result = normalizeAgentResultEnvelope({
         schemaVersion: 42,
         kind: "stale",
-        _meta: { surfaceClass: "wrong" },
+        _meta: { artifactClass: "wrong" },
       });
       expect(result.schemaVersion).toBe(AGENT_RESULT_ENVELOPE_SCHEMA_VERSION);
       expect(result.kind).toBe(AGENT_RESULT_ENVELOPE_KIND);
-      expect(result._meta.surfaceClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
     });
 
     it("handles non-object input", () => {
@@ -162,14 +162,14 @@ describe("surface class metadata", () => {
   });
 
   describe("normalizeResumePlan", () => {
-    it("wraps payload with correct schema/kind/surfaceClass (cached-derived)", () => {
+    it("wraps payload with correct schema/kind/artifactClass (cached-derived)", () => {
       const result = normalizeResumePlan({
         selectedAgentIds: ["A1"],
         strategy: "retry",
       });
       expect(result.schemaVersion).toBe(RESUME_PLAN_SCHEMA_VERSION);
       expect(result.kind).toBe(RESUME_PLAN_KIND);
-      expect(result._meta).toEqual({ surfaceClass: SURFACE_CLASS_CACHED_DERIVED });
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CACHED_DERIVED);
       expect(result.selectedAgentIds).toEqual(["A1"]);
       expect(result.strategy).toBe("retry");
     });
@@ -178,11 +178,11 @@ describe("surface class metadata", () => {
       const result = normalizeResumePlan({
         schemaVersion: 99,
         kind: "old-resume",
-        _meta: { surfaceClass: "wrong" },
+        _meta: { artifactClass: "wrong" },
       });
       expect(result.schemaVersion).toBe(RESUME_PLAN_SCHEMA_VERSION);
       expect(result.kind).toBe(RESUME_PLAN_KIND);
-      expect(result._meta.surfaceClass).toBe(SURFACE_CLASS_CACHED_DERIVED);
+      expect(result._meta.artifactClass).toBe(SURFACE_CLASS_CACHED_DERIVED);
     });
 
     it("handles non-object input", () => {
@@ -203,7 +203,7 @@ describe("surface class metadata", () => {
       );
       expect(written.schemaVersion).toBe(WAVE_STATE_SCHEMA_VERSION);
       expect(written.kind).toBe(WAVE_STATE_KIND);
-      expect(written._meta.surfaceClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
+      expect(written._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
       expect(written.lane).toBe("main");
       expect(written.wave).toBe(2);
 
@@ -214,7 +214,7 @@ describe("surface class metadata", () => {
       const readBack = readWaveStateSnapshot(filePath, { lane: "main", wave: 2 });
       expect(readBack.schemaVersion).toBe(WAVE_STATE_SCHEMA_VERSION);
       expect(readBack.kind).toBe(WAVE_STATE_KIND);
-      expect(readBack._meta.surfaceClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
+      expect(readBack._meta.artifactClass).toBe(SURFACE_CLASS_CANONICAL_SNAPSHOT);
       expect(readBack.lane).toBe("main");
       expect(readBack.wave).toBe(2);
       expect(readBack.status).toBe("completed");

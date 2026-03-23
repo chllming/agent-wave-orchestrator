@@ -145,9 +145,10 @@ import {
   resolveRetryOverrideRuns,
   waveRelaunchPlanPath,
 } from "./retry-control.mjs";
-import { appendWaveControlEvent } from "./control-plane.mjs";
+import { appendWaveControlEvent, readControlPlaneEvents } from "./control-plane.mjs";
 import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { flushWaveControlQueue } from "./wave-control-client.mjs";
+import { reduceWaveState } from "./wave-state-reducer.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 import { readProjectProfile, resolveDefaultTerminalSurface } from "./project-profile.mjs";
 import {
@@ -167,9 +168,11 @@ import {
   writeDependencySnapshotMarkdown,
 } from "./routing-state.mjs";
 import {
+  readWaveStateSnapshot,
   writeAssignmentSnapshot,
   writeDependencySnapshot,
   writeRelaunchPlan,
+  writeWaveStateSnapshot,
 } from "./artifact-schemas.mjs";
 import {
   collectUnexpectedSessionFailures as collectUnexpectedSessionFailuresImpl,
@@ -238,6 +241,7 @@ export {
 
 // --- Re-exports from launcher-retry.mjs ---
 import {
+  buildResumePlan,
   readWaveRelaunchPlan,
   writeWaveRelaunchPlan,
   clearWaveRelaunchPlan,
@@ -2408,4 +2412,127 @@ export async function runLauncherCli(argv) {
       releaseLauncherLock(lanePaths.launcherLockPath);
     }
   }
+}
+
+/**
+ * Compute and persist a reducer snapshot alongside the traditional gate evaluation.
+ * Shadow mode: the reducer runs and its output is written to disk, but decisions
+ * still come from the traditional gate readers. This enables comparison and validation.
+ *
+ * @param {object} params
+ * @param {object} params.lanePaths
+ * @param {object} params.wave - Wave definition
+ * @param {object} params.agentRuns - Array of run info objects
+ * @param {object} params.derivedState - Current derived state
+ * @param {number} params.attempt - Current attempt number
+ * @param {object} params.options - Launcher options
+ * @returns {object} { reducerState, resumePlan, snapshotPath }
+ */
+export function computeReducerSnapshot({
+  lanePaths,
+  wave,
+  agentRuns,
+  derivedState,
+  attempt,
+  options = {},
+}) {
+  // Build agentResults from agentRuns
+  const agentResults = {};
+  for (const run of agentRuns) {
+    const summary = readRunExecutionSummary(run, wave);
+    if (summary) {
+      agentResults[run.agent.agentId] = summary;
+    }
+  }
+
+  // Load canonical event sources
+  const controlPlaneLogPath = path.join(
+    lanePaths.controlPlaneDir,
+    `wave-${wave.wave}.jsonl`,
+  );
+  const controlPlaneEvents = fs.existsSync(controlPlaneLogPath)
+    ? readControlPlaneEvents(controlPlaneLogPath)
+    : [];
+
+  const coordinationLogPath = path.join(
+    lanePaths.coordinationDir,
+    `wave-${wave.wave}.jsonl`,
+  );
+  const coordinationRecords = fs.existsSync(coordinationLogPath)
+    ? readMaterializedCoordinationState(coordinationLogPath)
+    : null;
+
+  const feedbackRequests = readWaveHumanFeedbackRequests({
+    feedbackRequestsDir: lanePaths.feedbackRequestsDir,
+    lane: lanePaths.lane,
+    waveNumber: wave.wave,
+    agentIds: (agentRuns || []).map((run) => run.agent.agentId),
+    orchestratorId: options.orchestratorId,
+  });
+
+  // Build dependency tickets from derivedState
+  const dependencyTickets = derivedState?.dependencySnapshot || null;
+
+  // Run the reducer
+  const reducerState = reduceWaveState({
+    controlPlaneEvents,
+    coordinationRecords: coordinationRecords?.latestRecords || [],
+    agentResults,
+    waveDefinition: wave,
+    dependencyTickets,
+    feedbackRequests: feedbackRequests || [],
+    laneConfig: {
+      lane: lanePaths.lane,
+      contQaAgentId: lanePaths.contQaAgentId || "A0",
+      contEvalAgentId: lanePaths.contEvalAgentId || "E0",
+      integrationAgentId: lanePaths.integrationAgentId || "A8",
+      documentationAgentId: lanePaths.documentationAgentId || "A9",
+      validationMode: "live",
+      evalTargets: wave.evalTargets,
+      benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
+      laneProfile: lanePaths.laneProfile,
+      requireIntegrationStewardFromWave: lanePaths.requireIntegrationStewardFromWave,
+    },
+  });
+
+  // Build resume plan
+  const resumePlan = buildResumePlan(reducerState, {
+    waveDefinition: wave,
+    lanePaths,
+  });
+
+  // Persist snapshot
+  const stateDir = path.join(lanePaths.stateDir, "reducer");
+  ensureDirectory(stateDir);
+  const snapshotPath = path.join(stateDir, `wave-${wave.wave}.json`);
+  writeWaveStateSnapshot(snapshotPath, {
+    ...reducerState,
+    attempt,
+    resumePlan,
+  }, {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+  });
+
+  return {
+    reducerState,
+    resumePlan,
+    snapshotPath,
+  };
+}
+
+/**
+ * Read a previously persisted reducer snapshot from disk.
+ *
+ * @param {object} lanePaths
+ * @param {number} waveNumber
+ * @returns {object|null} The persisted snapshot, or null if not found
+ */
+export function readPersistedReducerSnapshot(lanePaths, waveNumber) {
+  const stateDir = path.join(lanePaths.stateDir, "reducer");
+  const snapshotPath = path.join(stateDir, `wave-${waveNumber}.json`);
+  return readWaveStateSnapshot(snapshotPath, {
+    lane: lanePaths.lane,
+    wave: waveNumber,
+  });
 }

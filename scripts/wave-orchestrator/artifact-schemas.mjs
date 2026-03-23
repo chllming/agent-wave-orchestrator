@@ -404,24 +404,31 @@ export function cloneArtifactPayload(value) {
   return cloneJson(value);
 }
 
-// ── Wave 4: Surface class metadata and additional schema normalizers ──
+// ── Wave 4: Artifact class metadata and additional schema normalizers ──
 
 export const WAVE_STATE_SCHEMA_VERSION = 1;
 export const TASK_ENTITY_SCHEMA_VERSION = 1;
-export const AGENT_RESULT_ENVELOPE_SCHEMA_VERSION = 1;
+export const AGENT_RESULT_ENVELOPE_SCHEMA_VERSION = 2;
 export const RESUME_PLAN_SCHEMA_VERSION = 1;
 export const HUMAN_INPUT_WORKFLOW_SCHEMA_VERSION = 1;
 
-export const SURFACE_CLASS_CANONICAL_EVENT = "canonical-event";
-export const SURFACE_CLASS_CANONICAL_SNAPSHOT = "canonical-snapshot";
-export const SURFACE_CLASS_CACHED_DERIVED = "cached-derived";
-export const SURFACE_CLASS_HUMAN_PROJECTION = "human-projection";
-export const SURFACE_CLASSES = new Set([
-  SURFACE_CLASS_CANONICAL_EVENT,
-  SURFACE_CLASS_CANONICAL_SNAPSHOT,
-  SURFACE_CLASS_CACHED_DERIVED,
-  SURFACE_CLASS_HUMAN_PROJECTION,
+export const ARTIFACT_CLASS_CANONICAL_EVENT = "canonical-event";
+export const ARTIFACT_CLASS_CANONICAL_SNAPSHOT = "canonical-snapshot";
+export const ARTIFACT_CLASS_DERIVED_CACHE = "derived-cache";
+export const ARTIFACT_CLASS_HUMAN_PROJECTION = "human-projection";
+export const ARTIFACT_CLASSES = new Set([
+  ARTIFACT_CLASS_CANONICAL_EVENT,
+  ARTIFACT_CLASS_CANONICAL_SNAPSHOT,
+  ARTIFACT_CLASS_DERIVED_CACHE,
+  ARTIFACT_CLASS_HUMAN_PROJECTION,
 ]);
+
+// Backward-compat aliases
+export const SURFACE_CLASS_CANONICAL_EVENT = ARTIFACT_CLASS_CANONICAL_EVENT;
+export const SURFACE_CLASS_CANONICAL_SNAPSHOT = ARTIFACT_CLASS_CANONICAL_SNAPSHOT;
+export const SURFACE_CLASS_CACHED_DERIVED = ARTIFACT_CLASS_DERIVED_CACHE;
+export const SURFACE_CLASS_HUMAN_PROJECTION = ARTIFACT_CLASS_HUMAN_PROJECTION;
+export const SURFACE_CLASSES = ARTIFACT_CLASSES;
 
 export const WAVE_STATE_KIND = "wave-state-snapshot";
 export const TASK_ENTITY_KIND = "wave-task-entity";
@@ -432,15 +439,12 @@ export const HUMAN_INPUT_WORKFLOW_KIND = "human-input-workflow-state";
 export function normalizeWaveStateSnapshot(payload, defaults = {}) {
   const source = isPlainObject(payload) ? payload : {};
   return {
-    schemaVersion: WAVE_STATE_SCHEMA_VERSION,
-    kind: WAVE_STATE_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT },
-    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
-    wave: normalizeInteger(source.wave, normalizeInteger(defaults.wave, null)),
     ...source,
     schemaVersion: WAVE_STATE_SCHEMA_VERSION,
     kind: WAVE_STATE_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT },
+    _meta: { artifactClass: ARTIFACT_CLASS_CANONICAL_SNAPSHOT, schemaVersion: WAVE_STATE_SCHEMA_VERSION, generatedAt: normalizeText(source.generatedAt, toIsoTimestamp()), source: "wave-state-reducer" },
+    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
+    wave: normalizeInteger(source.wave, normalizeInteger(defaults.wave, null)),
     generatedAt: normalizeText(source.generatedAt, toIsoTimestamp()),
   };
 }
@@ -462,25 +466,19 @@ export function writeWaveStateSnapshot(filePath, payload, defaults = {}) {
 export function normalizeAgentResultEnvelope(payload) {
   const source = isPlainObject(payload) ? payload : {};
   return {
-    schemaVersion: AGENT_RESULT_ENVELOPE_SCHEMA_VERSION,
-    kind: AGENT_RESULT_ENVELOPE_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT },
     ...source,
     schemaVersion: AGENT_RESULT_ENVELOPE_SCHEMA_VERSION,
     kind: AGENT_RESULT_ENVELOPE_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CANONICAL_SNAPSHOT },
+    _meta: { artifactClass: ARTIFACT_CLASS_CANONICAL_SNAPSHOT, schemaVersion: AGENT_RESULT_ENVELOPE_SCHEMA_VERSION },
   };
 }
 
 export function normalizeResumePlan(payload) {
   const source = isPlainObject(payload) ? payload : {};
   return {
-    schemaVersion: RESUME_PLAN_SCHEMA_VERSION,
-    kind: RESUME_PLAN_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CACHED_DERIVED },
     ...source,
     schemaVersion: RESUME_PLAN_SCHEMA_VERSION,
     kind: RESUME_PLAN_KIND,
-    _meta: { surfaceClass: SURFACE_CLASS_CACHED_DERIVED },
+    _meta: { artifactClass: ARTIFACT_CLASS_DERIVED_CACHE, schemaVersion: RESUME_PLAN_SCHEMA_VERSION },
   };
 }

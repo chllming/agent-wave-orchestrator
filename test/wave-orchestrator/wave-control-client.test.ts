@@ -24,6 +24,9 @@ function makeLanePaths(dir, waveControl = {}) {
     lane: "main",
     runKind: "roadmap",
     runId: null,
+    projectId: "wave-orchestration",
+    runtimeVersion: "0.7.0",
+    orchestratorId: "main-orch-1",
     controlPlaneDir: path.join(dir, "control-plane"),
     telemetryDir: path.join(dir, "control-plane", "telemetry"),
     waveControl: {
@@ -81,6 +84,11 @@ describe("wave-control client", () => {
     });
 
     expect(event?.entityType).toBe("wave_run");
+    expect(event?.identity).toMatchObject({
+      projectId: "wave-orchestration",
+      orchestratorId: "main-orch-1",
+      runtimeVersion: "0.7.0",
+    });
     const state = readWaveControlQueueState(lanePaths);
     expect(state.pendingCount).toBe(1);
     expect(fs.existsSync(path.join(lanePaths.telemetryDir, "events.jsonl"))).toBe(true);

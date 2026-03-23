@@ -396,6 +396,7 @@ function parseArgs(argv) {
     };
   }
   options.orchestratorId ||= sanitizeOrchestratorId(`${lanePaths.lane}-orch-${process.pid}`);
+  lanePaths.orchestratorId = options.orchestratorId;
   if (options.agentRateLimitMaxDelaySeconds < options.agentRateLimitBaseDelaySeconds) {
     throw new Error(
       "--agent-rate-limit-max-delay-seconds must be >= --agent-rate-limit-base-delay-seconds",

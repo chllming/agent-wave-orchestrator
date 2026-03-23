@@ -34,11 +34,14 @@ async function readJsonBody(req) {
 function queryFilters(url) {
   return {
     workspaceId: url.searchParams.get("workspaceId") || undefined,
+    projectId: url.searchParams.get("projectId") || undefined,
     runKind: url.searchParams.get("runKind") || undefined,
     runId: url.searchParams.get("runId") || undefined,
     lane: url.searchParams.get("lane") || undefined,
     wave:
       url.searchParams.get("wave") === null ? undefined : Number(url.searchParams.get("wave")),
+    orchestratorId: url.searchParams.get("orchestratorId") || undefined,
+    runtimeVersion: url.searchParams.get("runtimeVersion") || undefined,
     benchmarkRunId: url.searchParams.get("benchmarkRunId") || undefined,
   };
 }

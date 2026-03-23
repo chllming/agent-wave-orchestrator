@@ -168,6 +168,7 @@ export function normalizeWaveControlRunIdentity(rawIdentity = {}, defaults = {})
   const fallback = normalizePlainObject(defaults);
   return {
     workspaceId: normalizeText(source.workspaceId, normalizeText(fallback.workspaceId, null)),
+    projectId: normalizeText(source.projectId, normalizeText(fallback.projectId, null)),
     runId: normalizeText(source.runId, normalizeText(fallback.runId, null)),
     runKind: normalizeWaveControlRunKind(
       source.runKind,
@@ -181,6 +182,14 @@ export function normalizeWaveControlRunIdentity(rawIdentity = {}, defaults = {})
       normalizeNonNegativeInt(fallback.attempt, null),
     ),
     agentId: normalizeText(source.agentId, normalizeText(fallback.agentId, null)),
+    orchestratorId: normalizeText(
+      source.orchestratorId,
+      normalizeText(fallback.orchestratorId, null),
+    ),
+    runtimeVersion: normalizeText(
+      source.runtimeVersion,
+      normalizeText(fallback.runtimeVersion, null),
+    ),
     benchmarkRunId: normalizeText(
       source.benchmarkRunId,
       normalizeText(fallback.benchmarkRunId, null),
@@ -245,12 +254,15 @@ export function normalizeWaveControlEventEnvelope(rawEvent = {}, defaults = {}) 
     source.identity,
     fallback.identity || {
       workspaceId: fallback.workspaceId,
+      projectId: fallback.projectId,
       runId: fallback.runId,
       runKind: fallback.runKind,
       lane: fallback.lane,
       wave: fallback.wave,
       attempt: fallback.attempt,
       agentId: fallback.agentId,
+      orchestratorId: fallback.orchestratorId,
+      runtimeVersion: fallback.runtimeVersion,
       benchmarkRunId: fallback.benchmarkRunId,
       benchmarkItemId: fallback.benchmarkItemId,
     },
@@ -267,10 +279,13 @@ export function normalizeWaveControlEventEnvelope(rawEvent = {}, defaults = {}) 
         "wctl",
         stableJsonStringify({
           workspaceId: identity.workspaceId,
+          projectId: identity.projectId,
           runId: identity.runId,
           lane: identity.lane,
           wave: identity.wave,
           attempt: identity.attempt,
+          orchestratorId: identity.orchestratorId,
+          runtimeVersion: identity.runtimeVersion,
           entityType,
           entityId,
           action,

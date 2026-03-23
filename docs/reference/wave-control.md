@@ -39,6 +39,34 @@ This lets the control plane answer:
 - whether a benchmark result is comparison-valid or only diagnostic
 - which coordination failures blocked closure
 
+## Run Identity
+
+Every Wave Control event carries a normalized run identity.
+
+The key fields are:
+
+- `workspaceId`
+- `projectId`
+- `runKind`
+- `runId`
+- `lane`
+- `wave`
+- `attempt`
+- `agentId`
+- `orchestratorId`
+- `runtimeVersion`
+- `benchmarkRunId`
+- `benchmarkItemId`
+
+Why these fields matter:
+
+- `workspaceId` separates whole adopted workspaces
+- `projectId` separates product or repo identities inside one control plane
+- `orchestratorId` separates resident orchestrators or control-plane owners
+- `runtimeVersion` lets operators compare behavior across Wave releases without guessing from deploy timestamps
+
+These are first-class query dimensions in the service, not only free-form event payload fields.
+
 ## Proof Signals
 
 Wave Control is intended to make the main README claims measurable.
@@ -94,6 +122,7 @@ Upload policy meanings:
   "waveControl": {
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "workspaceId": "my-workspace",
+    "projectId": "wave-orchestration",
     "authTokenEnvVar": "WAVE_CONTROL_AUTH_TOKEN",
     "reportMode": "metadata-plus-selected",
     "uploadArtifactKinds": [
@@ -129,3 +158,7 @@ Wave Control reporting should:
 The Railway-hosted `services/wave-control` service is an analysis surface, not the scheduler of record.
 
 The service package lives under `services/wave-control/`.
+
+For durable telemetry retention, attach Railway Postgres to `wave-control` so the
+service receives `DATABASE_URL`. Without that variable, the service falls back to the
+in-memory store and only keeps data until the process restarts.

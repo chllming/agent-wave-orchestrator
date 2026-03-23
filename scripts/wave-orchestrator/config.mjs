@@ -546,6 +546,7 @@ function normalizeWaveControl(rawWaveControl = {}, label = "waveControl") {
     enabled,
     endpoint: normalizeOptionalString(waveControl.endpoint, null),
     workspaceId: normalizeOptionalString(waveControl.workspaceId, null),
+    projectId: normalizeOptionalString(waveControl.projectId, null),
     authTokenEnvVar:
       normalizeOptionalString(waveControl.authTokenEnvVar, DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR) ||
       DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,

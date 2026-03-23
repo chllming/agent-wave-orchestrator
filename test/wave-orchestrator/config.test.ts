@@ -133,6 +133,7 @@ describe("runtime configuration normalization", () => {
           waveControl: {
             endpoint: "https://wave-control.example/api/v1",
             workspaceId: "wave-control-workspace",
+            projectId: "wave-orchestration",
             authTokenEnvVar: "CUSTOM_WAVE_CONTROL_TOKEN",
             uploadArtifactKinds: ["trace-quality", "trace-outcome"],
             requestTimeoutMs: 9000,
@@ -276,6 +277,7 @@ describe("runtime configuration normalization", () => {
       enabled: true,
       endpoint: "https://wave-control.example/api/v1",
       workspaceId: "wave-control-workspace",
+      projectId: "wave-orchestration",
       authTokenEnvVar: "CUSTOM_WAVE_CONTROL_TOKEN",
       reportMode: "metadata-plus-selected",
       uploadArtifactKinds: ["trace-quality", "trace-outcome"],
@@ -286,6 +288,7 @@ describe("runtime configuration normalization", () => {
       enabled: true,
       endpoint: "https://wave-control.example/api/v1",
       workspaceId: "wave-control-workspace",
+      projectId: "wave-orchestration",
       uploadArtifactKinds: ["trace-quality", "benchmark-results"],
       captureBenchmarkRuns: false,
     });

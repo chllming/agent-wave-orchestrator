@@ -86,9 +86,12 @@ test("health is public and ingest requires bearer auth", async (t) => {
           action: "completed",
           identity: {
             workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
             runKind: "roadmap",
             lane: "main",
             wave: 1,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
           },
           tags: ["runtime"],
           data: {
@@ -133,9 +136,12 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
           action: "completed",
           identity: {
             workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
             runKind: "roadmap",
             lane: "main",
             wave: 1,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
           },
           data: {
             waveId: "wave-1",
@@ -166,8 +172,11 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
           action: "completed",
           identity: {
             workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
             runKind: "benchmark",
             benchmarkRunId: "bench-1",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
           },
           data: {
             adapter: { id: "swe-bench-pro" },
@@ -186,9 +195,12 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
           action: "review-only",
           identity: {
             workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
             runKind: "benchmark",
             benchmarkRunId: "bench-1",
             benchmarkItemId: "task-1:full-wave",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
           },
           data: {
             reviewValidity: "review-only",
@@ -200,41 +212,50 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
   assert.equal(batchResponse.status, 200);
 
   const headers = { authorization: "Bearer test-token" };
-  const runs = await fetch(`${app.baseUrl}/api/v1/runs?workspaceId=workspace-1`, { headers });
+  const runs = await fetch(
+    `${app.baseUrl}/api/v1/runs?workspaceId=workspace-1&projectId=wave-orchestration&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
+    { headers },
+  );
   assert.equal(runs.status, 200);
   const runList = await runs.json();
   assert.equal(runList.length, 1);
   assert.equal(runList[0].status, "completed");
+  assert.equal(runList[0].projectId, "wave-orchestration");
+  assert.equal(runList[0].orchestratorId, "main-orch-1");
+  assert.equal(runList[0].runtimeVersion, "0.7.0");
 
   const runDetail = await fetch(
-    `${app.baseUrl}/api/v1/run?workspaceId=workspace-1&lane=main&wave=1`,
+    `${app.baseUrl}/api/v1/run?workspaceId=workspace-1&projectId=wave-orchestration&lane=main&wave=1&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
     { headers },
   );
   assert.equal(runDetail.status, 200);
   const runPayload = await runDetail.json();
   assert.equal(runPayload.summary.wave, 1);
+  assert.equal(runPayload.summary.projectId, "wave-orchestration");
   assert.equal(runPayload.artifacts.length, 1);
 
   const benchmarks = await fetch(
-    `${app.baseUrl}/api/v1/benchmarks?workspaceId=workspace-1`,
+    `${app.baseUrl}/api/v1/benchmarks?workspaceId=workspace-1&projectId=wave-orchestration&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
     { headers },
   );
   assert.equal(benchmarks.status, 200);
   const benchmarkList = await benchmarks.json();
   assert.equal(benchmarkList.length, 1);
   assert.equal(benchmarkList[0].benchmarkRunId, "bench-1");
+  assert.equal(benchmarkList[0].projectId, "wave-orchestration");
 
   const benchmarkDetail = await fetch(
-    `${app.baseUrl}/api/v1/benchmark?workspaceId=workspace-1&benchmarkRunId=bench-1`,
+    `${app.baseUrl}/api/v1/benchmark?workspaceId=workspace-1&projectId=wave-orchestration&benchmarkRunId=bench-1&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
     { headers },
   );
   assert.equal(benchmarkDetail.status, 200);
   const benchmarkPayload = await benchmarkDetail.json();
   assert.equal(benchmarkPayload.summary.benchmarkRunId, "bench-1");
+  assert.equal(benchmarkPayload.summary.runtimeVersion, "0.7.0");
   assert.equal(benchmarkPayload.reviews.length, 1);
 
   const analytics = await fetch(
-    `${app.baseUrl}/api/v1/analytics/overview?workspaceId=workspace-1`,
+    `${app.baseUrl}/api/v1/analytics/overview?workspaceId=workspace-1&projectId=wave-orchestration&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
     { headers },
   );
   assert.equal(analytics.status, 200);

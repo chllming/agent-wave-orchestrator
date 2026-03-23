@@ -29,10 +29,13 @@ function runKey(event) {
   const identity = event.identity || {};
   return JSON.stringify({
     workspaceId: identity.workspaceId || "",
+    projectId: identity.projectId || "",
     runKind: identity.runKind || "",
     runId: identity.runId || "",
     lane: identity.lane || "",
     wave: identity.wave ?? null,
+    orchestratorId: identity.orchestratorId || "",
+    runtimeVersion: identity.runtimeVersion || "",
   });
 }
 
@@ -40,13 +43,19 @@ function benchmarkRunKey(event) {
   const identity = event.identity || {};
   return JSON.stringify({
     workspaceId: identity.workspaceId || "",
+    projectId: identity.projectId || "",
     benchmarkRunId: identity.benchmarkRunId || "",
+    orchestratorId: identity.orchestratorId || "",
+    runtimeVersion: identity.runtimeVersion || "",
   });
 }
 
 function matchesRunFilters(event, filters = {}) {
   const identity = event.identity || {};
   if (filters.workspaceId && identity.workspaceId !== filters.workspaceId) {
+    return false;
+  }
+  if (filters.projectId && identity.projectId !== filters.projectId) {
     return false;
   }
   if (filters.runKind && identity.runKind !== filters.runKind) {
@@ -61,6 +70,12 @@ function matchesRunFilters(event, filters = {}) {
   if (filters.wave != null && Number(identity.wave) !== Number(filters.wave)) {
     return false;
   }
+  if (filters.orchestratorId && identity.orchestratorId !== filters.orchestratorId) {
+    return false;
+  }
+  if (filters.runtimeVersion && identity.runtimeVersion !== filters.runtimeVersion) {
+    return false;
+  }
   return true;
 }
 
@@ -69,7 +84,16 @@ function matchesBenchmarkFilters(event, filters = {}) {
   if (filters.workspaceId && identity.workspaceId !== filters.workspaceId) {
     return false;
   }
+  if (filters.projectId && identity.projectId !== filters.projectId) {
+    return false;
+  }
   if (filters.benchmarkRunId && identity.benchmarkRunId !== filters.benchmarkRunId) {
+    return false;
+  }
+  if (filters.orchestratorId && identity.orchestratorId !== filters.orchestratorId) {
+    return false;
+  }
+  if (filters.runtimeVersion && identity.runtimeVersion !== filters.runtimeVersion) {
     return false;
   }
   return true;
@@ -97,10 +121,13 @@ function summarizeRunEvents(events) {
   const identity = latest.identity || first.identity || {};
   return {
     workspaceId: identity.workspaceId || null,
+    projectId: identity.projectId || null,
     runKind: identity.runKind || null,
     runId: identity.runId || null,
     lane: identity.lane || null,
     wave: identity.wave ?? null,
+    orchestratorId: identity.orchestratorId || null,
+    runtimeVersion: identity.runtimeVersion || null,
     startedAt: first.recordedAt || null,
     updatedAt: latest.recordedAt || null,
     status: waveRun?.action || latest.action || "unknown",
@@ -174,7 +201,10 @@ function summarizeBenchmarkEvents(events) {
   }
   return {
     workspaceId: identity.workspaceId || null,
+    projectId: identity.projectId || null,
     benchmarkRunId: identity.benchmarkRunId || null,
+    orchestratorId: identity.orchestratorId || null,
+    runtimeVersion: identity.runtimeVersion || null,
     startedAt: first.recordedAt || null,
     updatedAt: latest.recordedAt || null,
     action: runEvent?.action || latest.action || "unknown",
@@ -226,9 +256,22 @@ export function getBenchmarkRunDetail(events, filters = {}) {
 }
 
 export function buildAnalyticsOverview(events, filters = {}) {
-  const filtered = filters.workspaceId
-    ? events.filter((event) => event.identity?.workspaceId === filters.workspaceId)
-    : events;
+  const filtered = events.filter((event) => {
+    const identity = event.identity || {};
+    if (filters.workspaceId && identity.workspaceId !== filters.workspaceId) {
+      return false;
+    }
+    if (filters.projectId && identity.projectId !== filters.projectId) {
+      return false;
+    }
+    if (filters.orchestratorId && identity.orchestratorId !== filters.orchestratorId) {
+      return false;
+    }
+    if (filters.runtimeVersion && identity.runtimeVersion !== filters.runtimeVersion) {
+      return false;
+    }
+    return true;
+  });
   const runSummaries = listRunSummaries(filtered, filters);
   const benchmarkRuns = listBenchmarkRunSummaries(filtered, filters);
   const reviewValidityCounts = {};

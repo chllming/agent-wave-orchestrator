@@ -32,6 +32,10 @@ Optional Postgres:
 - `PGSSL`
 - `WAVE_CONTROL_DB_MAX_CONNECTIONS`
 
+For production on Railway, attach a Postgres service and expose its `DATABASE_URL` to
+`wave-control`. When `DATABASE_URL` is unset, the service falls back to the in-memory
+store and telemetry is not durable across restarts.
+
 Optional S3-compatible bucket:
 
 - `WAVE_CONTROL_BUCKET_NAME`
@@ -78,6 +82,27 @@ Authenticated reads:
 - Inline artifact uploads are persisted in Postgres when bucket storage is unavailable.
 - When a bucket is configured, inline artifact bodies are moved to object storage and exposed through signed or public download URLs.
 
+## Indexed Identity Dimensions
+
+Wave Control stores and filters telemetry by the run identity carried on each event.
+
+The core dimensions are:
+
+- `workspaceId`
+- `projectId`
+- `runKind`
+- `runId`
+- `lane`
+- `wave`
+- `orchestratorId`
+- `runtimeVersion`
+- `benchmarkRunId`
+- `benchmarkItemId`
+
+This allows the service to separate telemetry by repository/workspace, product/project,
+resident orchestrator identity, and installed Wave runtime version without relying on
+free-form event payloads.
+
 ## Railway Notes
 
 Point Railway at `services/wave-control` as the service root.
@@ -87,3 +112,9 @@ The included `railway.json` starts the service with:
 ```bash
 node src/server.mjs
 ```
+
+Recommended Railway service variables:
+
+- `DATABASE_URL` from the attached Postgres service
+- `WAVE_CONTROL_API_TOKEN` for authenticated ingest
+- optional `PGSSL=true` if your connection mode requires it

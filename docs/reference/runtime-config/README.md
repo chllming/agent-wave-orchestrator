@@ -86,6 +86,7 @@ Supported top-level fields:
 | `enabled` | boolean | `true` | Master switch for local queueing and remote delivery |
 | `endpoint` | string | unset | Base URL for the Railway-hosted `services/wave-control` API |
 | `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
+| `projectId` | string | derived from `projectName` | Stable project/repo identity used for cross-workspace reporting and filtering |
 | `authTokenEnvVar` | string | `WAVE_CONTROL_AUTH_TOKEN` | Environment variable name holding the bearer token |
 | `reportMode` | string | `metadata-plus-selected` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
 | `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload when an artifact's upload policy requests a body |
@@ -110,6 +111,7 @@ Example:
   "waveControl": {
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "workspaceId": "wave-main",
+    "projectId": "wave-orchestration",
     "reportMode": "metadata-plus-selected",
     "uploadArtifactKinds": [
       "trace-run-metadata",
@@ -119,6 +121,14 @@ Example:
   }
 }
 ```
+
+Runtime-emitted Wave Control events also attach:
+
+- `orchestratorId` from the active launcher or resident orchestrator
+- `runtimeVersion` from the installed Wave package metadata
+
+Those fields are queryable in the `wave-control` service alongside `workspaceId`,
+`projectId`, `runKind`, `runId`, `lane`, and benchmark ids.
 
 See [../wave-control.md](../wave-control.md) for the event contract and upload-policy model.
 

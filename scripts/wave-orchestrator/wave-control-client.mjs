@@ -11,11 +11,22 @@ import {
   normalizeWaveControlArtifactDescriptor,
   normalizeWaveControlEventEnvelope,
 } from "./wave-control-schema.mjs";
+import { readInstalledPackageMetadata } from "./package-version.mjs";
 
 const MAX_INLINE_ARTIFACT_BYTES = 512 * 1024;
 
 function normalizeText(value, fallback = null) {
   const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
+
+function normalizeTelemetryId(value, fallback = null) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return normalized || fallback;
 }
 
@@ -106,6 +117,23 @@ function resolveWaveControlConfig(lanePaths, overrides = {}) {
 
 function buildWorkspaceId(lanePaths, config) {
   return normalizeText(config.workspaceId, buildWorkspaceTmuxToken(REPO_ROOT));
+}
+
+function buildProjectId(lanePaths, config) {
+  const projectName =
+    lanePaths?.projectId ||
+    config.projectId ||
+    lanePaths?.config?.projectId ||
+    lanePaths?.config?.projectName ||
+    path.basename(REPO_ROOT);
+  return normalizeTelemetryId(projectName, "wave");
+}
+
+function buildRuntimeVersion(lanePaths) {
+  return normalizeText(
+    lanePaths?.runtimeVersion,
+    normalizeText(readInstalledPackageMetadata()?.version, null),
+  );
 }
 
 function shouldUploadArtifactBody(descriptor, config) {
@@ -257,9 +285,12 @@ export function queueWaveControlEvent(lanePaths, rawEvent, options = {}) {
       ...rawEvent,
       identity: {
         workspaceId: buildWorkspaceId(lanePaths, config),
+        projectId: buildProjectId(lanePaths, config),
         runId: lanePaths?.runId || null,
         runKind: lanePaths?.runKind || "roadmap",
         lane: lanePaths?.lane || null,
+        orchestratorId: lanePaths?.orchestratorId || null,
+        runtimeVersion: buildRuntimeVersion(lanePaths),
         ...(rawEvent?.identity || {}),
       },
       data: {

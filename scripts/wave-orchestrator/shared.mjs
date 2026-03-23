@@ -112,6 +112,21 @@ export function buildWorkspaceTmuxToken(workspaceRoot = REPO_ROOT) {
   return `${repoBase}_${repoHash}`;
 }
 
+function buildTelemetryProjectId(config) {
+  return (
+    String(config?.waveControl?.projectId || config?.projectId || config?.projectName || path.basename(REPO_ROOT))
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || "wave"
+  );
+}
+
+function readRuntimeVersion() {
+  return String(readJsonOrNull(path.join(PACKAGE_ROOT, "package.json"))?.version || "").trim() || null;
+}
+
 export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
   const config = options.config || loadWaveConfig();
   const baseLaneProfile = resolveLaneProfile(config, laneInput || config.defaultLane);
@@ -231,6 +246,9 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     executors: laneProfile.executors,
     skills: laneProfile.skills,
     capabilityRouting: laneProfile.capabilityRouting,
+    projectId: buildTelemetryProjectId(config),
+    runtimeVersion: readRuntimeVersion(),
+    orchestratorId: null,
     waveControl: laneProfile.waveControl,
     defaultManifestPath: path.join(stateDir, "waves.manifest.json"),
     defaultRunStatePath: path.join(stateDir, "run-state.json"),

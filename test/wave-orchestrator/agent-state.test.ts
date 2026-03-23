@@ -474,6 +474,11 @@ describe("validateImplementationSummary", () => {
       logPath,
     });
 
+    expect(summary).toMatchObject({
+      terminationReason: "max-turns",
+      terminationObservedTurnLimit: 12,
+    });
+
     expect(
       validateImplementationSummary(
         {

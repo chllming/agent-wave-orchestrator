@@ -59,6 +59,21 @@ function packagedPlannerContextFiles() {
   return files.toSorted();
 }
 
+function removePlannerStarterSurface(repoDir) {
+  fs.rmSync(path.join(repoDir, "docs", "agents", "wave-planner-role.md"), { force: true });
+  fs.rmSync(path.join(repoDir, "skills", "role-planner"), { recursive: true, force: true });
+  fs.rmSync(path.join(repoDir, "docs", "context7", "planner-agent"), { recursive: true, force: true });
+  fs.rmSync(path.join(repoDir, "docs", "reference", "wave-planning-lessons.md"), { force: true });
+  const bundlesPath = path.join(repoDir, "docs", "context7", "bundles.json");
+  if (fs.existsSync(bundlesPath)) {
+    const bundles = JSON.parse(fs.readFileSync(bundlesPath, "utf8"));
+    if (bundles && typeof bundles === "object" && bundles.bundles && typeof bundles.bundles === "object") {
+      delete bundles.bundles["planner-agentic"];
+      fs.writeFileSync(bundlesPath, `${JSON.stringify(bundles, null, 2)}\n`, "utf8");
+    }
+  }
+}
+
 function runWaveCli(args, options = {}) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd: options.cwd || REPO_ROOT,
@@ -298,6 +313,29 @@ describe("wave upgrade", () => {
       "No repo-owned plans, waves, role prompts, or config files were overwritten.",
     );
   });
+
+  it("adds planner follow-up guidance for adopted repos missing the planner starter surface", () => {
+    const repoDir = makeTempRepo();
+    expect(runWaveCli(["init"], { cwd: repoDir }).status).toBe(0);
+    removePlannerStarterSurface(repoDir);
+
+    const installStatePath = path.join(repoDir, ".wave", "install-state.json");
+    const installState = JSON.parse(fs.readFileSync(installStatePath, "utf8"));
+    installState.initMode = "adopt-existing";
+    installState.installedVersion = "0.6.3";
+    fs.writeFileSync(installStatePath, `${JSON.stringify(installState, null, 2)}\n`, "utf8");
+
+    const upgradeResult = runWaveCli(["upgrade"], { cwd: repoDir });
+
+    expect(upgradeResult.status).toBe(0);
+    const historyDir = path.join(repoDir, ".wave", "upgrade-history");
+    const reports = fs.readdirSync(historyDir).filter((fileName) => fileName.endsWith(".md"));
+    expect(reports.length).toBe(1);
+    const reportText = fs.readFileSync(path.join(historyDir, reports[0]), "utf8");
+    expect(reportText).toContain("## Adopted Repo Follow-Up");
+    expect(reportText).toContain("wave upgrade` does not copy new planner starter docs, skills, or Context7 bundle entries into adopted repos");
+    expect(reportText).toContain("docs/context7/bundles.json#planner-agentic");
+  });
 });
 
 describe("wave doctor", () => {
@@ -342,6 +380,30 @@ describe("wave doctor", () => {
         "Missing recommended .gitignore entry: .vscode/terminals.json",
       ]),
     );
+  });
+
+  it("groups missing planner starter surface into one doctor error", () => {
+    const repoDir = makeTempRepo();
+    expect(runWaveCli(["init"], { cwd: repoDir }).status).toBe(0);
+    removePlannerStarterSurface(repoDir);
+
+    const doctorResult = runWaveCli(["doctor", "--json"], { cwd: repoDir });
+
+    expect(doctorResult.status).toBe(0);
+    const payload = JSON.parse(doctorResult.stdout);
+    expect(payload.ok).toBe(false);
+    expect(payload.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Planner starter surface is incomplete for 0.7.x workspaces."),
+      ]),
+    );
+    const combinedErrors = payload.errors.join("\n");
+    expect(combinedErrors).toContain("docs/agents/wave-planner-role.md");
+    expect(combinedErrors).toContain("skills/role-planner/");
+    expect(combinedErrors).toContain("docs/context7/planner-agent/");
+    expect(combinedErrors).toContain("docs/reference/wave-planning-lessons.md");
+    expect(combinedErrors).toContain("docs/context7/bundles.json#planner-agentic");
+    expect(combinedErrors).not.toContain("Missing planner file:");
   });
 });
 

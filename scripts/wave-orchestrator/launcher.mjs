@@ -198,6 +198,22 @@ export function formatReconcileBlockedWaveLine(blockedWave) {
   }`;
 }
 
+export function formatReconcilePreservedWaveLine(preservedWave) {
+  const parts = Array.isArray(preservedWave?.reasons)
+    ? preservedWave.reasons
+        .map((reason) => {
+          const code = compactSingleLine(reason?.code || "", 80);
+          const detail = compactSingleLine(reason?.detail || "", 240);
+          return code && detail ? `${code}=${detail}` : "";
+        })
+        .filter(Boolean)
+    : [];
+  const previousState = compactSingleLine(preservedWave?.previousState || "completed", 80);
+  return `[reconcile] wave ${preservedWave?.wave ?? "unknown"} preserved as ${previousState}: ${
+    parts.join("; ") || "unknown reason"
+  }`;
+}
+
 function printUsage(lanePaths, terminalSurface) {
   console.log(`Usage: pnpm exec wave launch [options]
 
@@ -206,6 +222,7 @@ Options:
   --start-wave <n>       Start from wave number (default: 0)
   --end-wave <n>         End at wave number (default: last available)
   --auto-next            Start from the next unfinished wave and continue forward
+  --resume-control-state Preserve the prior auto-generated relaunch plan for this wave
   --reconcile-status     Reconcile run-state from agent status files and exit
   --state-file <path>    Path to run-state JSON (default: ${path.relative(REPO_ROOT, lanePaths.defaultRunStatePath)})
   --timeout-minutes <n>  Max minutes to wait per wave (default: ${DEFAULT_TIMEOUT_MINUTES})
@@ -252,6 +269,7 @@ function parseArgs(argv) {
     startWave: 0,
     endWave: null,
     autoNext: false,
+    resumeControlState: false,
     reconcileStatus: false,
     runStatePath: lanePaths.defaultRunStatePath,
     timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
@@ -301,6 +319,8 @@ function parseArgs(argv) {
       options.cleanupSessions = false;
     } else if (arg === "--auto-next") {
       options.autoNext = true;
+    } else if (arg === "--resume-control-state") {
+      options.resumeControlState = true;
     } else if (arg === "--reconcile-status") {
       options.reconcileStatus = true;
     } else if (arg === "--keep-terminals") {
@@ -563,6 +583,32 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
     reportPath,
   });
   writeAgentExecutionSummary(runInfo.statusPath, summary);
+  if (runInfo?.previewPath && fs.existsSync(runInfo.previewPath)) {
+    const previewPayload = readJsonOrNull(runInfo.previewPath);
+    if (previewPayload && typeof previewPayload === "object") {
+      const nextLimits =
+        previewPayload.limits && typeof previewPayload.limits === "object" && !Array.isArray(previewPayload.limits)
+          ? { ...previewPayload.limits }
+          : {};
+      const observedTurnLimit = Number(summary?.terminationObservedTurnLimit);
+      if (Number.isFinite(observedTurnLimit) && observedTurnLimit > 0) {
+        nextLimits.observedTurnLimit = observedTurnLimit;
+        nextLimits.observedTurnLimitSource = "runtime-log";
+        if (runInfo.agent.executorResolved?.id === "codex") {
+          const existingNotes = Array.isArray(nextLimits.notes) ? nextLimits.notes.slice() : [];
+          const observedNote = `Observed runtime stop at ${observedTurnLimit} turns from executor log output.`;
+          if (!existingNotes.includes(observedNote)) {
+            existingNotes.push(observedNote);
+          }
+          nextLimits.notes = existingNotes;
+        }
+      }
+      writeJsonAtomic(runInfo.previewPath, {
+        ...previewPayload,
+        limits: nextLimits,
+      });
+    }
+  }
   return summary;
 }
 
@@ -650,6 +696,25 @@ function clearWaveRelaunchPlan(lanePaths, waveNumber) {
   } catch {
     // no-op
   }
+}
+
+export function resetPersistedWaveLaunchState(lanePaths, waveNumber, options = {}) {
+  if (options?.dryRun || options?.resumeControlState) {
+    return {
+      clearedRelaunchPlan: false,
+    };
+  }
+  const persistedRelaunchPlan = readWaveRelaunchPlan(lanePaths, waveNumber);
+  if (!persistedRelaunchPlan) {
+    return {
+      clearedRelaunchPlan: false,
+    };
+  }
+  clearWaveRelaunchPlan(lanePaths, waveNumber);
+  return {
+    clearedRelaunchPlan: true,
+    relaunchPlan: persistedRelaunchPlan,
+  };
 }
 
 function waveSecurityPath(lanePaths, waveNumber) {
@@ -3469,6 +3534,9 @@ export async function runLauncherCli(argv) {
       for (const blockedWave of reconciliation.blockedFromStatus || []) {
         console.log(formatReconcileBlockedWaveLine(blockedWave));
       }
+      for (const preservedWave of reconciliation.preservedWithDrift || []) {
+        console.log(formatReconcilePreservedWaveLine(preservedWave));
+      }
       console.log(`[reconcile] completed waves now: ${completedSummary}`);
       return;
     }
@@ -3628,7 +3696,7 @@ export async function runLauncherCli(argv) {
         dashboardPath: lanePaths.globalDashboardPath,
       });
       console.log(
-        `[dashboard] tmux -L ${lanePaths.tmuxSocketName} attach -t ${globalDashboardTerminalEntry.sessionName}`,
+        `[dashboard] attach global: pnpm exec wave dashboard --lane ${lanePaths.lane} --attach global`,
       );
     }
 
@@ -3730,6 +3798,12 @@ export async function runLauncherCli(argv) {
             promptPath: path.join(lanePaths.promptsDir, `${safeName}.prompt.md`),
             logPath: path.join(lanePaths.logsDir, `${safeName}.log`),
             statusPath: path.join(lanePaths.statusDir, `${safeName}.status`),
+            previewPath: path.join(
+              lanePaths.executorOverlaysDir,
+              `wave-${wave.wave}`,
+              agent.slug,
+              "launch-preview.json",
+            ),
             messageBoardPath,
             messageBoardSnapshot: derivedState.messageBoardText,
             sharedSummaryPath: derivedState.sharedSummaryPath,
@@ -3777,6 +3851,16 @@ export async function runLauncherCli(argv) {
         };
 
         refreshDerivedState(0);
+        const launchStateReset = resetPersistedWaveLaunchState(lanePaths, wave.wave, options);
+        if (launchStateReset.clearedRelaunchPlan) {
+          appendCoordination({
+            event: "wave_launch_state_reset",
+            waves: [wave.wave],
+            status: "running",
+            details: `cleared_relaunch_plan=yes; previous_agents=${(launchStateReset.relaunchPlan?.selectedAgentIds || []).join(",") || "none"}`,
+            actionRequested: "None",
+          });
+        }
         let persistedRelaunchPlan = readWaveRelaunchPlan(lanePaths, wave.wave);
         let retryOverride = readWaveRetryOverride(lanePaths, wave.wave);
 
@@ -3891,6 +3975,9 @@ export async function runLauncherCli(argv) {
             dashboardPath,
             messageBoardPath,
           });
+          console.log(
+            `[dashboard] attach current: pnpm exec wave dashboard --lane ${lanePaths.lane} --attach current`,
+          );
         }
 
         if (options.residentOrchestrator) {

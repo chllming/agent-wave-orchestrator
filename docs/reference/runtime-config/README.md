@@ -141,7 +141,7 @@ Wave writes runtime artifacts here:
 
 Common files:
 
-- `launch-preview.json`: resolved invocation lines, env vars, retry mode, and structured attempt/turn-limit metadata
+- `launch-preview.json`: resolved invocation lines, env vars, retry mode, and structured attempt/turn-limit metadata for both dry-run and live launches
 - `skills.resolved.md`: compact metadata-first skill catalog for the selected agent and runtime
 - `skills.expanded.md`: full canonical/debug skill payload with `SKILL.md` bodies and adapters
 - `skills.metadata.json`: resolved skill ids, activation metadata, permissions, hashes, and generated artifact paths
@@ -161,7 +161,7 @@ Runtime-specific delivery:
 - OpenCode injects the compact catalog into `opencode.json` and attaches `skill.json`, `SKILL.md`, the selected adapter, and recursive `references/**` files through `--file`.
 - Local keeps skills prompt-only.
 
-`launch-preview.json` also records the resolved skill metadata plus a `limits` section. For Claude and OpenCode, that section reports the known turn ceiling and whether it came from the runtime-specific setting or generic `budget.turns`. For Codex, it explicitly records that Wave emitted no turn-limit flag and that any effective ceiling may come from the selected Codex profile or upstream runtime.
+`launch-preview.json` also records the resolved skill metadata plus a `limits` section. For Claude and OpenCode, that section reports the known turn ceiling and whether it came from the runtime-specific setting or generic `budget.turns`. For Codex, it explicitly records that Wave emitted no turn-limit flag and that any effective ceiling may come from the selected Codex profile or upstream runtime. If a live Codex run later terminates with a visible `Reached max turns (N)` log line, Wave appends that observed ceiling back into the live `launch-preview.json` as runtime evidence rather than pretending Wave set it.
 
 ## Recommended Validation Path
 

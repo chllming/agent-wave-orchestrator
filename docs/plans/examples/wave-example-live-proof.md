@@ -2,7 +2,7 @@
 
 This is a showcase-first sample wave.
 
-Use it as the single reference example for the current `0.7.0` Wave surface.
+Use it as the single reference example for the current `0.7.1` Wave surface.
 
 It intentionally combines more sections than a normal production wave so one file can demonstrate:
 

@@ -1,8 +1,11 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { loadWaveConfig } from "./config.mjs";
 import { analyzeMessageBoardCommunication } from "./coordination.mjs";
 import { commsAgeSummary, deploymentSummary } from "./dashboard-state.mjs";
 import {
+  buildLanePaths,
   DEFAULT_REFRESH_MS,
   DEFAULT_WAVE_LANE,
   FINAL_EXIT_DELAY_MS,
@@ -14,12 +17,29 @@ import {
   sleep,
   truncate,
 } from "./shared.mjs";
+import {
+  createCurrentWaveDashboardTerminalEntry,
+  createGlobalDashboardTerminalEntry,
+} from "./terminals.mjs";
+
+const DASHBOARD_ATTACH_TARGETS = ["current", "global"];
+
+function normalizeDashboardAttachTarget(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!DASHBOARD_ATTACH_TARGETS.includes(normalized)) {
+    throw new Error(`--attach must be one of: ${DASHBOARD_ATTACH_TARGETS.join(", ")}`);
+  }
+  return normalized;
+}
 
 export function parseDashboardArgs(argv) {
   const options = {
     lane: DEFAULT_WAVE_LANE,
     dashboardFile: null,
     messageBoard: null,
+    attach: null,
     watch: false,
     refreshMs: DEFAULT_REFRESH_MS,
   };
@@ -39,6 +59,8 @@ export function parseDashboardArgs(argv) {
       options.dashboardFile = path.resolve(REPO_ROOT, argv[++i] || "");
     } else if (arg === "--message-board") {
       options.messageBoard = path.resolve(REPO_ROOT, argv[++i] || "");
+    } else if (arg === "--attach") {
+      options.attach = normalizeDashboardAttachTarget(argv[++i] || "");
     } else if (arg === "--refresh-ms") {
       options.refreshMs = Number.parseInt(String(argv[++i] || ""), 10);
     } else if (arg === "--help" || arg === "-h") {
@@ -47,10 +69,61 @@ export function parseDashboardArgs(argv) {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  if (!options.dashboardFile) {
-    throw new Error("--dashboard-file is required");
+  if (!options.dashboardFile && !options.attach) {
+    throw new Error("--dashboard-file is required unless --attach is used");
   }
   return { help: false, options };
+}
+
+function tmuxSessionExists(socketName, sessionName) {
+  const result = spawnSync("tmux", ["-L", socketName, "has-session", "-t", sessionName], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: { ...process.env, TMUX: "" },
+  });
+  if (result.error) {
+    throw new Error(`tmux session lookup failed: ${result.error.message}`);
+  }
+  if (result.status === 0) {
+    return true;
+  }
+  const combined = `${String(result.stderr || "").toLowerCase()}\n${String(result.stdout || "").toLowerCase()}`;
+  if (
+    combined.includes("can't find session") ||
+    combined.includes("no server running") ||
+    combined.includes("error connecting")
+  ) {
+    return false;
+  }
+  throw new Error((result.stderr || result.stdout || "tmux has-session failed").trim());
+}
+
+function attachDashboardSession(lane, target) {
+  const config = loadWaveConfig();
+  const lanePaths = buildLanePaths(lane, { config });
+  const entry =
+    target === "global"
+      ? createGlobalDashboardTerminalEntry(lanePaths, "current")
+      : createCurrentWaveDashboardTerminalEntry(lanePaths);
+  if (!tmuxSessionExists(lanePaths.tmuxSocketName, entry.sessionName)) {
+    const dashboardsRel = path.relative(REPO_ROOT, path.dirname(lanePaths.globalDashboardPath));
+    throw new Error(
+      `No ${target} dashboard session is live for lane ${lanePaths.lane}. Launch a dashboarded run on that lane, then inspect ${dashboardsRel} if you need the last written dashboard state.`,
+    );
+  }
+  const result = spawnSync("tmux", ["-L", lanePaths.tmuxSocketName, "attach", "-t", entry.sessionName], {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+    env: { ...process.env, TMUX: "" },
+  });
+  if (result.error) {
+    throw new Error(`tmux attach failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `tmux attach exited ${result.status} for lane ${lanePaths.lane} ${target} dashboard session ${entry.sessionName}.`,
+    );
+  }
 }
 
 function readMessageBoardTail(messageBoardPath, maxLines = 24) {
@@ -379,9 +452,16 @@ Options:
   --lane <name>            Wave lane name (default: ${DEFAULT_WAVE_LANE})
   --dashboard-file <path>  Path to wave/global dashboard JSON
   --message-board <path>   Optional message board path override
+  --attach <current|global>
+                          Attach to the stable tmux-backed dashboard session for the lane
   --watch                  Refresh continuously
   --refresh-ms <n>         Refresh interval in ms (default: ${DEFAULT_REFRESH_MS})
 `);
+    return;
+  }
+
+  if (options.attach) {
+    attachDashboardSession(options.lane, options.attach);
     return;
   }
 

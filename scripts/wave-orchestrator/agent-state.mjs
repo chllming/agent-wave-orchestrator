@@ -185,23 +185,27 @@ function findLatestComponentMatches(text) {
 
 function detectTermination(agent, logText, statusRecord) {
   const patterns = [
-    { reason: "max-turns", regex: /(Reached max turns \(\d+\))/i },
+    { reason: "max-turns", regex: /Reached max turns \((\d+)\)/i },
     { reason: "timeout", regex: /(timed out(?: after [^\n.]+)?)/i },
     { reason: "session-missing", regex: /(session [^\n]+ disappeared before [^\n]+ was written)/i },
   ];
   for (const pattern of patterns) {
     const match = String(logText || "").match(pattern.regex);
     if (match) {
-      const baseHint = cleanText(match[1] || match[0]);
+      const baseHint = cleanText(match[0]);
+      const observedTurnLimit =
+        pattern.reason === "max-turns" && Number.isFinite(Number(match[1])) ? Number(match[1]) : null;
       if (pattern.reason === "max-turns" && agent?.executorResolved?.id === "codex") {
         return {
           reason: pattern.reason,
           hint: `${baseHint}. Wave does not set a Codex turn-limit flag; inspect launch-preview.json limits for any profile or upstream-runtime ceiling notes.`,
+          observedTurnLimit,
         };
       }
       return {
         reason: pattern.reason,
         hint: baseHint,
+        observedTurnLimit,
       };
     }
   }
@@ -212,6 +216,7 @@ function detectTermination(agent, logText, statusRecord) {
     return {
       reason: "status-detail",
       hint: statusHint,
+      observedTurnLimit: null,
     };
   }
   const exitCode = Number.isFinite(Number(statusRecord?.code)) ? Number(statusRecord.code) : null;
@@ -219,11 +224,13 @@ function detectTermination(agent, logText, statusRecord) {
     return {
       reason: "exit-code",
       hint: `Exit code ${exitCode}.`,
+      observedTurnLimit: null,
     };
   }
   return {
     reason: null,
     hint: "",
+    observedTurnLimit: null,
   };
 }
 
@@ -437,6 +444,8 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       : null,
     terminationReason: termination.reason,
     terminationHint: termination.hint,
+    terminationObservedTurnLimit:
+      Number.isFinite(Number(termination.observedTurnLimit)) ? Number(termination.observedTurnLimit) : null,
     logPath: path.relative(REPO_ROOT, logPath),
     reportPath: reportPath ? path.relative(REPO_ROOT, reportPath) : null,
   };

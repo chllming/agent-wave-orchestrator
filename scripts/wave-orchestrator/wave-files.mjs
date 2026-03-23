@@ -2421,6 +2421,17 @@ function relativeRepoPathOrNull(filePath) {
   return filePath ? path.relative(REPO_ROOT, filePath) : null;
 }
 
+const RUN_STATE_COMPLETED_VALUES = new Set(["completed", "completed_with_drift"]);
+const PROMPT_DRIFT_REASON_CODES = new Set(["prompt-hash-mismatch", "prompt-hash-missing"]);
+
+function isCompletedRunStateValue(value) {
+  return RUN_STATE_COMPLETED_VALUES.has(String(value || "").trim().toLowerCase());
+}
+
+function completedRunStateEntries(waves) {
+  return Object.values(waves || {}).filter((entry) => isCompletedRunStateValue(entry?.currentState));
+}
+
 function normalizeRunStateWaveEntry(rawEntry, waveNumber) {
   const source = rawEntry && typeof rawEntry === "object" && !Array.isArray(rawEntry) ? rawEntry : {};
   const normalizedWave = normalizeCompletedWaves([waveNumber])[0] ?? normalizeCompletedWaves([source.wave])[0] ?? null;
@@ -2465,9 +2476,7 @@ function normalizeRunStateHistoryEntry(rawEntry, seqFallback) {
 
 function completedWavesFromStateEntries(waves) {
   return normalizeCompletedWaves(
-    Object.values(waves || {})
-      .filter((entry) => entry?.currentState === "completed")
-      .map((entry) => entry.wave),
+    completedRunStateEntries(waves).map((entry) => entry.wave),
   );
 }
 
@@ -2744,6 +2753,64 @@ function pushWaveCompletionReason(reasons, code, detail) {
   reasons.push({ code: normalizedCode, detail: normalizedDetail });
 }
 
+function promptDriftReasonForStatus(agent, statusPath, statusRecord, expectedPromptHash) {
+  const actualPromptHash = String(statusRecord?.promptHash || "").trim();
+  if (!actualPromptHash) {
+    return {
+      code: "prompt-hash-missing",
+      detail: `${agent.agentId} status in ${path.relative(REPO_ROOT, statusPath)} is missing prompt-hash metadata required to match the current prompt fingerprint.`,
+    };
+  }
+  if (actualPromptHash !== expectedPromptHash) {
+    return {
+      code: "prompt-hash-mismatch",
+      detail: `${agent.agentId} status in ${path.relative(REPO_ROOT, statusPath)} does not match the current prompt fingerprint.`,
+    };
+  }
+  return null;
+}
+
+function diagnosticHasOnlyPromptDriftReasons(diagnostic) {
+  return (
+    Array.isArray(diagnostic?.reasons) &&
+    diagnostic.reasons.length > 0 &&
+    diagnostic.reasons.every((reason) => PROMPT_DRIFT_REASON_CODES.has(String(reason?.code || "").trim()))
+  );
+}
+
+function isAuthoritativeCompletedRunStateEntry(entry) {
+  if (!isCompletedRunStateValue(entry?.currentState)) {
+    return false;
+  }
+  const source = String(entry?.lastSource || "").trim().toLowerCase();
+  return source !== "" && source !== "legacy-run-state";
+}
+
+function buildPreservedCompletionEvidence(previousEntry, diagnostic) {
+  const baseEvidence =
+    diagnostic?.evidence && typeof diagnostic.evidence === "object" && !Array.isArray(diagnostic.evidence)
+      ? { ...diagnostic.evidence }
+      : {};
+  baseEvidence.preservedCompletion = {
+    preserved: true,
+    preservedFromState: previousEntry?.currentState || "completed",
+    preservedFromSource: previousEntry?.lastSource || null,
+    preservedFromReasonCode: previousEntry?.lastReasonCode || null,
+    driftReasons: (diagnostic?.reasons || [])
+      .filter((reason) => PROMPT_DRIFT_REASON_CODES.has(String(reason?.code || "").trim()))
+      .map((reason) => ({
+        code: String(reason?.code || "").trim(),
+        detail: String(reason?.detail || "").trim(),
+      })),
+    previousEvidence: previousEntry?.lastEvidence || null,
+  };
+  return baseEvidence;
+}
+
+function shouldPreserveCompletedWave(previousEntry, diagnostic) {
+  return isAuthoritativeCompletedRunStateEntry(previousEntry) && diagnosticHasOnlyPromptDriftReasons(diagnostic);
+}
+
 function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const logsDir = options.logsDir || path.join(path.resolve(statusDir, ".."), "logs");
   const coordinationDir =
@@ -2770,6 +2837,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const statusEntries = [];
   const missingStatusAgents = [];
   let statusesReady = wave.agents.length > 0;
+  let summaryValidationReady = wave.agents.length > 0;
   const coordinationLogPath = path.join(coordinationDir, `wave-${wave.wave}.jsonl`);
   const assignmentsPath = path.join(assignmentsDir, `wave-${wave.wave}.json`);
   const dependencySnapshotPath = path.join(dependencySnapshotsDir, `wave-${wave.wave}.json`);
@@ -2780,6 +2848,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
     if (!statusRecord) {
       missingStatusAgents.push(agent.agentId);
       statusesReady = false;
+      summaryValidationReady = false;
       continue;
     }
     const summaryPath = agentSummaryPathFromStatusPath(statusPath);
@@ -2797,16 +2866,18 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
         `${agent.agentId} exited ${statusRecord.code} in ${path.relative(REPO_ROOT, statusPath)}.`,
       );
       statusesReady = false;
+      summaryValidationReady = false;
       continue;
     }
-    if (statusRecord.promptHash !== expectedPromptHash) {
-      pushWaveCompletionReason(
-        reasons,
-        "prompt-hash-mismatch",
-        `${agent.agentId} status in ${path.relative(REPO_ROOT, statusPath)} does not match the current prompt fingerprint.`,
-      );
+    const promptDriftReason = promptDriftReasonForStatus(
+      agent,
+      statusPath,
+      statusRecord,
+      expectedPromptHash,
+    );
+    if (promptDriftReason) {
+      pushWaveCompletionReason(reasons, promptDriftReason.code, promptDriftReason.detail);
       statusesReady = false;
-      continue;
     }
     const summary = materializeLiveExecutionSummaryIfMissing({
       wave,
@@ -2917,7 +2988,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   }
 
   if (
-    statusesReady &&
+    summaryValidationReady &&
     componentThreshold !== null &&
     wave.wave >= componentThreshold
   ) {
@@ -3071,32 +3142,63 @@ export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusD
   const before = readRunState(runStatePath);
   const firstMerge = normalizeCompletedWaves(
     diagnostics
-      .filter((diagnostic) => diagnostic.ok)
+      .filter((diagnostic) => {
+        if (diagnostic.ok) {
+          return true;
+        }
+        const previousEntry = before.waves[String(diagnostic.wave)] || null;
+        return shouldPreserveCompletedWave(previousEntry, diagnostic);
+      })
       .map((diagnostic) => diagnostic.wave)
       .concat(
         before.completedWaves.filter((waveNumber) => {
           const diagnostic = diagnostics.find((entry) => entry.wave === waveNumber);
-          return !diagnostic || diagnostic.ok;
+          if (!diagnostic) {
+            return true;
+          }
+          const previousEntry = before.waves[String(waveNumber)] || null;
+          return diagnostic.ok || shouldPreserveCompletedWave(previousEntry, diagnostic);
         }),
       ),
   );
   const latest = readRunState(runStatePath);
   let nextState = latest;
+  const preservedWithDrift = [];
   for (const diagnostic of diagnostics) {
-    const toState = diagnostic.ok ? "completed" : "blocked";
+    const previousEntry = before.waves[String(diagnostic.wave)] || null;
+    const preserveCompleted = shouldPreserveCompletedWave(previousEntry, diagnostic);
+    const toState = diagnostic.ok
+      ? "completed"
+      : preserveCompleted
+        ? "completed_with_drift"
+        : "blocked";
     const reasonCode = diagnostic.ok
       ? "status-reconcile-complete"
-      : diagnostic.reasons[0]?.code || "status-reconcile-blocked";
+      : preserveCompleted
+        ? "status-reconcile-completed-with-drift"
+        : diagnostic.reasons[0]?.code || "status-reconcile-blocked";
     const detail = diagnostic.ok
       ? `Wave ${diagnostic.wave} reconstructed as complete from status files.`
-      : diagnostic.reasons.map((reason) => reason.detail).filter(Boolean).join(" ");
+      : preserveCompleted
+        ? `Wave ${diagnostic.wave} preserved as completed with prompt drift: ${diagnostic.reasons.map((reason) => reason.detail).filter(Boolean).join(" ")}`
+        : diagnostic.reasons.map((reason) => reason.detail).filter(Boolean).join(" ");
+    const evidence = preserveCompleted
+      ? buildPreservedCompletionEvidence(previousEntry, diagnostic)
+      : diagnostic.evidence || null;
+    if (preserveCompleted) {
+      preservedWithDrift.push({
+        wave: diagnostic.wave,
+        reasons: diagnostic.reasons,
+        previousState: previousEntry?.currentState || "completed",
+      });
+    }
     nextState = appendRunStateTransition(nextState, {
       waveNumber: diagnostic.wave,
       toState,
       source: "status-reconcile",
       reasonCode,
       detail,
-      evidence: diagnostic.evidence || null,
+      evidence,
       at: diagnostic.evidence?.statusFiles?.find((entry) => entry.completedAt)?.completedAt || toIsoTimestamp(),
     });
   }
@@ -3106,7 +3208,14 @@ export function reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusD
     completedFromStatus,
     addedFromBefore: firstMerge.filter((waveNumber) => !before.completedWaves.includes(waveNumber)),
     addedFromLatest: merged.filter((waveNumber) => !latest.completedWaves.includes(waveNumber)),
-    blockedFromStatus: diagnostics.filter((diagnostic) => !diagnostic.ok),
+    blockedFromStatus: diagnostics.filter((diagnostic) => {
+      if (diagnostic.ok) {
+        return false;
+      }
+      const previousEntry = before.waves[String(diagnostic.wave)] || null;
+      return !shouldPreserveCompletedWave(previousEntry, diagnostic);
+    }),
+    preservedWithDrift,
     state,
   };
 }

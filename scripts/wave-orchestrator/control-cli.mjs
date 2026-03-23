@@ -270,8 +270,46 @@ function assignmentRelevantToAgent(assignment, agentId = "") {
   );
 }
 
-function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabilityAssignments, rerunRequest, proofRegistry }) {
-  const rerunSelected = new Set(rerunRequest?.selectedAgentIds || resolveRetryOverrideAgentIds(wave, lanePaths, rerunRequest));
+function buildEffectiveSelection(lanePaths, wave, { activeAttempt = null, rerunRequest = null, relaunchPlan = null } = {}) {
+  const activeAttemptSelected = Array.isArray(activeAttempt?.selectedAgentIds)
+    ? Array.from(new Set(activeAttempt.selectedAgentIds.filter(Boolean)))
+    : [];
+  if (activeAttemptSelected.length > 0) {
+    return {
+      source: "active-attempt",
+      selectedAgentIds: activeAttemptSelected,
+      detail: activeAttempt?.detail || null,
+    };
+  }
+  const rerunSelected = rerunRequest?.selectedAgentIds?.length
+    ? rerunRequest.selectedAgentIds
+    : resolveRetryOverrideAgentIds(wave, lanePaths, rerunRequest);
+  if (rerunSelected.length > 0) {
+    return {
+      source: "rerun-request",
+      selectedAgentIds: rerunSelected,
+      detail: rerunRequest?.reason || null,
+    };
+  }
+  const relaunchSelected = Array.isArray(relaunchPlan?.selectedAgentIds)
+    ? Array.from(new Set(relaunchPlan.selectedAgentIds.filter(Boolean)))
+    : [];
+  if (relaunchSelected.length > 0) {
+    return {
+      source: "relaunch-plan",
+      selectedAgentIds: relaunchSelected,
+      detail: null,
+    };
+  }
+  return {
+    source: "none",
+    selectedAgentIds: [],
+    detail: null,
+  };
+}
+
+function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabilityAssignments, selection, proofRegistry }) {
+  const selectedAgentIds = new Set(selection?.selectedAgentIds || []);
   const helperAssignments = Array.isArray(capabilityAssignments) ? capabilityAssignments : [];
   const openInbound = dependencySnapshot?.openInbound || [];
   return wave.agents.map((agent) => {
@@ -301,9 +339,15 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
     const dependency = openInbound.find((record) => record.assignedAgentId === agent.agentId);
     let state = "planned";
     let reason = "";
-    if (rerunSelected.has(agent.agentId)) {
+    if (selection?.source === "active-attempt" && selectedAgentIds.has(agent.agentId)) {
+      state = "working";
+      reason = selection?.detail || "Selected by the active launcher attempt.";
+    } else if (selectedAgentIds.has(agent.agentId)) {
       state = "needs-rerun";
-      reason = "Selected by active rerun request.";
+      reason =
+        selection?.source === "relaunch-plan"
+          ? "Selected by the persisted relaunch plan."
+          : "Selected by active rerun request.";
     } else if (targetedBlockingTasks.some((task) => task.state === "working")) {
       state = "working";
       reason = targetedBlockingTasks.find((task) => task.state === "working")?.title || "";
@@ -334,7 +378,8 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
       state,
       reason: reason || null,
       taskIds: targetedTasks.map((task) => task.taskId),
-      selectedForRerun: rerunSelected.has(agent.agentId),
+      selectedForRerun: selectedAgentIds.has(agent.agentId) && selection?.source !== "active-attempt",
+      selectedForActiveAttempt: selection?.source === "active-attempt" && selectedAgentIds.has(agent.agentId),
       activeProofBundleIds: (proofRegistry?.entries || [])
         .filter(
           (entry) =>
@@ -346,10 +391,25 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
   });
 }
 
-function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, rerunRequest, agentId = "" }) {
-  const scopedTasks = agentId
+function selectionTargetsAgent(agentId, selectionSet) {
+  return Boolean(agentId) && selectionSet.has(agentId);
+}
+
+function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, activeAttempt, rerunRequest, relaunchPlan, agentId = "" }) {
+  const attemptSelection = new Set(activeAttempt?.selectedAgentIds || []);
+  const scopeToActiveAttempt = !agentId && attemptSelection.size > 0;
+  const scopedTasks = (agentId
     ? tasks.filter((task) => task.ownerAgentId === agentId || task.assigneeAgentId === agentId)
-    : tasks;
+    : tasks
+  ).filter((task) => {
+    if (!scopeToActiveAttempt) {
+      return true;
+    }
+    return (
+      selectionTargetsAgent(task.ownerAgentId, attemptSelection) ||
+      selectionTargetsAgent(task.assigneeAgentId, attemptSelection)
+    );
+  });
   const pendingHuman = scopedTasks.find((task) => task.state === "input-required");
   if (pendingHuman) {
     return {
@@ -381,11 +441,19 @@ function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, r
       detail: clarification.title,
     };
   }
-  const unresolvedAssignment = (capabilityAssignments || []).find(
+  const scopedAssignments = (capabilityAssignments || []).filter((assignment) => {
+    if (!scopeToActiveAttempt) {
+      return assignmentRelevantToAgent(assignment, agentId);
+    }
+    return (
+      selectionTargetsAgent(assignment.assignedAgentId, attemptSelection) ||
+      selectionTargetsAgent(assignment.sourceAgentId, attemptSelection)
+    );
+  });
+  const unresolvedAssignment = scopedAssignments.find(
     (assignment) =>
       assignment.blocking &&
-      !assignment.assignedAgentId &&
-      assignmentRelevantToAgent(assignment, agentId),
+      !assignment.assignedAgentId,
   );
   if (unresolvedAssignment) {
     return {
@@ -395,10 +463,7 @@ function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, r
       detail: unresolvedAssignment.assignmentDetail || unresolvedAssignment.summary || unresolvedAssignment.requestId,
     };
   }
-  const blockingAssignment = (capabilityAssignments || []).find(
-    (assignment) =>
-      assignment.blocking && assignmentRelevantToAgent(assignment, agentId),
-  );
+  const blockingAssignment = scopedAssignments.find((assignment) => assignment.blocking);
   if (blockingAssignment) {
     return {
       kind: "helper-assignment",
@@ -410,7 +475,18 @@ function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, r
   const dependency = [
     ...(dependencySnapshot?.openInbound || []),
     ...(dependencySnapshot?.openOutbound || []),
-  ].find((record) => !agentId || record.assignedAgentId === agentId || record.agentId === agentId);
+  ].find((record) => {
+    if (agentId) {
+      return record.assignedAgentId === agentId || record.agentId === agentId;
+    }
+    if (!scopeToActiveAttempt) {
+      return true;
+    }
+    return (
+      selectionTargetsAgent(record.assignedAgentId, attemptSelection) ||
+      selectionTargetsAgent(record.agentId, attemptSelection)
+    );
+  });
   if (dependency) {
     return {
       kind: "dependency",
@@ -419,12 +495,20 @@ function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, r
       detail: dependency.summary || dependency.detail || dependency.id,
     };
   }
-  if (rerunRequest) {
+  if (!scopeToActiveAttempt && rerunRequest) {
     return {
       kind: "rerun-request",
       id: rerunRequest.requestId || "active-rerun",
       agentId: null,
       detail: rerunRequest.reason || "Active rerun request controls next attempt selection.",
+    };
+  }
+  if (!scopeToActiveAttempt && relaunchPlan) {
+    return {
+      kind: "relaunch-plan",
+      id: `wave-${relaunchPlan.wave ?? "unknown"}-relaunch-plan`,
+      agentId: null,
+      detail: "Persisted relaunch plan controls the next safe launcher selection.",
     };
   }
   const blocker = scopedTasks.find(
@@ -485,6 +569,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
   }).filter((task) => !agentId || task.ownerAgentId === agentId || task.assigneeAgentId === agentId);
   const controlState = readWaveControlPlaneState(lanePaths, wave.wave);
   const proofRegistry = readWaveProofRegistry(lanePaths, wave.wave) || { entries: [] };
+  const relaunchPlan = readWaveRelaunchPlanSnapshot(lanePaths, wave.wave);
   const rerunRequest = controlState.activeRerunRequest
     ? {
         ...controlState.activeRerunRequest,
@@ -497,6 +582,11 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
               }),
       }
     : null;
+  const selection = buildEffectiveSelection(lanePaths, wave, {
+    activeAttempt: controlState.activeAttempt,
+    rerunRequest,
+    relaunchPlan,
+  });
   return {
     lane: lanePaths.lane,
     wave: wave.wave,
@@ -506,7 +596,9 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
       tasks,
       capabilityAssignments,
       dependencySnapshot,
+      activeAttempt: controlState.activeAttempt,
       rerunRequest,
+      relaunchPlan,
       agentId,
     }),
     logicalAgents: buildLogicalAgents({
@@ -515,7 +607,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
       tasks,
       dependencySnapshot,
       capabilityAssignments,
-      rerunRequest,
+      selection,
       proofRegistry,
     }).filter((agent) => !agentId || agent.agentId === agentId),
     tasks,
@@ -533,8 +625,9 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
     proofBundles: (proofRegistry?.entries || []).filter(
       (entry) => !agentId || entry.agentId === agentId,
     ),
+    selectionSource: selection.source,
     rerunRequest,
-    relaunchPlan: readWaveRelaunchPlanSnapshot(lanePaths, wave.wave),
+    relaunchPlan,
     nextTimer: nextTaskDeadline(tasks),
     activeAttempt: controlState.activeAttempt,
   };

@@ -20,6 +20,7 @@ import {
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
   persistedRelaunchPlanMatchesCurrentState,
+  resetPersistedWaveLaunchState,
   resolveRelaunchRuns,
   resolveSharedComponentContinuationRuns,
   runClosureSweepPhase,
@@ -39,7 +40,13 @@ function makeTempDir() {
 
 function makeLanePaths(dir) {
   const dashboardsDir = path.join(dir, "dashboards");
+  const statusDir = path.join(dir, "status");
+  const controlDir = path.join(dir, "control");
+  const controlPlaneDir = path.join(dir, "control-plane");
   fs.mkdirSync(dashboardsDir, { recursive: true });
+  fs.mkdirSync(statusDir, { recursive: true });
+  fs.mkdirSync(controlDir, { recursive: true });
+  fs.mkdirSync(controlPlaneDir, { recursive: true });
   return {
     lane: "leap-claw",
     launcherLockPath: path.join(dir, "launcher.lock"),
@@ -53,6 +60,9 @@ function makeLanePaths(dir) {
     tmuxDashboardSessionPrefix: "oc_leap_claw_wave_dashboard",
     tmuxGlobalDashboardSessionPrefix: "oc_leap_claw_wave_dashboard_global",
     tmuxSocketName: `test-${path.basename(dir)}`,
+    statusDir,
+    controlDir,
+    controlPlaneDir,
     integrationAgentId: "A8",
     documentationAgentId: "A9",
     contQaAgentId: "A0",
@@ -1086,6 +1096,67 @@ describe("resolveRelaunchRuns", () => {
         wave,
       ),
     ).toBe(false);
+  });
+
+  it("clears persisted relaunch plans for fresh live launches by default", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const relaunchPlanPath = path.join(lanePaths.statusDir, "relaunch-plan-wave-10.json");
+    fs.writeFileSync(
+      relaunchPlanPath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          kind: "wave-relaunch-plan",
+          wave: 10,
+          selectedAgentIds: ["A1"],
+          createdAt: "2026-03-23T00:00:00.000Z",
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = resetPersistedWaveLaunchState(lanePaths, 10, {});
+
+    expect(result).toMatchObject({
+      clearedRelaunchPlan: true,
+      relaunchPlan: {
+        selectedAgentIds: ["A1"],
+      },
+    });
+    expect(fs.existsSync(relaunchPlanPath)).toBe(false);
+  });
+
+  it("preserves persisted relaunch plans when resume-control-state is requested", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const relaunchPlanPath = path.join(lanePaths.statusDir, "relaunch-plan-wave-10.json");
+    fs.writeFileSync(
+      relaunchPlanPath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          kind: "wave-relaunch-plan",
+          wave: 10,
+          selectedAgentIds: ["A1"],
+          createdAt: "2026-03-23T00:00:00.000Z",
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = resetPersistedWaveLaunchState(lanePaths, 10, {
+      resumeControlState: true,
+    });
+
+    expect(result).toEqual({
+      clearedRelaunchPlan: false,
+    });
+    expect(fs.existsSync(relaunchPlanPath)).toBe(true);
   });
 
   it("switches failed agents to an allowed fallback executor on retry", () => {

@@ -117,4 +117,80 @@ describe("launchAgentSession", () => {
       process.env.PATH = originalPath;
     }
   });
+
+  it("writes launch-preview.json for live launches before tmux attach", async () => {
+    const dir = makeTempDir();
+    const lanePaths = {
+      lane: "main",
+      tmuxSocketName: "test-socket",
+      context7CacheDir: path.join(dir, "context7"),
+      executorOverlaysDir: path.join(dir, "overlays"),
+      laneProfile: { skills: { dir: "skills", base: [], byRole: {}, byRuntime: {}, byDeployKind: {} } },
+      sharedPlanDocs: [],
+      contQaAgentId: "A0",
+      contEvalAgentId: "E0",
+      integrationAgentId: "A8",
+      documentationAgentId: "A9",
+    };
+    const agent = {
+      agentId: "A1",
+      slug: "0-a1",
+      title: "Implementation",
+      prompt: "Ship the assigned implementation safely.",
+      context7Resolved: {
+        bundleId: "none",
+        libraries: [],
+      },
+      executorResolved: {
+        id: "codex",
+        model: "gpt-5-codex",
+        codex: {
+          command: "codex",
+          sandbox: "workspace-write",
+          profileName: "review",
+          config: [],
+          search: false,
+          images: [],
+          addDirs: [],
+          json: false,
+          ephemeral: false,
+        },
+      },
+    };
+
+    await launchAgentSession(
+      lanePaths,
+      {
+        wave: 0,
+        agent,
+        sessionName: "wave-a1",
+        promptPath: path.join(dir, "prompts", "wave-a1.prompt.md"),
+        logPath: path.join(dir, "logs", "wave-a1.log"),
+        statusPath: path.join(dir, "status", "wave-a1.status.json"),
+        messageBoardPath: path.join(dir, "messageboards", "wave-0.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "inboxes", "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "inboxes", "A1.md"),
+        inboxText: "",
+        orchestratorId: "orch",
+        context7Enabled: false,
+      },
+      {
+        runTmuxFn: () => {},
+      },
+    );
+
+    const previewPath = path.join(dir, "overlays", "wave-0", "0-a1", "launch-preview.json");
+    expect(fs.existsSync(previewPath)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(previewPath, "utf8"))).toMatchObject({
+      executorId: "codex",
+      command: "codex",
+      useRateLimitRetries: true,
+      invocationLines: expect.any(Array),
+      limits: {
+        turnLimitSource: "not-set-by-wave",
+      },
+    });
+  });
 });

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.7.1 - 2026-03-23
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, sample-wave docs, and npm publishing runbook to advertise `0.7.1` as the current release surface.
+- Clarified the adopted-repo `0.7.x` upgrade path with explicit planner-corpus remediation, stable dashboard reattach guidance, and current-release examples that match the package tag.
+
+### Fixed And Hardened
+
+- Fresh live launches now clear stale auto-generated relaunch plans by default, with `--resume-control-state` as the explicit opt-in when an operator intentionally wants to preserve prior relaunch intent.
+- Fixed `wave control status` so an already-running attempt remains the authoritative live fan-out instead of letting stale relaunch metadata or unrelated closure blockers dominate the wave-level view.
+- Fixed `reconcile-status` so waves with prior authoritative closure stay complete as `completed_with_drift` when the only mismatch is historical prompt-hash drift.
+- Fixed live executor overlays so `launch-preview.json` is written for real runs as well as dry-runs, and Codex previews record observed turn ceilings when the runtime logs one.
+- Updated dashboard, CLI reference, and terminal-surface docs to consistently point operators at the shipped `wave dashboard --attach current|global` surface.
+
+### Testing And Validation
+
+- Updated release-surface regression coverage so package metadata, README, changelog, release manifest, migration guidance, and CLI docs all stay aligned on the current release version.
+
 ## 0.7.0 - 2026-03-23
 
 ### Added
@@ -41,12 +60,18 @@
 - Wave Control storage and queries now support durable Postgres-backed filtering by `workspaceId`, `projectId`, `orchestratorId`, and `runtimeVersion`.
 - Skill resolution description and documentation now accurately reflects the merge-then-resolve code path (base → role → runtime → deploy-kind → explicit).
 - Updated all documentation to reflect `0.7.0` release surface, including the operational runbook, coordination reference, sample waves, and live-proof examples.
+- Dashboard docs and CLI reference now document the stable `wave dashboard --attach current|global` surface instead of older speculative flags.
+- Upgrade and planner docs now call out the repo-owned planner corpus required by adopted `0.7.x` repos and explain that `wave upgrade` stays non-destructive.
+- Fresh live launches now clear stale auto-generated relaunch plans by default, with an explicit `--resume-control-state` escape hatch when an operator intentionally wants to preserve the previous relaunch selection.
 
 ### Fixed And Hardened
 
 - Fixed executor-profile inheritance so a Claude profile that only overrides `claude.effort` or other scalar runtime fields now keeps the inherited global Claude command and runtime settings instead of nulling them out.
 - Fixed shared promoted-component retries so landed owners stay reusable, stale relaunch plans are invalidated against current sibling ownership, and continuation can advance to the remaining owners without burning another retry on the already-clean agent.
 - Fixed clarification triage so routed follow-up work supersedes stale human escalations, keeps the routed chain blocking through the linked request, and only opens human escalation after orchestrator-side routing is actually exhausted.
+- Fixed `reconcile-status` so waves with prior authoritative closure stay complete as `completed_with_drift` when the only mismatch is historical prompt-hash drift.
+- Fixed live executor overlays so `launch-preview.json` is written for real runs as well as dry-runs, and Codex previews record an observed turn ceiling when the runtime logs one.
+- Fixed `wave control status` so an already-running attempt is treated as the authoritative live fan-out instead of letting stale relaunch metadata or unrelated closure blockers dominate the wave-level view.
 - Hardened proof registry projections from the control-plane so revoked and superseded bundles are excluded from closure evaluation.
 - Hardened the "What The Launcher Writes" path reference to correctly place `run-state.json` at the state root (not under `status/`), and added `control-plane/`, `proof/`, and `control/` directories.
 - Closed 11 documentation-to-code gaps identified by end-to-end audit, including trace contract completeness, skill pack enumeration, benchmark CLI surface, and steward coordination kinds.

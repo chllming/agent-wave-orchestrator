@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { renderDashboard } from "../../scripts/wave-orchestrator/dashboard-renderer.mjs";
+import {
+  parseDashboardArgs,
+  renderDashboard,
+} from "../../scripts/wave-orchestrator/dashboard-renderer.mjs";
 
 describe("dashboard renderer", () => {
   it("shows completed versus active versus pending counts in the global dashboard", () => {
@@ -84,5 +87,16 @@ describe("dashboard renderer", () => {
     });
 
     expect(rendered).toContain("\u001b[");
+  });
+
+  it("accepts stable attach mode without requiring a dashboard file", () => {
+    expect(parseDashboardArgs(["--lane", "release", "--attach", "global"])).toEqual({
+      help: false,
+      options: expect.objectContaining({
+        lane: "release",
+        attach: "global",
+        dashboardFile: null,
+      }),
+    });
   });
 });

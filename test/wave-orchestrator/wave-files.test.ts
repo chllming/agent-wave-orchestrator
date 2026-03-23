@@ -2670,6 +2670,134 @@ describe("reconcileRunStateFromStatusFiles", () => {
     ]);
   });
 
+  it("preserves previously completed waves as completed_with_drift when only prompt hashes drift", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile-drift`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+
+    const wave = makeReconcileWave(tempRoot);
+    fs.writeFileSync(
+      path.join(REPO_ROOT, wave.contQaReportPath),
+      "# cont-QA\n\nVerdict: PASS\n",
+      "utf8",
+    );
+    writeStatus(statusDir, wave.agents[0], {
+      code: 0,
+    });
+    writeStatus(statusDir, wave.agents[1], {
+      code: 0,
+      promptHash: hashText("old-prompt-hash"),
+    });
+    writeStatus(statusDir, wave.agents[2], {
+      code: 0,
+      promptHash: hashAgentPromptFingerprint(wave.agents[2]),
+    });
+    writeStatus(statusDir, wave.agents[3], {
+      code: 0,
+      promptHash: hashAgentPromptFingerprint(wave.agents[3]),
+    });
+    writeSummary(statusDir, wave.agents[0], {
+      reportPath: wave.contQaReportPath,
+      verdict: { verdict: "pass", detail: "good" },
+      gate: {
+        architecture: "pass",
+        integration: "pass",
+        durability: "pass",
+        live: "pass",
+        docs: "pass",
+        detail: "all clear",
+      },
+    });
+    writeSummary(statusDir, wave.agents[1], {
+      proof: { completion: "contract", durability: "none", proof: "unit", state: "met" },
+      docDelta: { state: "owned", paths: [] },
+    });
+    writeSummary(statusDir, wave.agents[2], {
+      integration: { state: "ready-for-doc-closure", detail: "all lanes landed" },
+    });
+    writeSummary(statusDir, wave.agents[3], {
+      docClosure: { state: "closed", detail: "docs reconciled" },
+    });
+    fs.writeFileSync(path.join(coordinationDir, "wave-200.jsonl"), "", "utf8");
+    markWaveCompleted(runStatePath, wave.wave, {
+      detail: "Wave 200 completed after 1 attempt(s).",
+      evidence: {
+        waveFileHash: "wave-200-hash",
+      },
+    });
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      coordinationDir,
+      requireIntegrationStewardFromWave: 0,
+      laneProfile: {
+        validation: {
+          requireComponentPromotionsFromWave: null,
+          requireIntegrationStewardFromWave: 0,
+          requiredPromptReferences: [],
+        },
+        paths: {
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      },
+    });
+
+    expect(reconciliation.completedFromStatus).toEqual([]);
+    expect(reconciliation.blockedFromStatus).toEqual([]);
+    expect(reconciliation.preservedWithDrift).toHaveLength(1);
+    expect(reconciliation.preservedWithDrift[0]).toMatchObject({
+      wave: 200,
+      previousState: "completed",
+      reasons: expect.arrayContaining([
+        expect.objectContaining({
+          code: "prompt-hash-missing",
+        }),
+        expect.objectContaining({
+          code: "prompt-hash-mismatch",
+        }),
+      ]),
+    });
+    expect(reconciliation.state.completedWaves).toEqual([200]);
+    expect(reconciliation.state.waves["200"]).toMatchObject({
+      currentState: "completed_with_drift",
+      lastSource: "status-reconcile",
+      lastReasonCode: "status-reconcile-completed-with-drift",
+    });
+    expect(reconciliation.state.history).toHaveLength(2);
+    expect(reconciliation.state.history[0]).toMatchObject({
+      wave: 200,
+      toState: "completed",
+      source: "live-launcher",
+    });
+    expect(reconciliation.state.history[1]).toMatchObject({
+      wave: 200,
+      fromState: "completed",
+      toState: "completed_with_drift",
+      source: "status-reconcile",
+      reasonCode: "status-reconcile-completed-with-drift",
+      evidence: {
+        preservedCompletion: {
+          preserved: true,
+          driftReasons: expect.arrayContaining([
+            expect.objectContaining({
+              code: "prompt-hash-missing",
+            }),
+            expect.objectContaining({
+              code: "prompt-hash-mismatch",
+            }),
+          ]),
+        },
+      },
+    });
+  });
+
   it("surfaces cont-QA artifact and open coordination blockers during reconciliation", () => {
     const tempRoot = registerTempPath(
       path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-reconcile-reasons`),

@@ -79,18 +79,18 @@ Wave is built to mitigate those failures with canonical shared state, generated 
 
 Current release:
 
-- `@chllming/wave-orchestration@0.7.0`
-- Release tag: [`v0.7.0`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.0)
+- `@chllming/wave-orchestration@0.7.1`
+- Release tag: [`v0.7.1`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.1)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.7.0`:
+Highlights in `0.7.1`:
 
-- Unified `wave control` operator CLI with `status`, `task`, `rerun`, `proof`, and `telemetry` surfaces, replacing the separate `wave coord`/`wave retry`/`wave proof` commands (which remain as compatibility surfaces).
-- Canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` with event-sourced materialization for proof bundles, rerun requests, operator tasks, and attempt lifecycle.
-- Wave Control telemetry: local-first event queueing with best-effort batch delivery to a Railway-hosted analysis endpoint, configurable report modes, selective artifact upload, and durable Postgres-backed querying by workspace, project, orchestrator, and runtime version.
-- Live-wave orchestration refresh that keeps coordination surfaces current during execution, including overdue acknowledgement tracking and stale clarification rerouting.
-- Resident orchestrator support via `--resident-orchestrator` for long-running non-owning monitoring sessions.
+- Fresh live launches now clear stale auto-generated relaunch plans by default, so explicit wave restarts seed a clean implementation fan-out unless `--resume-control-state` is passed.
+- `wave control status` now treats the active attempt as the authoritative live fan-out instead of replaying stale rerun intent or unrelated closure blockers.
+- `reconcile-status` now preserves previously authoritative completed waves as `completed_with_drift` when the only mismatch is historical prompt-hash drift.
+- Live `launch-preview.json` artifacts now exist for real runs as well as dry-runs, and Codex summaries record observed turn ceilings when the runtime reveals them.
+- Upgrade and operator docs now cover stable dashboard attach, adopted-repo planner corpus migration, and the full `0.7.1` package surface end to end.
 
 Requirements:
 

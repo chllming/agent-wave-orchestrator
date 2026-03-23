@@ -22,6 +22,32 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
+## Upgrading From 0.6.x To 0.7.1
+
+Read `CHANGELOG.md` first, then treat this section as the repo-owned migration checklist for adopted `0.6.x` workspaces.
+
+`wave upgrade` updates the installed runtime only. It does not copy planner starter files into a repo that already owns its docs, skills, and Context7 bundles.
+
+`0.7.1` also hardens run-control behavior for manual relaunches: fresh live starts clear stale auto-generated relaunch plans by default unless `--resume-control-state` is passed, and `wave control status` now treats the active attempt as the authoritative live fan-out while that attempt is running.
+
+### Required Repo Changes
+
+If the repo adopted Wave before the planner corpus became a tracked required surface, sync:
+
+- `docs/agents/wave-planner-role.md`
+- `skills/role-planner/`
+- `docs/context7/planner-agent/`
+- `docs/reference/wave-planning-lessons.md`
+- the `planner-agentic` bundle entry in `docs/context7/bundles.json`
+
+### Recommended Upgrade Validation
+
+After syncing those repo-owned files:
+
+1. Run `pnpm exec wave doctor`.
+2. Run `pnpm exec wave launch --lane main --dry-run --no-dashboard`.
+3. Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a live tmux-backed dashboard without reverse-engineering the socket or session name.
+
 ## Upgrading From 0.5.4 To 0.6.1
 
 Read `CHANGELOG.md` first, then treat the rest of this page as the manual repo-owned migration checklist for the `0.6.1` release. `wave upgrade` will update package-owned runtime code only; it will not rewrite the docs, prompts, config, or wave files that your repo already owns.

@@ -92,6 +92,33 @@ const REQUIRED_GITIGNORE_ENTRIES = [
   "docs/research/papers/",
   "docs/research/articles/",
 ];
+const PLANNER_MIGRATION_REQUIRED_SURFACES = [
+  {
+    id: "planner-role",
+    label: "docs/agents/wave-planner-role.md",
+    path: "docs/agents/wave-planner-role.md",
+    kind: "file",
+  },
+  {
+    id: "planner-skill",
+    label: "skills/role-planner/",
+    path: "skills/role-planner",
+    kind: "dir",
+  },
+  {
+    id: "planner-context7",
+    label: "docs/context7/planner-agent/",
+    path: "docs/context7/planner-agent",
+    kind: "dir",
+  },
+  {
+    id: "planner-lessons",
+    label: "docs/reference/wave-planning-lessons.md",
+    path: "docs/reference/wave-planning-lessons.md",
+    kind: "file",
+  },
+];
+const PLANNER_REQUIRED_BUNDLE_ID = "planner-agentic";
 
 function collectDeclaredDeployKinds(waves = []) {
   return Array.from(
@@ -222,6 +249,8 @@ function slugifyVersion(value) {
 }
 
 function formatUpgradeReport(report) {
+  const plannerMigrationErrors = report.doctor.errors.filter((issue) => isPlannerMigrationIssue(issue));
+  const otherDoctorErrors = report.doctor.errors.filter((issue) => !isPlannerMigrationIssue(issue));
   return [
     `# Wave Upgrade Report`,
     "",
@@ -238,12 +267,27 @@ function formatUpgradeReport(report) {
     "",
     "- No repo-owned plans, waves, role prompts, or config files were overwritten.",
     "- New runtime behavior comes from the installed package version.",
+    ...(report.initMode === "adopt-existing" && plannerMigrationErrors.length > 0
+      ? [
+          "",
+          "## Adopted Repo Follow-Up",
+          "",
+          "- This workspace was adopted from an existing repo-owned Wave surface.",
+          "- `wave upgrade` does not copy new planner starter docs, skills, or Context7 bundle entries into adopted repos.",
+          ...plannerMigrationErrors.map((issue) => `- Error: ${issue}`),
+        ]
+      : []),
+    ...(report.initMode === "adopt-existing" && plannerMigrationErrors.length > 0
+      ? [
+          "- After syncing that planner surface, rerun `pnpm exec wave doctor` before relying on `wave draft --agentic` or planner-aware validation.",
+        ]
+      : []),
     ...(report.doctor.errors.length > 0 || report.doctor.warnings.length > 0
       ? [
           "",
           "## Follow-Up",
           "",
-          ...report.doctor.errors.map((issue) => `- Error: ${issue}`),
+          ...otherDoctorErrors.map((issue) => `- Error: ${issue}`),
           ...report.doctor.warnings.map((issue) => `- Warning: ${issue}`),
         ]
       : []),
@@ -273,6 +317,48 @@ function plannerRequiredPaths() {
       ].filter(Boolean),
     ),
   ).sort();
+}
+
+function isPlannerMigrationIssue(issue) {
+  return String(issue || "").startsWith("Planner starter surface is incomplete");
+}
+
+function missingPlannerMigrationSurfaceLabels() {
+  const missing = [];
+  for (const surface of PLANNER_MIGRATION_REQUIRED_SURFACES) {
+    const targetPath = path.join(REPO_ROOT, surface.path);
+    if (!fs.existsSync(targetPath)) {
+      missing.push(surface.label);
+      continue;
+    }
+    if (surface.kind === "dir") {
+      try {
+        if (fs.readdirSync(targetPath).length === 0) {
+          missing.push(surface.label);
+        }
+      } catch {
+        missing.push(surface.label);
+      }
+    }
+  }
+  return missing;
+}
+
+function plannerMigrationIssue(config, context7BundleIndex) {
+  const missing = missingPlannerMigrationSurfaceLabels();
+  const bundleId = String(config?.planner?.agentic?.context7Bundle || "").trim();
+  const bundleEntryMissing =
+    bundleId === "" || bundleId === PLANNER_REQUIRED_BUNDLE_ID
+      ? !context7BundleIndex?.bundles?.[PLANNER_REQUIRED_BUNDLE_ID]
+      : false;
+  if (missing.length === 0 && !bundleEntryMissing) {
+    return null;
+  }
+  const remediationItems = missing.slice();
+  if (bundleEntryMissing) {
+    remediationItems.push(`docs/context7/bundles.json#${PLANNER_REQUIRED_BUNDLE_ID}`);
+  }
+  return `Planner starter surface is incomplete for 0.7.x workspaces. Sync ${remediationItems.join(", ")} from the packaged release, then rerun \`pnpm exec wave doctor\`.`;
 }
 
 export function runDoctor() {
@@ -320,14 +406,22 @@ export function runDoctor() {
         }
       }
       const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
+      const plannerMigration = plannerMigrationIssue(config, context7BundleIndex);
+      if (plannerMigration) {
+        errors.push(plannerMigration);
+      }
       const plannerPaths = plannerRequiredPaths();
       for (const relPath of plannerPaths) {
-        if (!fs.existsSync(path.join(REPO_ROOT, relPath))) {
+        if (!fs.existsSync(path.join(REPO_ROOT, relPath)) && !plannerMigration) {
           errors.push(`Missing planner file: ${relPath}`);
         }
       }
       const plannerBundleId = String(config.planner?.agentic?.context7Bundle || "").trim();
-      if (plannerBundleId && !context7BundleIndex.bundles[plannerBundleId]) {
+      if (
+        plannerBundleId &&
+        !context7BundleIndex.bundles[plannerBundleId] &&
+        !(plannerMigration && plannerBundleId === PLANNER_REQUIRED_BUNDLE_ID)
+      ) {
         errors.push(
           `planner.agentic.context7Bundle references unknown bundle "${plannerBundleId}".`,
         );
@@ -484,6 +578,7 @@ export function upgradeWorkspace() {
     previousVersion,
     currentVersion: metadata.version,
     generatedAt,
+    initMode: existingState.initMode || null,
     releases,
     doctor,
   };

@@ -45,6 +45,17 @@ Use `tmux` when:
 
 By default the launcher can start per-wave dashboard sessions in tmux.
 
+Wave now maintains stable tmux attach targets for both the current-wave dashboard and the global dashboard on the lane socket.
+
+Use:
+
+```bash
+pnpm exec wave dashboard --lane main --attach current
+pnpm exec wave dashboard --lane main --attach global
+```
+
+Those commands work for both `tmux` and `vscode` terminal surfaces because the live sessions still run on the lane tmux socket.
+
 When `--terminal-surface vscode` is active, Wave also maintains a stable current-wave dashboard terminal entry instead of creating a new wave-numbered dashboard attach target for every wave transition.
 
 Important flags:
@@ -63,6 +74,7 @@ Important flags:
 - Use `vscode` for local interactive operator work when the temporary terminal registry is useful.
 - Use `tmux` for remote, CI-like, or editor-independent operation.
 - Use `none` only with `--dry-run`.
+- Prefer `wave dashboard --attach current|global` over manual `tmux -L <socket> attach ...` lookups.
 - Pair `--keep-sessions` with incident review or deep debugging, not as a default steady-state mode.
 - Pair `--no-dashboard` with scripted dry-runs or when the board and summaries are sufficient.
 

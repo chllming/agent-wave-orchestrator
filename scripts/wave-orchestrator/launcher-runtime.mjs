@@ -135,16 +135,16 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
     skillProjection: agent.skillsResolved,
   });
   const resolvedExecutorMode = launchSpec.executorId || agent.executorResolved?.id || "codex";
+  writeJsonAtomic(path.join(overlayDir, "launch-preview.json"), {
+    executorId: resolvedExecutorMode,
+    command: launchSpec.command,
+    env: launchSpec.env || {},
+    useRateLimitRetries: launchSpec.useRateLimitRetries === true,
+    invocationLines: launchSpec.invocationLines,
+    limits: launchSpec.limits || null,
+    skills: summarizeResolvedSkills(agent.skillsResolved),
+  });
   if (dryRun) {
-    writeJsonAtomic(path.join(overlayDir, "launch-preview.json"), {
-      executorId: resolvedExecutorMode,
-      command: launchSpec.command,
-      env: launchSpec.env || {},
-      useRateLimitRetries: launchSpec.useRateLimitRetries === true,
-      invocationLines: launchSpec.invocationLines,
-      limits: launchSpec.limits || null,
-      skills: summarizeResolvedSkills(agent.skillsResolved),
-    });
     return {
       promptHash,
       context7,

@@ -164,7 +164,7 @@ What happens next:
 - that assignment is written into the assignment snapshot
 - the shared summary and A8 inbox now show the open helper work
 
-`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into blocking task edges; plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner.
+`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into blocking task edges; plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner. When a launcher attempt is already running, status scopes the top-level blocking edge to that active attempt instead of letting stale relaunch metadata or unrelated closure tasks dominate the wave-level view.
 
 ### Step 3: Why A1 Can Be Done But The Wave Is Still Blocked
 

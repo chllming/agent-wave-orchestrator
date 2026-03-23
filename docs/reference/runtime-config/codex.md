@@ -21,6 +21,7 @@ Wave launches Codex with `codex exec` and pipes the generated task prompt throug
 
 - There is no `executors.codex.model` key today. Use profile `model` or per-agent `model`.
 - Generic `budget.turns` does not set a Codex turn limit. If Codex stops on a turn ceiling, that limit came from the selected Codex profile or upstream Codex runtime, not from a Wave-emitted CLI flag.
+- Live runs still write `launch-preview.json`. If Codex later logs `Reached max turns (N)`, Wave records that observed ceiling under `limits.observedTurnLimit` with source `runtime-log`.
 - `codex.images`, `codex.add_dirs`, and `codex.config` accept either a string array in `wave.config.json` or a comma-separated list in a wave file.
 - Relative paths are passed to Codex relative to the repository root because Wave launches the executor from the repo workspace.
 
@@ -78,4 +79,4 @@ For a dry run, inspect:
 - `launch-preview.json` for the final `codex exec` command
 - any referenced prompt file under `.tmp/<lane>-wave-launcher/dry-run/prompts/`
 
-The preview records the exact `--profile`, repeated `-c`, `--image`, and `--add-dir` flags that Wave would use in a live launch. It also includes a `limits` block that makes Wave's Codex visibility explicit: `turnLimitSource: "not-set-by-wave"` means Wave emitted no Codex turn-limit flag, so any effective ceiling is external to the Wave CLI invocation.
+The preview records the exact `--profile`, repeated `-c`, `--image`, and `--add-dir` flags that Wave would use in a live launch. It also includes a `limits` block that makes Wave's Codex visibility explicit: `turnLimitSource: "not-set-by-wave"` means Wave emitted no Codex turn-limit flag, so any effective ceiling is external to the Wave CLI invocation. On a live run, that same preview file may later gain `observedTurnLimit` if the Codex runtime reports the ceiling in its log output.

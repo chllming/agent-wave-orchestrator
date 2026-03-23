@@ -21,6 +21,7 @@ wave launch [options]
 | `--start-wave <n>` | `0` | First wave to launch |
 | `--end-wave <n>` | last available | Last wave to launch |
 | `--auto-next` | off | Start from next unfinished wave and continue |
+| `--resume-control-state` | off | Preserve the prior auto-generated relaunch plan instead of treating the launch as a fresh wave start |
 | `--executor <id>` | lane config | Default executor: `codex`, `claude`, `opencode`, `local` |
 | `--codex-sandbox <mode>` | `danger-full-access` | Codex sandbox isolation level |
 | `--timeout-minutes <n>` | `60` | Max minutes to wait per wave |
@@ -76,6 +77,8 @@ Unified operator control surface. Preferred over legacy `wave coord`, `wave retr
 ### wave control status
 
 Read-only view: blocking edges, logical agent state, tasks, dependencies, rerun intent, proof bundles, and next timers.
+
+When a launcher attempt is already running, `wave control status` treats that active attempt as the authoritative current fan-out. Older relaunch plans or unrelated closure blockers remain visible in the payload, but they do not override the live attempt view.
 
 ```
 wave control status --lane <lane> --wave <n> [--agent <id>] [--run <id>] [--json]
@@ -453,7 +456,8 @@ wave local --prompt <path> [--log <path>] [--status <path>]
 Live dashboard viewer.
 
 ```
-wave dashboard [--lane <lane>] [--wave <n>] [--watch] [--refresh-ms <n>] [--dashboard-file <path>] [--message-board <path>] [--json]
+wave dashboard --dashboard-file <path> [--lane <lane>] [--message-board <path>] [--watch] [--refresh-ms <n>]
+wave dashboard --lane <lane> --attach current|global
 ```
 
 ## Workspace Commands

@@ -18,6 +18,11 @@ function writeJson(filePath, payload) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function appendJsonl(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.appendFileSync(filePath, `${JSON.stringify(payload)}\n`, "utf8");
+}
+
 function runWaveCli(args, cwd) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd,
@@ -336,6 +341,93 @@ describe("wave control CLI", () => {
           assignedAgentId: null,
         }),
       ],
+    });
+  });
+
+  it("prefers the active attempt over stale relaunch plans and unrelated closure blockers", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+    expect(
+      runWaveCli(
+        [
+          "control",
+          "task",
+          "create",
+          "--lane",
+          "main",
+          "--wave",
+          "0",
+          "--agent",
+          "A9",
+          "--kind",
+          "human-input",
+          "--summary",
+          "Need stale docs closure input",
+          "--detail",
+          "Old closure blocker should not dominate while A1 is actively running.",
+        ],
+        repoDir,
+      ).status,
+    ).toBe(0);
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "status", "relaunch-plan-wave-0.json"), {
+      schemaVersion: 1,
+      kind: "wave-relaunch-plan",
+      wave: 0,
+      selectedAgentIds: ["A9"],
+      createdAt: "2026-03-23T00:00:00.000Z",
+    });
+    appendJsonl(path.join(repoDir, ".tmp", "main-wave-launcher", "control-plane", "wave-0.jsonl"), {
+      recordVersion: 1,
+      id: "ctrl-attempt-1",
+      lane: "main",
+      wave: 0,
+      runKind: "roadmap",
+      runId: "run-1",
+      entityType: "attempt",
+      entityId: "wave-0-attempt-1",
+      action: "running",
+      source: "launcher",
+      actor: "launcher",
+      recordedAt: "2026-03-23T01:00:00.000Z",
+      data: {
+        attemptId: "wave-0-attempt-1",
+        attemptNumber: 1,
+        state: "running",
+        selectedAgentIds: ["A1"],
+        detail: "Launching A1.",
+        createdAt: "2026-03-23T01:00:00.000Z",
+        updatedAt: "2026-03-23T01:00:00.000Z",
+      },
+    });
+
+    const statusResult = runWaveCli(
+      ["control", "status", "--lane", "main", "--wave", "0", "--json"],
+      repoDir,
+    );
+
+    expect(statusResult.status).toBe(0);
+    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+      selectionSource: "active-attempt",
+      blockingEdge: null,
+      relaunchPlan: {
+        selectedAgentIds: ["A9"],
+      },
+      activeAttempt: {
+        selectedAgentIds: ["A1"],
+      },
+      logicalAgents: expect.arrayContaining([
+        expect.objectContaining({
+          agentId: "A1",
+          state: "working",
+          selectedForActiveAttempt: true,
+        }),
+        expect.objectContaining({
+          agentId: "A9",
+          state: "blocked",
+        }),
+      ]),
     });
   });
 

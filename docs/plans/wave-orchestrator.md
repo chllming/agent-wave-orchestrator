@@ -134,6 +134,7 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 
 - `wave control status` is the read-only projection for "why blocked / why retrying" at wave or agent scope. It returns blocking edges, logical agent state, tasks, dependencies, rerun intent, active proof bundles, and next timers from one materialized control-plane view.
 - `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions. `wave control status` only treats requests, blockers, clarifications, human-input, escalations, helper assignments, and required dependencies as blocking edges.
+- A fresh live `wave launch --start-wave <n> --end-wave <n>` now clears the previous auto-generated relaunch plan for that wave before selecting the initial implementation fan-out. Pass `--resume-control-state` only when you intentionally want to keep that persisted relaunch selection.
 - `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists.
 - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles in the same control-plane log and projects compatible proof registries under `.tmp/<lane>-wave-launcher/proof/`.
 - `wave control telemetry status|flush` inspects and delivers the local Wave Control event queue. Pass `--no-telemetry` on `wave launch` to disable event publication for a single run.
@@ -324,7 +325,7 @@ For the complete syntax of every command, flag, and subcommand, see [docs/refere
 - Skills resolve only after that executor choice is known. Runtime-specific skill overlays are regenerated whenever retry-time fallback changes the selected executor.
 - Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
 - Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
-- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set; Codex turn ceilings remain external to Wave and show up in preview metadata as opaque when Wave cannot inspect them.
+- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set; Codex turn ceilings remain external to Wave and show up in preview metadata as opaque when Wave cannot inspect them, though live previews now record an observed ceiling if the Codex runtime later logs one explicitly.
 - The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 Runtime authoring examples:

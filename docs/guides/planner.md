@@ -21,6 +21,25 @@ It reduces repeated setup questions, stores project defaults, and generates wave
 - rendered markdown waves in `docs/plans/waves/wave-<n>.md`
 - candidate matrix previews plus canonical component matrix updates on apply
 
+## Upgrading Adopted 0.6.x Repos
+
+`wave upgrade` updates the installed runtime and records `.wave/install-state.json`, but it does not copy newer planner starter files into an already-adopted repo.
+
+If `pnpm exec wave doctor` starts failing after a `0.7.x` upgrade, sync these repo-owned planner surfaces from the packaged release:
+
+- `docs/agents/wave-planner-role.md`
+- `skills/role-planner/`
+- `docs/context7/planner-agent/`
+- `docs/reference/wave-planning-lessons.md`
+- the `planner-agentic` bundle entry in `docs/context7/bundles.json`
+
+Then rerun:
+
+```bash
+pnpm exec wave doctor
+pnpm exec wave launch --lane main --dry-run --no-dashboard
+```
+
 ## What The Planner Does Not Yet Ship
 
 - forward replanning of later waves

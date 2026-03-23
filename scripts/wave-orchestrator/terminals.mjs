@@ -129,7 +129,7 @@ export function createTemporaryTerminalEntries(
 }
 
 export function createGlobalDashboardTerminalEntry(lanePaths, runTag) {
-  const sessionName = `${lanePaths.tmuxGlobalDashboardSessionPrefix}_${runTag}`.replace(
+  const sessionName = `${lanePaths.tmuxGlobalDashboardSessionPrefix}_current`.replace(
     /[^a-zA-Z0-9:_-]/g,
     "_",
   );

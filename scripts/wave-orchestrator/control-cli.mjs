@@ -32,19 +32,22 @@ import {
   waveProofRegistryPath,
 } from "./proof-registry.mjs";
 import { readWaveRelaunchPlanSnapshot, readWaveRetryOverride, resolveRetryOverrideAgentIds, writeWaveRetryOverride, clearWaveRetryOverride } from "./retry-control.mjs";
+import { flushWaveControlQueue, readWaveControlQueueState } from "./wave-control-client.mjs";
 import { readAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
 import { isContEvalReportOnlyAgent, isSecurityReviewAgent } from "./role-helpers.mjs";
 
 function printUsage() {
   console.log(`Usage:
   wave control status --lane <lane> --wave <n> [--agent <id>] [--json]
+  wave control telemetry status --lane <lane> [--run <id>] [--json]
+  wave control telemetry flush --lane <lane> [--run <id>] [--json]
 
   wave control task create --lane <lane> --wave <n> --agent <id> --kind <request|blocker|clarification|handoff|evidence|claim|decision|human-input> --summary <text> [options]
   wave control task list --lane <lane> --wave <n> [--agent <id>] [--json]
   wave control task get --lane <lane> --wave <n> --id <task-id> [--json]
   wave control task act <start|resolve|dismiss|cancel|reassign|answer|escalate> --lane <lane> --wave <n> --id <task-id> [options]
 
-  wave control rerun request --lane <lane> --wave <n> [--agent <id> ...] [--resume-cursor <cursor>] [--reuse-attempt <id> ...] [--reuse-proof <id> ...] [--reuse-derived-summaries <true|false>] [--invalidate-component <id> ...] [--requested-by <name>] [--reason <text>] [--json]
+  wave control rerun request --lane <lane> --wave <n> [--agent <id> ...] [--resume-cursor <cursor>] [--reuse-attempt <id> ...] [--reuse-proof <id> ...] [--reuse-derived-summaries <true|false>] [--invalidate-component <id> ...] [--clear-reuse <id> ...] [--preserve-reuse <id> ...] [--requested-by <name>] [--reason <text>] [--json]
   wave control rerun get --lane <lane> --wave <n> [--json]
   wave control rerun clear --lane <lane> --wave <n>
 
@@ -111,7 +114,16 @@ function parseArgs(argv) {
     proofLevel: "",
     docDeltaState: "",
   };
-  const startIndex = surface === "status" ? 1 : surface === "task" || surface === "rerun" || surface === "proof" ? (operation === "act" ? 3 : 2) : 0;
+  const startIndex =
+    surface === "status"
+      ? 1
+      : surface === "telemetry"
+        ? 2
+        : surface === "task" || surface === "rerun" || surface === "proof"
+          ? operation === "act"
+            ? 3
+            : 2
+          : 0;
   for (let i = startIndex; i < args.length; i += 1) {
     const arg = args[i];
     if (i < startIndex) {
@@ -238,6 +250,26 @@ function statusPathForAgent(lanePaths, wave, agent) {
   return path.join(lanePaths.statusDir, `wave-${wave.wave}-${agent.slug}.status`);
 }
 
+const BLOCKING_TASK_TYPES = new Set([
+  "request",
+  "blocker",
+  "clarification",
+  "human-input",
+  "escalation",
+]);
+
+function taskBlocksAgent(task) {
+  return BLOCKING_TASK_TYPES.has(String(task?.taskType || "").trim().toLowerCase());
+}
+
+function assignmentRelevantToAgent(assignment, agentId = "") {
+  return (
+    !agentId ||
+    assignment?.assignedAgentId === agentId ||
+    assignment?.sourceAgentId === agentId
+  );
+}
+
 function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabilityAssignments, rerunRequest, proofRegistry }) {
   const rerunSelected = new Set(rerunRequest?.selectedAgentIds || resolveRetryOverrideAgentIds(wave, lanePaths, rerunRequest));
   const helperAssignments = Array.isArray(capabilityAssignments) ? capabilityAssignments : [];
@@ -262,6 +294,7 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
     const targetedOpenTasks = targetedTasks.filter((task) =>
       ["open", "working", "input-required"].includes(task.state),
     );
+    const targetedBlockingTasks = targetedOpenTasks.filter((task) => taskBlocksAgent(task));
     const helperAssignment = helperAssignments.find(
       (assignment) => assignment.blocking && assignment.assignedAgentId === agent.agentId,
     );
@@ -271,13 +304,13 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
     if (rerunSelected.has(agent.agentId)) {
       state = "needs-rerun";
       reason = "Selected by active rerun request.";
-    } else if (targetedOpenTasks.some((task) => task.state === "working")) {
+    } else if (targetedBlockingTasks.some((task) => task.state === "working")) {
       state = "working";
-      reason = targetedOpenTasks.find((task) => task.state === "working")?.title || "";
-    } else if (targetedOpenTasks.length > 0 || helperAssignment || dependency) {
+      reason = targetedBlockingTasks.find((task) => task.state === "working")?.title || "";
+    } else if (targetedBlockingTasks.length > 0 || helperAssignment || dependency) {
       state = "blocked";
       reason =
-        targetedOpenTasks[0]?.title ||
+        targetedBlockingTasks[0]?.title ||
         helperAssignment?.assignmentDetail ||
         helperAssignment?.summary ||
         dependency?.summary ||
@@ -303,7 +336,11 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
       taskIds: targetedTasks.map((task) => task.taskId),
       selectedForRerun: rerunSelected.has(agent.agentId),
       activeProofBundleIds: (proofRegistry?.entries || [])
-        .filter((entry) => entry.agentId === agent.agentId && entry.state !== "revoked")
+        .filter(
+          (entry) =>
+            entry.agentId === agent.agentId &&
+            !["revoked", "superseded"].includes(String(entry.state || "").trim().toLowerCase()),
+        )
         .map((entry) => entry.id),
     };
   });
@@ -345,25 +382,28 @@ function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, r
     };
   }
   const unresolvedAssignment = (capabilityAssignments || []).find(
-    (assignment) => assignment.blocking && !assignment.assignedAgentId,
+    (assignment) =>
+      assignment.blocking &&
+      !assignment.assignedAgentId &&
+      assignmentRelevantToAgent(assignment, agentId),
   );
   if (unresolvedAssignment) {
     return {
       kind: "helper-assignment-unresolved",
       id: unresolvedAssignment.requestId,
-      agentId: null,
+      agentId: unresolvedAssignment.sourceAgentId || null,
       detail: unresolvedAssignment.assignmentDetail || unresolvedAssignment.summary || unresolvedAssignment.requestId,
     };
   }
   const blockingAssignment = (capabilityAssignments || []).find(
     (assignment) =>
-      assignment.blocking && (!agentId || assignment.assignedAgentId === agentId),
+      assignment.blocking && assignmentRelevantToAgent(assignment, agentId),
   );
   if (blockingAssignment) {
     return {
       kind: "helper-assignment",
       id: blockingAssignment.requestId,
-      agentId: blockingAssignment.assignedAgentId || null,
+      agentId: blockingAssignment.assignedAgentId || blockingAssignment.sourceAgentId || null,
       detail: blockingAssignment.assignmentDetail || blockingAssignment.summary || blockingAssignment.requestId,
     };
   }
@@ -480,7 +520,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
     }).filter((agent) => !agentId || agent.agentId === agentId),
     tasks,
     helperAssignments: (capabilityAssignments || []).filter(
-      (assignment) => assignment.blocking && (!agentId || assignment.assignedAgentId === agentId),
+      (assignment) => assignment.blocking && assignmentRelevantToAgent(assignment, agentId),
     ),
     dependencies: [
       ...(dependencySnapshot?.openInbound || []).filter(
@@ -658,8 +698,8 @@ export async function runControlCli(argv) {
     printUsage();
     return;
   }
-  if (surface !== "status" && !["task", "rerun", "proof"].includes(surface)) {
-    throw new Error("Expected control surface: status | task | rerun | proof");
+  if (surface !== "status" && !["telemetry", "task", "rerun", "proof"].includes(surface)) {
+    throw new Error("Expected control surface: status | telemetry | task | rerun | proof");
   }
   if (options.runId) {
     options.lane = resolveLaneForRun(options.runId, options.lane);
@@ -668,6 +708,21 @@ export async function runControlCli(argv) {
     runVariant: options.dryRun ? "dry-run" : undefined,
     adhocRunId: options.runId || null,
   });
+  if (surface === "telemetry") {
+    if (!["status", "flush"].includes(operation)) {
+      throw new Error("Expected telemetry operation: status | flush");
+    }
+    const payload =
+      operation === "flush"
+        ? await flushWaveControlQueue(lanePaths)
+        : readWaveControlQueueState(lanePaths);
+    if (options.json) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      console.log(JSON.stringify(payload, null, 2));
+    }
+    return;
+  }
   if (options.wave === null && options.runId) {
     options.wave = 0;
   }

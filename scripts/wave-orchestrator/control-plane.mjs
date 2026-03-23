@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   normalizeProofRegistry,
+  readProofRegistry,
   normalizeRetryOverride,
   writeProofRegistry,
   writeRetryOverride,
@@ -18,18 +19,19 @@ import {
   parseNonNegativeInt,
   toIsoTimestamp,
 } from "./shared.mjs";
-
-const CONTROL_ENTITY_TYPES = new Set([
-  "task",
-  "proof_bundle",
-  "rerun_request",
-  "attempt",
-  "human_input",
-]);
+import {
+  WAVE_CONTROL_ENTITY_TYPES,
+  normalizeWaveControlRunKind,
+} from "./wave-control-schema.mjs";
+import { safeQueueWaveControlEvent } from "./wave-control-client.mjs";
 
 const TASKABLE_COORDINATION_KINDS = new Set([
   "request",
   "blocker",
+  "handoff",
+  "evidence",
+  "claim",
+  "decision",
   "clarification-request",
   "human-feedback",
   "human-escalation",
@@ -107,11 +109,12 @@ export function normalizeControlPlaneEvent(rawEvent, defaults = {}) {
     throw new Error("Control-plane event must be an object");
   }
   const entityType = normalizeText(rawEvent.entityType || defaults.entityType).toLowerCase();
-  assertEnum(entityType, CONTROL_ENTITY_TYPES, "Control-plane entity type");
+  assertEnum(entityType, WAVE_CONTROL_ENTITY_TYPES, "Control-plane entity type");
   const lane = normalizeText(rawEvent.lane || defaults.lane);
   const wave = Number.parseInt(String(rawEvent.wave ?? defaults.wave ?? ""), 10);
   const entityId = normalizeText(rawEvent.entityId || defaults.entityId);
   const action = normalizeText(rawEvent.action || defaults.action).toLowerCase();
+  const runId = normalizeText(rawEvent.runId || defaults.runId, null);
   if (!lane) {
     throw new Error("Control-plane lane is required");
   }
@@ -129,12 +132,18 @@ export function normalizeControlPlaneEvent(rawEvent, defaults = {}) {
     id: normalizeText(rawEvent.id || defaults.id) || stableId(`ctrl-${entityType}`),
     lane,
     wave,
+    runKind: normalizeWaveControlRunKind(rawEvent.runKind || defaults.runKind || "roadmap"),
+    runId,
     entityType,
     entityId,
     action,
     source: normalizeText(rawEvent.source || defaults.source, "launcher"),
     actor: normalizeText(rawEvent.actor || defaults.actor, ""),
     recordedAt: normalizeText(rawEvent.recordedAt || defaults.recordedAt, toIsoTimestamp()),
+    attempt:
+      rawEvent.attempt === null || rawEvent.attempt === undefined || rawEvent.attempt === ""
+        ? defaults.attempt ?? null
+        : parseNonNegativeInt(rawEvent.attempt, "control-plane attempt"),
     data: normalizePlainObject(rawEvent.data || defaults.data) || {},
   };
 }
@@ -370,11 +379,34 @@ export function readWaveControlPlaneState(lanePaths, waveNumber) {
 
 export function appendWaveControlEvent(lanePaths, waveNumber, rawEvent, defaults = {}) {
   const filePath = waveControlPlaneLogPath(lanePaths, waveNumber);
-  return appendControlPlaneEvent(filePath, rawEvent, {
+  const event = appendControlPlaneEvent(filePath, rawEvent, {
     lane: lanePaths?.lane || defaults.lane || null,
     wave: waveNumber,
+    runKind: lanePaths?.runKind || defaults.runKind || "roadmap",
+    runId: lanePaths?.runId || defaults.runId || null,
     ...defaults,
   });
+  if (lanePaths?.waveControl?.captureControlPlaneEvents !== false) {
+    safeQueueWaveControlEvent(lanePaths, {
+      category: "control-plane",
+      entityType: event.entityType,
+      entityId: event.entityId,
+      action: event.action,
+      source: event.source,
+      actor: event.actor,
+      recordedAt: event.recordedAt,
+      identity: {
+        lane: event.lane,
+        wave: event.wave,
+        attempt: event.attempt,
+        runKind: event.runKind,
+        runId: event.runId,
+      },
+      tags: ["control-plane", event.entityType],
+      data: event.data,
+    });
+  }
+  return event;
 }
 
 function materializeProofRegistryProjection(lanePaths, waveNumber, controlState) {
@@ -405,6 +437,10 @@ function materializeRetryOverrideProjection(lanePaths, waveNumber, controlState)
       lane: lanePaths?.lane || null,
       wave: waveNumber,
       selectedAgentIds: activeRequest.selectedAgentIds,
+      reuseAttemptIds: activeRequest.reuseAttemptIds,
+      reuseProofBundleIds: activeRequest.reuseProofBundleIds,
+      reuseDerivedSummaries: activeRequest.reuseDerivedSummaries,
+      invalidateComponentIds: activeRequest.invalidateComponentIds,
       clearReusableAgentIds: activeRequest.clearReusableAgentIds,
       preserveReusableAgentIds: activeRequest.preserveReusableAgentIds,
       resumePhase: activeRequest.resumeCursor,

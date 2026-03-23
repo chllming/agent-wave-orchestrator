@@ -39,8 +39,10 @@
   - orchestrator-first clarification triage plus human escalation artifacts
   - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
-  - operator-applied retry overrides under `.tmp/<lane>-wave-launcher/control/` for selected reruns, reuse clearing, and explicit resume targets
-  - authoritative proof registries under `.tmp/<lane>-wave-launcher/proof/` so operator-captured live evidence can feed integration, cont-QA, and replay without manual state surgery
+  - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, attempt lifecycle, and human-input events as append-only JSONL; `wave control` materializes state from this log
+  - operator-applied retry overrides projected to `.tmp/<lane>-wave-launcher/control/` for compatibility with selected reruns, explicit reuse selectors, reuse clearing or preservation, and explicit resume targets
+  - authoritative proof registries projected to `.tmp/<lane>-wave-launcher/proof/` for compatibility, while preserving proof bundle lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure
+  - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for local-first, best-effort reporting to the Railway-hosted analysis plane
   - a thinner launcher entrypoint that now delegates session launch or wait and closure-sweep orchestration to dedicated modules while preserving the existing CLI surface
 - Runtime executor support now includes:
   - Codex `exec` profile, inline config, search, image, add-dir, JSON, and ephemeral flags

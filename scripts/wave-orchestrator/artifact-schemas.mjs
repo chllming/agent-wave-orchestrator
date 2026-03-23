@@ -1,4 +1,8 @@
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
+import {
+  normalizeWaveControlReportMode,
+  normalizeWaveControlRunKind,
+} from "./wave-control-schema.mjs";
 
 export const MANIFEST_SCHEMA_VERSION = 1;
 export const GLOBAL_DASHBOARD_SCHEMA_VERSION = 1;
@@ -9,6 +13,7 @@ export const ASSIGNMENT_SNAPSHOT_SCHEMA_VERSION = 1;
 export const DEPENDENCY_SNAPSHOT_SCHEMA_VERSION = 1;
 export const PROOF_REGISTRY_SCHEMA_VERSION = 1;
 export const RUN_STATE_SCHEMA_VERSION = 2;
+export const WAVE_CONTROL_DELIVERY_STATE_SCHEMA_VERSION = 1;
 
 export const MANIFEST_KIND = "wave-manifest";
 export const GLOBAL_DASHBOARD_KIND = "global-dashboard";
@@ -19,6 +24,7 @@ export const ASSIGNMENT_SNAPSHOT_KIND = "wave-assignment-snapshot";
 export const DEPENDENCY_SNAPSHOT_KIND = "wave-dependency-snapshot";
 export const PROOF_REGISTRY_KIND = "wave-proof-registry";
 export const RUN_STATE_KIND = "wave-run-state";
+export const WAVE_CONTROL_DELIVERY_STATE_KIND = "wave-control-delivery-state";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -27,6 +33,11 @@ function isPlainObject(value) {
 function normalizeInteger(value, fallback = null) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeNonNegativeInteger(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function normalizeText(value, fallback = null) {
@@ -119,6 +130,10 @@ export function normalizeRetryOverride(payload, defaults = {}) {
     lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
     wave: normalizeInteger(source.wave, normalizeInteger(defaults.wave, null)),
     selectedAgentIds: normalizeStringArray(source.selectedAgentIds),
+    reuseAttemptIds: normalizeStringArray(source.reuseAttemptIds),
+    reuseProofBundleIds: normalizeStringArray(source.reuseProofBundleIds),
+    reuseDerivedSummaries: source.reuseDerivedSummaries !== false,
+    invalidateComponentIds: normalizeStringArray(source.invalidateComponentIds),
     clearReusableAgentIds: normalizeStringArray(source.clearReusableAgentIds),
     preserveReusableAgentIds: normalizeStringArray(source.preserveReusableAgentIds),
     resumePhase: normalizeText(source.resumePhase, null),
@@ -273,6 +288,7 @@ function normalizeProofRegistryEntry(entry) {
   return {
     id: normalizeText(source.id, null),
     agentId: normalizeText(source.agentId, null),
+    state: normalizeText(source.state, null),
     authoritative: source.authoritative === true,
     recordedAt: normalizeText(source.recordedAt, toIsoTimestamp()),
     recordedBy: normalizeText(source.recordedBy, null),
@@ -287,6 +303,11 @@ function normalizeProofRegistryEntry(entry) {
     artifacts: (Array.isArray(source.artifacts) ? source.artifacts : [])
       .map((item) => normalizeProofArtifactEntry(item))
       .filter((item) => item.path),
+    scope: normalizeText(source.scope, null),
+    attestation: isPlainObject(source.attestation) ? cloneJson(source.attestation) : null,
+    satisfies: normalizeStringArray(source.satisfies),
+    supersedes: normalizeText(source.supersedes, null),
+    supersededBy: normalizeText(source.supersededBy, null),
   };
 }
 
@@ -314,6 +335,67 @@ export function readProofRegistry(filePath, defaults = {}) {
 
 export function writeProofRegistry(filePath, payload, defaults = {}) {
   const normalized = normalizeProofRegistry(payload, defaults);
+  writeJsonAtomic(filePath, normalized);
+  return normalized;
+}
+
+export function normalizeWaveControlDeliveryState(payload, defaults = {}) {
+  const source = isPlainObject(payload) ? payload : {};
+  return {
+    schemaVersion: WAVE_CONTROL_DELIVERY_STATE_SCHEMA_VERSION,
+    kind: WAVE_CONTROL_DELIVERY_STATE_KIND,
+    workspaceId: normalizeText(source.workspaceId, normalizeText(defaults.workspaceId, null)),
+    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
+    runId: normalizeText(source.runId, normalizeText(defaults.runId, null)),
+    runKind: normalizeWaveControlRunKind(
+      source.runKind,
+      "waveControlDeliveryState.runKind",
+      normalizeText(defaults.runKind, "unknown"),
+    ),
+    reportMode: normalizeWaveControlReportMode(
+      source.reportMode,
+      "waveControlDeliveryState.reportMode",
+      normalizeText(defaults.reportMode, "metadata-plus-selected"),
+    ),
+    endpoint: normalizeText(source.endpoint, normalizeText(defaults.endpoint, null)),
+    queuePath: normalizeText(source.queuePath, normalizeText(defaults.queuePath, null)),
+    eventsPath: normalizeText(source.eventsPath, normalizeText(defaults.eventsPath, null)),
+    pendingCount: normalizeNonNegativeInteger(
+      source.pendingCount,
+      normalizeNonNegativeInteger(defaults.pendingCount, 0),
+    ),
+    sentCount: normalizeNonNegativeInteger(
+      source.sentCount,
+      normalizeNonNegativeInteger(defaults.sentCount, 0),
+    ),
+    failedCount: normalizeNonNegativeInteger(
+      source.failedCount,
+      normalizeNonNegativeInteger(defaults.failedCount, 0),
+    ),
+    lastEnqueuedAt: normalizeText(source.lastEnqueuedAt, normalizeText(defaults.lastEnqueuedAt, null)),
+    lastFlushAt: normalizeText(source.lastFlushAt, normalizeText(defaults.lastFlushAt, null)),
+    lastSuccessAt: normalizeText(source.lastSuccessAt, normalizeText(defaults.lastSuccessAt, null)),
+    lastError:
+      source.lastError === undefined
+        ? defaults.lastError ?? null
+        : isPlainObject(source.lastError)
+          ? source.lastError
+          : normalizeText(source.lastError, null),
+    recentEventIds: normalizeStringArray(source.recentEventIds ?? defaults.recentEventIds),
+    updatedAt: normalizeText(source.updatedAt, normalizeText(defaults.updatedAt, toIsoTimestamp())),
+  };
+}
+
+export function readWaveControlDeliveryState(filePath, defaults = {}) {
+  const payload = readJsonOrNull(filePath);
+  if (!payload) {
+    return null;
+  }
+  return normalizeWaveControlDeliveryState(payload, defaults);
+}
+
+export function writeWaveControlDeliveryState(filePath, payload, defaults = {}) {
+  const normalized = normalizeWaveControlDeliveryState(payload, defaults);
   writeJsonAtomic(filePath, normalized);
   return normalized;
 }

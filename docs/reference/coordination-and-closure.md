@@ -164,6 +164,8 @@ What happens next:
 - that assignment is written into the assignment snapshot
 - the shared summary and A8 inbox now show the open helper work
 
+`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into blocking task edges; plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner.
+
 ### Step 3: Why A1 Can Be Done But The Wave Is Still Blocked
 
 This is the important distinction:
@@ -411,6 +413,7 @@ pnpm exec wave control rerun request --lane main --wave 10 --agent A2 --agent A7
 The canonical rerun request is written under `.tmp/<lane>-wave-launcher/control-plane/`, projected to `.tmp/<lane>-wave-launcher/control/` for compatibility, consumed by the launcher on the next retry decision, and then cleared by default after one application. This is the supported path for:
 
 - rerunning only specific owners
+- preserving explicit reuse selectors such as attempt ids, proof bundle ids, derived-summary reuse, and invalidated component ids through the compatibility projection
 - clearing reuse for selected agents without wiping the whole wave state
 - resuming at the real remaining implementation owners instead of restarting or stopping at the wrong sibling
 

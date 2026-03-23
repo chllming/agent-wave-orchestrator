@@ -23,6 +23,7 @@ import {
   resolveRelaunchRuns,
   resolveSharedComponentContinuationRuns,
   runClosureSweepPhase,
+  selectReusablePreCompletedAgentIds,
   selectInitialWaveRuns,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
 import { materializeCoordinationState } from "../../scripts/wave-orchestrator/coordination-store.mjs";
@@ -2272,6 +2273,60 @@ describe("hasReusableSuccessStatus", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe("selectReusablePreCompletedAgentIds", () => {
+  it("excludes closure agents from precompleted reuse selection", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const a1StatusPath = path.join(dir, "wave-0-a1.status");
+    const a8StatusPath = path.join(dir, "wave-0-a8.status");
+    const a1 = {
+      agentId: "A1",
+      prompt: "Implement the runtime fix.",
+    };
+    const a8 = {
+      agentId: "A8",
+      prompt: "Integrate the implementation slices.",
+    };
+
+    fs.writeFileSync(
+      a1StatusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(a1),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      a8StatusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(a8),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      Array.from(
+        selectReusablePreCompletedAgentIds(
+          [
+            { agent: a1, statusPath: a1StatusPath },
+            { agent: a8, statusPath: a8StatusPath },
+          ],
+          lanePaths,
+        ),
+      ),
+    ).toEqual(["A1"]);
   });
 });
 

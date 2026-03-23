@@ -147,6 +147,7 @@ import {
 } from "./retry-control.mjs";
 import { appendWaveControlEvent } from "./control-plane.mjs";
 import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
+import { flushWaveControlQueue } from "./wave-control-client.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 import { readProjectProfile, resolveDefaultTerminalSurface } from "./project-profile.mjs";
 import {
@@ -237,6 +238,7 @@ Options:
                         Optional startup intent note appended to orchestrator board
   --resident-orchestrator
                         Launch an additional long-running resident orchestrator session for the wave
+  --no-telemetry        Disable Wave Control reporting for this launcher run
   --no-context7         Disable launcher-side Context7 prefetch/injection
   --help                 Show this help message
 `);
@@ -267,6 +269,7 @@ function parseArgs(argv) {
     cleanupSessions: true,
     keepTerminals: false,
     context7Enabled: true,
+    telemetryEnabled: true,
     residentOrchestrator: false,
     orchestratorId: null,
     orchestratorBoardPath: null,
@@ -304,6 +307,8 @@ function parseArgs(argv) {
       options.keepTerminals = true;
     } else if (arg === "--no-context7") {
       options.context7Enabled = false;
+    } else if (arg === "--no-telemetry") {
+      options.telemetryEnabled = false;
     } else if (arg === "--no-orchestrator-board") {
       options.orchestratorBoardPath = null;
       orchestratorBoardProvided = true;
@@ -379,6 +384,16 @@ function parseArgs(argv) {
   }
   if (!executorProvided) {
     options.executorMode = lanePaths.executors.default;
+  }
+  if (!options.telemetryEnabled) {
+    lanePaths.waveControl = {
+      ...(lanePaths.waveControl || {}),
+      enabled: false,
+    };
+    lanePaths.laneProfile = {
+      ...(lanePaths.laneProfile || {}),
+      waveControl: lanePaths.waveControl,
+    };
   }
   options.orchestratorId ||= sanitizeOrchestratorId(`${lanePaths.lane}-orch-${process.pid}`);
   if (options.agentRateLimitMaxDelaySeconds < options.agentRateLimitBaseDelaySeconds) {
@@ -2678,6 +2693,28 @@ function isClosureAgentId(agent, lanePaths) {
   ].includes(agent?.agentId) || isSecurityReviewAgent(agent);
 }
 
+export function selectReusablePreCompletedAgentIds(
+  agentRuns,
+  lanePaths,
+  { retryOverride = null, wave = null, derivedState = null, proofRegistry = null } = {},
+) {
+  const retryOverrideClearedAgentIds = new Set(retryOverride?.clearReusableAgentIds || []);
+  return new Set(
+    (agentRuns || [])
+      .filter(
+        (run) =>
+          !retryOverrideClearedAgentIds.has(run.agent.agentId) &&
+          !isClosureAgentId(run.agent, lanePaths) &&
+          hasReusableSuccessStatus(run.agent, run.statusPath, {
+            wave,
+            derivedState,
+            proofRegistry,
+          }),
+      )
+      .map((run) => run.agent.agentId),
+  );
+}
+
 export function selectInitialWaveRuns(agentRuns, lanePaths) {
   const implementationRuns = (agentRuns || []).filter(
     (run) => !isClosureAgentId(run?.agent, lanePaths),
@@ -3656,6 +3693,13 @@ export async function runLauncherCli(argv) {
           message: `${globalMessagePrefix}${message}`,
         });
       };
+      const flushWaveControlTelemetry = async () => {
+        try {
+          await flushWaveControlQueue(lanePaths);
+        } catch {
+          // Remote telemetry delivery is best-effort only.
+        }
+      };
 
       try {
         terminalEntries = createTemporaryTerminalEntries(
@@ -3809,21 +3853,13 @@ export async function runLauncherCli(argv) {
           return true;
         };
 
-        const retryOverrideClearedAgentIds = new Set(retryOverride?.clearReusableAgentIds || []);
-        const preCompletedAgentIds = new Set(
-          agentRuns
-            .filter(
-              (run) =>
-                !retryOverrideClearedAgentIds.has(run.agent.agentId) &&
-                !isClosureAgentId(run.agent.agentId, lanePaths) &&
-                hasReusableSuccessStatus(run.agent, run.statusPath, {
-                  wave,
-                  derivedState,
-                  proofRegistry: readWaveProofRegistry(lanePaths, wave.wave),
-                }),
-            )
-            .map((run) => run.agent.agentId),
-        );
+        const proofRegistryForReuse = readWaveProofRegistry(lanePaths, wave.wave);
+        const preCompletedAgentIds = selectReusablePreCompletedAgentIds(agentRuns, lanePaths, {
+          retryOverride,
+          wave,
+          derivedState,
+          proofRegistry: proofRegistryForReuse,
+        });
         for (const agentId of preCompletedAgentIds) {
           setWaveDashboardAgent(dashboardState, agentId, {
             state: "completed",
@@ -3983,6 +4019,19 @@ export async function runLauncherCli(argv) {
               ...(data.createdAt ? { createdAt: data.createdAt } : {}),
             },
           });
+        appendWaveControlEvent(lanePaths, wave.wave, {
+          entityType: "wave_run",
+          entityId: `wave-${wave.wave}`,
+          action: "started",
+          source: "launcher",
+          actor: "launcher",
+          data: {
+            waveId: `wave-${wave.wave}`,
+            waveNumber: wave.wave,
+            agentIds: wave.agents.map((agent) => agent.agentId),
+            runVariant: lanePaths.runVariant || "live",
+          },
+        });
 
         while (attempt <= options.maxRetriesPerWave + 1) {
           refreshDerivedState(attempt - 1);
@@ -4089,6 +4138,23 @@ export async function runLauncherCli(argv) {
                 state: "running",
                 detail: "Session launched",
               });
+              appendWaveControlEvent(lanePaths, wave.wave, {
+                entityType: "agent_run",
+                entityId: `wave-${wave.wave}-attempt-${attempt}-agent-${runInfo.agent.agentId}`,
+                action: "started",
+                source: "launcher",
+                actor: runInfo.agent.agentId,
+                attempt,
+                data: {
+                  agentId: runInfo.agent.agentId,
+                  attemptNumber: attempt,
+                  sessionName: runInfo.sessionName,
+                  executorId: runInfo.lastExecutorId,
+                  promptPath: path.relative(REPO_ROOT, runInfo.promptPath),
+                  statusPath: path.relative(REPO_ROOT, runInfo.statusPath),
+                  logPath: path.relative(REPO_ROOT, runInfo.logPath),
+                },
+              });
               recordCombinedEvent({
                 agentId: runInfo.agent.agentId,
                 message: `Launched in tmux session ${runInfo.sessionName}`,
@@ -4155,6 +4221,28 @@ export async function runLauncherCli(argv) {
           }
 
           materializeAgentExecutionSummaries(wave, agentRuns);
+          for (const runInfo of runsToLaunch) {
+            const statusRecord = readStatusRecordIfPresent(runInfo.statusPath);
+            const action = Number(statusRecord?.code) === 0 ? "completed" : "failed";
+            appendWaveControlEvent(lanePaths, wave.wave, {
+              entityType: "agent_run",
+              entityId: `wave-${wave.wave}-attempt-${attempt}-agent-${runInfo.agent.agentId}`,
+              action,
+              source: "launcher",
+              actor: runInfo.agent.agentId,
+              attempt,
+              data: {
+                agentId: runInfo.agent.agentId,
+                attemptNumber: attempt,
+                exitCode: statusRecord?.code ?? null,
+                completedAt: statusRecord?.completedAt || null,
+                promptHash: statusRecord?.promptHash || runInfo.lastPromptHash || null,
+                executorId: runInfo.lastExecutorId || null,
+                logPath: path.relative(REPO_ROOT, runInfo.logPath),
+                statusPath: path.relative(REPO_ROOT, runInfo.statusPath),
+              },
+            });
+          }
           refreshDerivedState(attempt);
           lastLiveCoordinationRefreshAt = Date.now();
           emitCoordinationAlertEvents(derivedState);
@@ -4620,6 +4708,24 @@ export async function runLauncherCli(argv) {
             }),
           });
           completionTraceDir = traceDir;
+          appendWaveControlEvent(lanePaths, wave.wave, {
+            entityType: "gate",
+            entityId: `wave-${wave.wave}-attempt-${attempt}-gate`,
+            action: "evaluated",
+            source: "launcher",
+            actor: "launcher",
+            attempt,
+            data: {
+              attemptNumber: attempt,
+              traceDir: path.relative(REPO_ROOT, traceDir),
+              gateSnapshot,
+              qualitySummary: {
+                contradictionCount: gateSnapshot?.integration?.conflictingClaims?.length || 0,
+                finalRecommendation: derivedState.integrationSummary?.recommendation || "unknown",
+              },
+            },
+          });
+          await flushWaveControlTelemetry();
 
           const sharedComponentContinuationRuns = resolveSharedComponentContinuationRuns(
             runsToLaunch,
@@ -4680,6 +4786,20 @@ export async function runLauncherCli(argv) {
               selectedAgentIds: runsToLaunch.map((run) => run.agent.agentId),
               detail: "Wave gates passed for this attempt.",
             });
+            appendWaveControlEvent(lanePaths, wave.wave, {
+              entityType: "wave_run",
+              entityId: `wave-${wave.wave}`,
+              action: "completed",
+              source: "launcher",
+              actor: "launcher",
+              data: {
+                waveId: `wave-${wave.wave}`,
+                waveNumber: wave.wave,
+                attempts: attempt,
+                traceDir: completionTraceDir ? path.relative(REPO_ROOT, completionTraceDir) : null,
+                gateSnapshot: completionGateSnapshot,
+              },
+            });
             dashboardState.status = "completed";
             recordCombinedEvent({ message: `Wave ${wave.wave} completed successfully.` });
             refreshWaveDashboardAgentStates(dashboardState, agentRuns, new Set(), (event) =>
@@ -4687,6 +4807,7 @@ export async function runLauncherCli(argv) {
             );
             updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
             flushDashboards();
+            await flushWaveControlTelemetry();
             break;
           }
 
@@ -4696,6 +4817,25 @@ export async function runLauncherCli(argv) {
               detail: failures
                 .map((failure) => `${failure.agentId || "wave"}:${failure.statusCode}`)
                 .join(", "),
+            });
+            appendWaveControlEvent(lanePaths, wave.wave, {
+              entityType: "wave_run",
+              entityId: `wave-${wave.wave}`,
+              action: "failed",
+              source: "launcher",
+              actor: "launcher",
+              data: {
+                waveId: `wave-${wave.wave}`,
+                waveNumber: wave.wave,
+                attempts: attempt,
+                traceDir: completionTraceDir ? path.relative(REPO_ROOT, completionTraceDir) : null,
+                gateSnapshot: completionGateSnapshot,
+                failures: failures.map((failure) => ({
+                  agentId: failure.agentId || null,
+                  statusCode: failure.statusCode,
+                  detail: failure.detail || null,
+                })),
+              },
             });
             dashboardState.status = timedOut ? "timed_out" : "failed";
             for (const failure of failures) {
@@ -4714,6 +4854,7 @@ export async function runLauncherCli(argv) {
             const error = new Error(
               `Wave ${wave.wave} failed after ${attempt} attempt(s):\n${details}`,
             );
+            await flushWaveControlTelemetry();
             if (
               failures.every(
                 (failure) =>

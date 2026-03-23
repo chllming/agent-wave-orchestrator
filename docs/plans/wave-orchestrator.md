@@ -65,11 +65,12 @@ This runbook is the operational view of the architecture:
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, and Context7 bundle-index location. The starter config also wires the optional security reviewer prompt at `docs/agents/wave-security-role.md` and the `security-review` executor profile.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, Context7 bundle-index location, and the optional `waveControl` telemetry section. The starter config also wires the optional security reviewer prompt at `docs/agents/wave-security-role.md` and the `security-review` executor profile.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/evals/README.md` explains how to author delegated versus pinned `## Eval targets`, including the coordination-oriented benchmark families.
 - `docs/reference/live-proof-waves.md` explains how to author proof-first `pilot-live` and higher-maturity waves with `### Proof artifacts`, sticky executors, and operator command capture.
 - `docs/reference/sample-waves.md` points to showcase-first sample waves that combine the modern authored wave surface in concrete examples.
+- `docs/reference/wave-control.md` documents the Wave Control telemetry and analysis plane, including entity types, artifact upload policies, and the local-first reporting contract.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
 - `.wave/project-profile.json` (created by `wave project setup`) records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
@@ -132,8 +133,8 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 ## Coordination Surfaces
 
 - `wave control status` is the read-only projection for "why blocked / why retrying" at wave or agent scope. It returns blocking edges, logical agent state, tasks, dependencies, rerun intent, active proof bundles, and next timers from one materialized control-plane view.
-- `wave control task create|get|list|act` is the operator task surface for blockers, handoffs, clarification chains, human-input tickets, and escalations.
-- `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`.
+- `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions. `wave control status` only treats requests, blockers, clarifications, human-input, escalations, helper assignments, and required dependencies as blocking edges.
+- `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists.
 - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles in the same control-plane log and projects compatible proof registries under `.tmp/<lane>-wave-launcher/proof/`.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
@@ -225,10 +226,12 @@ pnpm exec wave changelog --since-installed
 - dependency snapshots: `.tmp/<lane>-wave-launcher/dependencies/`
 - docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
+- control-plane events: `.tmp/<lane>-wave-launcher/control-plane/`
+  Canonical append-only JSONL log of operator tasks, rerun requests, proof bundles, attempt lifecycle, and human-input events. This is the source of truth for `wave control`. Telemetry queue lives under `control-plane/telemetry/`.
 - proof registries: `.tmp/<lane>-wave-launcher/proof/`
-  Operator-registered authoritative proof bundles. Entries feed integration, cont-QA, and replay.
+  Projected from control-plane state for compatibility. Operator-registered authoritative proof bundles that feed integration, cont-QA, and replay.
 - retry overrides: `.tmp/<lane>-wave-launcher/control/`
-  Operator-applied targeted retry overrides. Applied once per attempt, then cleared by the launcher.
+  Projected from control-plane state for compatibility. Operator-applied targeted retry overrides, applied once per attempt and then cleared by the launcher.
 - clarification triage: `.tmp/<lane>-wave-launcher/feedback/triage/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
   Dashboard JSON is a versioned contract. `global.json` and `wave-<n>.json` now carry explicit `schemaVersion` and `kind` fields.
@@ -260,6 +263,7 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
   - `outcome.json`
   - `shared-summary.md`
   - copied prompt, log, status, inbox, and summary artifacts per launched agent
+  - `control-plane.raw.jsonl`
   - `structured-signals.json`
   - `quality.json`
   - `run-metadata.json`

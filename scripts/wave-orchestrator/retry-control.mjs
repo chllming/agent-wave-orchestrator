@@ -23,6 +23,51 @@ function uniqueAgentIds(values) {
   );
 }
 
+function mergeRetryOverride(activeRequest, projectedOverride, lanePaths, waveNumber) {
+  const projected = projectedOverride || {};
+  return {
+    lane: lanePaths?.lane || projected.lane || null,
+    wave: waveNumber,
+    selectedAgentIds: uniqueAgentIds(
+      projected.selectedAgentIds?.length > 0
+        ? projected.selectedAgentIds
+        : activeRequest?.selectedAgentIds,
+    ),
+    reuseAttemptIds: uniqueAgentIds(
+      projected.reuseAttemptIds?.length > 0
+        ? projected.reuseAttemptIds
+        : activeRequest?.reuseAttemptIds,
+    ),
+    reuseProofBundleIds: uniqueAgentIds(
+      projected.reuseProofBundleIds?.length > 0
+        ? projected.reuseProofBundleIds
+        : activeRequest?.reuseProofBundleIds,
+    ),
+    reuseDerivedSummaries:
+      projected.reuseDerivedSummaries === false ? false : activeRequest?.reuseDerivedSummaries !== false,
+    invalidateComponentIds: uniqueAgentIds(
+      projected.invalidateComponentIds?.length > 0
+        ? projected.invalidateComponentIds
+        : activeRequest?.invalidateComponentIds,
+    ),
+    clearReusableAgentIds: uniqueAgentIds(
+      projected.clearReusableAgentIds?.length > 0
+        ? projected.clearReusableAgentIds
+        : activeRequest?.clearReusableAgentIds,
+    ),
+    preserveReusableAgentIds: uniqueAgentIds(
+      projected.preserveReusableAgentIds?.length > 0
+        ? projected.preserveReusableAgentIds
+        : activeRequest?.preserveReusableAgentIds,
+    ),
+    resumePhase: projected.resumePhase || activeRequest?.resumeCursor || null,
+    requestedBy: projected.requestedBy || activeRequest?.requestedBy || "human-operator",
+    reason: projected.reason || activeRequest?.reason || null,
+    applyOnce: projected.applyOnce === false ? false : activeRequest?.applyOnce !== false,
+    createdAt: projected.createdAt || activeRequest?.createdAt,
+  };
+}
+
 export function waveRetryOverridePath(lanePaths, waveNumber) {
   return path.join(lanePaths.controlDir, `retry-override-wave-${parseNonNegativeInt(waveNumber, "wave")}.json`);
 }
@@ -34,30 +79,17 @@ export function waveRelaunchPlanPath(lanePaths, waveNumber) {
 export function readWaveRetryOverride(lanePaths, waveNumber) {
   const state = readWaveControlPlaneState(lanePaths, waveNumber);
   const activeRequest = state.activeRerunRequest;
+  const projectedOverride = readRetryOverride(waveRetryOverridePath(lanePaths, waveNumber), {
+    lane: lanePaths?.lane || null,
+    wave: waveNumber,
+  });
   if (!activeRequest && state.rerunRequests.length === 0) {
-    return readRetryOverride(waveRetryOverridePath(lanePaths, waveNumber), {
-      lane: lanePaths?.lane || null,
-      wave: waveNumber,
-    });
+    return projectedOverride;
   }
   if (!activeRequest) {
     return null;
   }
-  return readRetryOverride(waveRetryOverridePath(lanePaths, waveNumber), {
-    lane: lanePaths?.lane || null,
-    wave: waveNumber,
-  }) || {
-    lane: lanePaths?.lane || null,
-    wave: waveNumber,
-    selectedAgentIds: activeRequest.selectedAgentIds,
-    clearReusableAgentIds: activeRequest.clearReusableAgentIds,
-    preserveReusableAgentIds: activeRequest.preserveReusableAgentIds,
-    resumePhase: activeRequest.resumeCursor || null,
-    requestedBy: activeRequest.requestedBy || "human-operator",
-    reason: activeRequest.reason || null,
-    applyOnce: activeRequest.applyOnce !== false,
-    createdAt: activeRequest.createdAt,
-  };
+  return mergeRetryOverride(activeRequest, projectedOverride, lanePaths, waveNumber);
 }
 
 export function writeWaveRetryOverride(lanePaths, waveNumber, payload) {

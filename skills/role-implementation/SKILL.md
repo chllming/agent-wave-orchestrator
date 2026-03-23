@@ -21,10 +21,13 @@ Follow this sequence for each deliverable in your exit contract:
    - Tests that pass and cover the changed behavior.
    - Generated artifacts (built output, schemas, configs) that exist on disk.
    - Structured markers or summaries when the deliverable is not purely code.
+   - If the wave declares `### Proof artifacts`, ensure those machine-visible local files are present before closure.
 5. **Run tests** -- execute `pnpm test` or the repo's declared test command. Fix any regressions your changes introduced.
 6. **Verify exit contract** -- walk each line of your exit contract and confirm a proof artifact backs it. If any line lacks proof, either produce it or post a coordination record explaining the gap.
 7. **Coordination record** -- post a record summarizing what landed, what proof exists, and any downstream impacts on integration or documentation.
 8. **Handoff** -- if your work affects another agent's scope (interface changes, new dependencies, shifted proof expectations), post an explicit handoff naming the affected agent, files, and fields.
+
+Note: summaries and inboxes may refresh during execution. Re-read context before major decisions rather than relying on the initial snapshot.
 
 ## Proof Standards
 
@@ -45,6 +48,7 @@ Post a coordination record immediately when any of these occur:
 - **Dependency**: your deliverable depends on another agent's work landing first.
 - **Proof gap**: you cannot produce the required proof for an exit contract line and need help.
 - **Completion**: you have finished all deliverables and want downstream agents (integration, documentation) to proceed.
+- **Helper assignment received**: you received a targeted request from another agent. Acknowledge it promptly; unacknowledged requests become overdue and may be rerouted.
 
 ## Exit Contract Verification
 

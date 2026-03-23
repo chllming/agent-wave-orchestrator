@@ -3,6 +3,24 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.7.0",
+      "date": "2026-03-23",
+      "summary": "Unified wave control operator CLI, canonical control-plane event log, Wave Control telemetry, live-wave orchestration refresh, and resident orchestrator support.",
+      "features": [
+        "Unified `wave control` CLI with `status`, `task`, `rerun`, `proof`, and `telemetry` sub-surfaces replacing `wave coord`/`wave retry`/`wave proof` as the preferred operator interface.",
+        "Canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` with event-sourced materialization for proof bundles, rerun requests, operator tasks, and attempt lifecycle.",
+        "Wave Control telemetry: local-first event queueing with best-effort batch delivery, configurable report modes, selective artifact upload, and per-category capture toggles.",
+        "Live-wave orchestration refresh that keeps coordination surfaces, clarification triage, and dashboard metrics current during active execution.",
+        "Resident orchestrator support via `--resident-orchestrator` for long-running non-owning monitoring sessions.",
+        "Native and external benchmark telemetry with failure-review validity classification and config attestation hashing."
+      ],
+      "manualSteps": [
+        "Existing `wave coord`, `wave retry`, and `wave proof` commands remain available as compatibility surfaces. No migration required, but new operator docs prefer `wave control`.",
+        "To enable Wave Control telemetry, add a `waveControl` section to `wave.config.json` with at minimum an `endpoint` and `workspaceId`. Pass `--no-telemetry` to disable for a single run."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.6.3",
       "date": "2026-03-22",
       "summary": "Runtime npmjs update notices plus a one-command self-update flow for downstream repos.",

@@ -248,6 +248,85 @@ describe("triageClarificationRequests", () => {
     });
   });
 
+  it("supersedes stale human escalation while a routed clarification follow-up is still open", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = makeWave();
+    const coordinationLogPath = path.join(dir, "coordination", "wave-0.jsonl");
+
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "clarify-runtime",
+      lane: "main",
+      wave: 0,
+      agentId: "A9",
+      kind: "clarification-request",
+      targets: ["launcher"],
+      priority: "high",
+      summary: "Need runtime owner for src/runtime.ts rollback drill",
+      detail: "Waiting on the implementation owner to confirm rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      status: "in_progress",
+      source: "agent",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "route-clarify-runtime-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "request",
+      targets: ["agent:A1"],
+      priority: "high",
+      summary: "Clarification follow-up for A9",
+      detail: "Please provide the approved rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      dependsOn: ["clarify-runtime"],
+      closureCondition: "clarification:clarify-runtime",
+      status: "open",
+      source: "launcher",
+      attempt: 1,
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "escalation-feedback-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "human-escalation",
+      targets: ["agent:A9"],
+      priority: "high",
+      summary: "Need runtime owner for src/runtime.ts rollback drill",
+      detail: "Stale escalation that should be suppressed while routing remains active.",
+      artifactRefs: ["feedback-1"],
+      dependsOn: ["clarify-runtime"],
+      closureCondition: "clarification:clarify-runtime",
+      status: "open",
+      source: "launcher",
+      attempt: 1,
+    });
+
+    const outcome = triageClarificationRequests({
+      lanePaths,
+      wave,
+      coordinationLogPath,
+      coordinationState: readMaterializedCoordinationState(coordinationLogPath),
+      orchestratorId: "orch-1",
+      attempt: 1,
+    });
+
+    expect(outcome.changed).toBe(true);
+    const updatedState = readMaterializedCoordinationState(coordinationLogPath);
+    expect(updatedState.byId.get("clarify-runtime")).toMatchObject({
+      status: "in_progress",
+    });
+    expect(updatedState.byId.get("route-clarify-runtime-1")).toMatchObject({
+      status: "open",
+    });
+    expect(updatedState.byId.get("escalation-feedback-1")).toMatchObject({
+      status: "superseded",
+      detail: "Superseded by routed clarification follow-up for clarify-runtime.",
+    });
+    expect(fs.existsSync(path.join(lanePaths.feedbackRequestsDir))).toBe(false);
+  });
+
   it("escalates unresolved clarification requests to human feedback and writes the pending summary", () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);
@@ -295,5 +374,75 @@ describe("triageClarificationRequests", () => {
       status: "in_progress",
     });
     expect(fs.readFileSync(outcome.pendingHumanPath, "utf8")).toContain(requestPayload.id);
+  });
+
+  it("reroutes a clarification follow-up inside the same attempt after the ack SLA expires", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = makeWave();
+    const coordinationLogPath = path.join(dir, "coordination", "wave-0.jsonl");
+
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "clarify-runtime-reroute",
+      lane: "main",
+      wave: 0,
+      agentId: "A9",
+      kind: "clarification-request",
+      targets: ["launcher"],
+      priority: "high",
+      summary: "Need runtime owner for src/runtime.ts rollback drill",
+      detail: "Waiting on the implementation owner to confirm rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      status: "in_progress",
+      source: "agent",
+      createdAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "route-clarify-runtime-reroute-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "request",
+      targets: ["agent:A1"],
+      priority: "high",
+      summary: "Clarification follow-up for A9",
+      detail: "Please provide the approved rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      dependsOn: ["clarify-runtime-reroute"],
+      closureCondition: "clarification:clarify-runtime-reroute",
+      status: "open",
+      source: "launcher",
+      attempt: 1,
+      createdAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+    });
+
+    const originalNow = Date.now;
+    Date.now = () => Date.parse("2026-03-22T00:10:00.000Z");
+    try {
+      const outcome = triageClarificationRequests({
+        lanePaths,
+        wave,
+        coordinationLogPath,
+        coordinationState: readMaterializedCoordinationState(coordinationLogPath),
+        orchestratorId: "orch-1",
+        attempt: 1,
+      });
+
+      expect(outcome.changed).toBe(true);
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const updatedState = readMaterializedCoordinationState(coordinationLogPath);
+    expect(updatedState.byId.get("route-clarify-runtime-reroute-1")).toMatchObject({
+      status: "superseded",
+    });
+    expect(updatedState.byId.get("route-clarify-runtime-reroute-2")).toMatchObject({
+      status: "open",
+      targets: ["agent:A1"],
+    });
+    expect(updatedState.humanEscalations).toHaveLength(0);
   });
 });

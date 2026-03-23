@@ -49,11 +49,12 @@ All three layers are binding. When they conflict, prefer the compiled task promp
 
 ## Context Management
 
-- Re-read the shared summary and inbox before starting work and before emitting final markers.
+- Re-read the shared summary and inbox before starting work and before emitting final markers. Summaries and inboxes may refresh during execution via the live orchestration loop, so re-read before major decisions.
 - Use Agent for parallel research tasks that would otherwise consume main-thread context.
 - Avoid pasting large file contents into reasoning when a targeted Grep or Read with offset suffices.
 - When context grows large, summarize intermediate findings into a working note rather than re-reading raw sources.
 - Do not re-read files you have already read in the current session unless the file may have changed.
+- Do not edit files under `.tmp/` (coordination logs, control-plane events, proof registries, dashboards, traces). These are managed by the launcher and operator tooling.
 
 ## Customization
 

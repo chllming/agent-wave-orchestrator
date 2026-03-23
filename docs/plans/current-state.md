@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.6.3` package release surface.
+- The starter workspace in this source repo reflects the `0.7.0` package release surface.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - Runtime launch entrypoints now perform a best-effort npmjs version check, cache the result under `.wave/package-update-check.json`, and point operators at `pnpm exec wave self-update` when a newer published package exists.
@@ -28,6 +28,7 @@
   - a canonical coordination JSONL log
   - a generated markdown board projection
   - compiled shared summaries and per-agent inboxes
+  - active live-wave orchestration refresh that keeps summaries, inboxes, clarification triage, and dashboard coordination metrics current while agents are still running
   - a per-wave ledger
   - docs queues
   - explicit integration summaries with actionable claim, interface, proof, docs, and deploy-risk evidence
@@ -36,7 +37,12 @@
   - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
   - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
+  - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
+  - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, attempt lifecycle, and human-input events as append-only JSONL; `wave control` materializes state from this log
+  - operator-applied retry overrides projected to `.tmp/<lane>-wave-launcher/control/` for compatibility with selected reruns, explicit reuse selectors, reuse clearing or preservation, and explicit resume targets
+  - authoritative proof registries projected to `.tmp/<lane>-wave-launcher/proof/` for compatibility, while preserving proof bundle lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure
+  - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for local-first, best-effort reporting to the Railway-hosted analysis plane
   - a thinner launcher entrypoint that now delegates session launch or wait and closure-sweep orchestration to dedicated modules while preserving the existing CLI surface
 - Runtime executor support now includes:
   - Codex `exec` profile, inline config, search, image, add-dir, JSON, and ephemeral flags
@@ -62,6 +68,7 @@
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.
 - Proof-centric waves can now declare `### Proof artifacts`, and implementation proof validation can require those machine-visible local artifacts in addition to deliverables and structured proof markers.
 - Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
+- Operators can now use `wave control status`, `wave control task`, `wave control rerun`, and `wave control proof` as the preferred supported control surfaces during a live wave instead of editing runtime files by hand. Legacy `wave coord`, `wave retry`, and `wave proof` commands remain as compatibility paths.
 - Required inbound cross-lane dependency tickets under `.tmp/wave-orchestrator/dependencies/` block both autonomous wave launch and lane finalization while they remain unresolved.
 - Cross-lane dependency workflows now include:
   - `wave dep post|show|resolve|render`

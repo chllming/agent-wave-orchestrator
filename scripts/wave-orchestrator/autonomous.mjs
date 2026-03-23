@@ -45,6 +45,7 @@ Options:
                                 Max backoff delay for 429 retries (default: ${DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS})
   --agent-launch-stagger-ms <n> Delay between agent launches (default: ${DEFAULT_AGENT_LAUNCH_STAGGER_MS})
   --orchestrator-id <id>        Orchestrator ID for coordination board
+  --resident-orchestrator       Launch a resident orchestrator session for each live wave
   --executor <mode>             Default executor passed to launcher: ${SUPPORTED_EXECUTOR_MODES.join(" | ")} (default: lane config)
   --codex-sandbox <mode>        Default Codex sandbox mode passed to launcher (default: ${DEFAULT_CODEX_SANDBOX_MODE})
   --dashboard                   Enable dashboards (default: disabled)
@@ -64,6 +65,7 @@ export function parseArgs(argv) {
     agentRateLimitMaxDelaySeconds: DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS,
     agentLaunchStaggerMs: DEFAULT_AGENT_LAUNCH_STAGGER_MS,
     orchestratorId: null,
+    residentOrchestrator: false,
     executorMode: DEFAULT_EXECUTOR_MODE,
     codexSandboxMode: DEFAULT_CODEX_SANDBOX_MODE,
     noDashboard: true,
@@ -103,6 +105,8 @@ export function parseArgs(argv) {
       options.agentLaunchStaggerMs = parseNonNegativeInt(argv[++i], "--agent-launch-stagger-ms");
     } else if (arg === "--orchestrator-id") {
       options.orchestratorId = String(argv[++i] || "").trim();
+    } else if (arg === "--resident-orchestrator") {
+      options.residentOrchestrator = true;
     } else if (arg === "--executor") {
       options.executorMode = normalizeExecutorMode(argv[++i], "--executor");
       executorProvided = true;
@@ -227,6 +231,9 @@ function launchSingleWave(params) {
   }
   if (params.keepTerminals) {
     args.push("--keep-terminals");
+  }
+  if (params.residentOrchestrator) {
+    args.push("--resident-orchestrator");
   }
   return runCommand(args, { [WAVE_SUPPRESS_UPDATE_NOTICE_ENV]: "1" });
 }

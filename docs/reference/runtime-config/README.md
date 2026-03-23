@@ -6,6 +6,7 @@ Use it when you need the full supported surface for:
 
 - `wave.config.json`
 - `lanes.<lane>.executors`
+- `waveControl`
 - `executors.profiles.<profile>`
 - per-agent `### Executor` blocks inside a wave file
 
@@ -74,6 +75,63 @@ These fields are shared across runtimes:
 - [claude.md](./claude.md)
 - [opencode.md](./opencode.md)
 
+## Wave Control
+
+`wave.config.json` may also declare a `waveControl` block for local-first telemetry delivery.
+
+Supported top-level fields:
+
+| Key | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Master switch for local queueing and remote delivery |
+| `endpoint` | string | unset | Base URL for the Railway-hosted `services/wave-control` API |
+| `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
+| `projectId` | string | derived from `projectName` | Stable project/repo identity used for cross-workspace reporting and filtering |
+| `authTokenEnvVar` | string | `WAVE_CONTROL_AUTH_TOKEN` | Environment variable name holding the bearer token |
+| `reportMode` | string | `metadata-plus-selected` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
+| `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload when an artifact's upload policy requests a body |
+| `requestTimeoutMs` | integer | `5000` | Per-batch network timeout |
+| `flushBatchSize` | integer | `25` | Max queued telemetry events flushed per batch |
+| `maxPendingEvents` | integer | `1000` | Cap for pending remote-delivery queue files; oldest pending uploads are dropped from the remote queue while the local `events.jsonl` stream remains authoritative |
+| `captureCoordinationRecords` | boolean | `true` | Emit `coordination_record` telemetry |
+| `captureControlPlaneEvents` | boolean | `true` | Emit `wave_run`, `attempt`, `proof_bundle`, and related control-plane events |
+| `captureTraceBundles` | boolean | `true` | Emit finalized trace-bundle artifacts and gate snapshots |
+| `captureBenchmarkRuns` | boolean | `true` | Emit `benchmark_run`, `benchmark_item`, `verification`, and `review` events |
+
+Lane overrides may refine the same keys under `lanes.<lane>.waveControl`.
+
+One-run override:
+
+- `wave launch --no-telemetry` disables Wave Control queueing and remote delivery for that launcher invocation without changing the repo config.
+
+Example:
+
+```json
+{
+  "waveControl": {
+    "endpoint": "https://wave-control.up.railway.app/api/v1",
+    "workspaceId": "wave-main",
+    "projectId": "wave-orchestration",
+    "reportMode": "metadata-plus-selected",
+    "uploadArtifactKinds": [
+      "trace-run-metadata",
+      "trace-quality",
+      "benchmark-results"
+    ]
+  }
+}
+```
+
+Runtime-emitted Wave Control events also attach:
+
+- `orchestratorId` from the active launcher or resident orchestrator
+- `runtimeVersion` from the installed Wave package metadata
+
+Those fields are queryable in the `wave-control` service alongside `workspaceId`,
+`projectId`, `runKind`, `runId`, `lane`, and benchmark ids.
+
+See [../wave-control.md](../wave-control.md) for the event contract and upload-policy model.
+
 ## Generated Artifacts
 
 Wave writes runtime artifacts here:
@@ -92,6 +150,9 @@ Common files:
 - `claude-settings.json`: generated Claude settings overlay when inline settings data is present
 - `opencode-agent-prompt.txt`: generated OpenCode harness prompt overlay
 - `opencode.json`: generated OpenCode runtime config overlay
+- `.tmp/<lane>-wave-launcher/control-plane/telemetry/events.jsonl`: local-first Wave Control event stream
+- `.tmp/<lane>-wave-launcher/control-plane/telemetry/pending/`: queued event batches awaiting remote delivery
+- `.tmp/<lane>-wave-launcher/control-plane/telemetry/delivery-state.json`: remote-delivery counters and last-error state
 
 Runtime-specific delivery:
 

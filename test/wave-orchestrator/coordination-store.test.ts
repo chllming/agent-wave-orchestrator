@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  buildCoordinationResponseMetrics,
   compileAgentInbox,
   compileSharedSummary,
   isClarificationLinkedRequest,
@@ -197,6 +198,61 @@ describe("compileAgentInbox", () => {
     expect(inbox.text).toContain("Owned file blocked");
     expect(inbox.text).toContain("Owned directory evidence");
     expect(inbox.text).toContain("Runtime component follow-up");
+  });
+
+  it("computes overdue acknowledgement and clarification timing from canonical state", () => {
+    const state = materializeCoordinationState([
+      {
+        id: "clarify-runtime",
+        kind: "clarification-request",
+        lane: "main",
+        wave: 0,
+        agentId: "A1",
+        targets: ["launcher"],
+        status: "in_progress",
+        priority: "high",
+        artifactRefs: ["src/runtime.ts"],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: "2026-03-22T00:00:00.000Z",
+        updatedAt: "2026-03-22T00:01:00.000Z",
+        confidence: "medium",
+        summary: "Need runtime guidance",
+        detail: "Clarification remains unresolved.",
+        source: "agent",
+      },
+      {
+        id: "route-clarify-runtime-1",
+        kind: "request",
+        lane: "main",
+        wave: 0,
+        agentId: "launcher",
+        targets: ["agent:A8"],
+        status: "open",
+        priority: "high",
+        artifactRefs: ["src/runtime.ts"],
+        dependsOn: ["clarify-runtime"],
+        closureCondition: "clarification:clarify-runtime",
+        createdAt: "2026-03-22T00:00:30.000Z",
+        updatedAt: "2026-03-22T00:00:30.000Z",
+        confidence: "high",
+        summary: "Clarification follow-up",
+        detail: "Please answer the runtime question.",
+        source: "launcher",
+      },
+    ]);
+
+    const responseMetrics = buildCoordinationResponseMetrics(state, {
+      nowMs: Date.parse("2026-03-22T00:12:00.000Z"),
+      ackTimeoutMs: 5 * 60 * 1000,
+      resolutionStaleMs: 10 * 60 * 1000,
+    });
+
+    expect(responseMetrics.overdueAckCount).toBe(1);
+    expect(responseMetrics.overdueAckRecordIds).toEqual(["route-clarify-runtime-1"]);
+    expect(responseMetrics.overdueClarificationCount).toBe(1);
+    expect(responseMetrics.overdueClarificationIds).toEqual(["clarify-runtime"]);
+    expect(responseMetrics.oldestUnackedRequestAgeMs).toBe(690000);
   });
 
   it("renders enriched integration evidence in shared summaries and inboxes", () => {

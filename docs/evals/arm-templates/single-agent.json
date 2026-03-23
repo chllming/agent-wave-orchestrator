@@ -1,0 +1,15 @@
+{
+  "armId": "single-agent",
+  "title": "Single Agent Baseline",
+  "roles": ["implementation"],
+  "includeContEval": false,
+  "includeIntegrationSteward": false,
+  "includeDocumentationSteward": false,
+  "tracesRequired": false,
+  "notes": [
+    "One implementation owner only.",
+    "No specialist decomposition.",
+    "No cont-EVAL, integration steward, or documentation steward.",
+    "Used only when model, executor, verifier, and budget are held constant relative to full-wave."
+  ]
+}

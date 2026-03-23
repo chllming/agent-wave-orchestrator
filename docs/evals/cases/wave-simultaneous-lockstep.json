@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "id": "wave-simultaneous-lockstep",
+  "title": "Lockstep Resolution",
+  "summary": "Two concurrent blocking requests should route to different specialists instead of collapsing into unresolved contention.",
+  "familyId": "simultaneous-coordination",
+  "benchmarkId": "lockstep-resolution",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "simultaneous-coordination",
+    "primaryMetric": "contention-resolution-rate",
+    "thresholds": {
+      "contention-resolution-rate": 100,
+      "symmetry-breaking-rate": 100,
+      "deadlock-rate": 0
+    },
+    "practicalWinThreshold": 30
+  },
+  "expectations": {
+    "requiredAssignments": [
+      {
+        "requestId": "req-cache-guard",
+        "assignedAgentId": "a2"
+      },
+      {
+        "requestId": "req-queue-budget",
+        "assignedAgentId": "a3"
+      }
+    ],
+    "minimumDistinctAssignedAgents": 2
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "capabilityRouting": {
+      "preferredAgents": {
+        "cache": ["a2"],
+        "queue": ["a3"]
+      }
+    },
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "Primary Owner",
+        "ownedPaths": ["src/runtime.ts"],
+        "capabilities": ["runtime"]
+      },
+      {
+        "agentId": "a2",
+        "title": "Cache Owner",
+        "ownedPaths": ["src/cache/guard.ts"],
+        "capabilities": ["cache"]
+      },
+      {
+        "agentId": "a3",
+        "title": "Queue Owner",
+        "ownedPaths": ["src/queue/budget.ts"],
+        "capabilities": ["queue"]
+      }
+    ],
+    "records": [
+      {
+        "id": "req-cache-guard",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["capability:cache"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/cache/guard.ts"],
+        "summary": "Concurrent fix one: cache guard must be updated before release",
+        "detail": "This blocking request should route to the cache owner."
+      },
+      {
+        "id": "req-queue-budget",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["capability:queue"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/queue/budget.ts"],
+        "summary": "Concurrent fix two: queue budget must be updated before release",
+        "detail": "This blocking request should route to the queue owner."
+      }
+    ]
+  }
+}

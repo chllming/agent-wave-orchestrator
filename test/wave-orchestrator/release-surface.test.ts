@@ -16,8 +16,19 @@ describe("release surface alignment", () => {
     const version = packageJson.version;
     expect(manifest.releases[0]?.version).toBe(version);
     expect(readme).toContain(`@chllming/wave-orchestration@${version}`);
-    expect(readme).toContain(`/releases/tag/v${version}`);
+    expect(readme).toContain(
+      `https://github.com/chllming/agent-wave-orchestrator/releases/tag/v${version}`,
+    );
     expect(changelog).toMatch(new RegExp(`^## ${version.replaceAll(".", "\\.")} - \\d{4}-\\d{2}-\\d{2}$`, "m"));
+    expect(packageJson.repository.url).toBe(
+      "git+https://github.com/chllming/agent-wave-orchestrator.git",
+    );
+    expect(packageJson.homepage).toBe(
+      "https://github.com/chllming/agent-wave-orchestrator#readme",
+    );
+    expect(packageJson.bugs.url).toBe(
+      "https://github.com/chllming/agent-wave-orchestrator/issues",
+    );
   });
 
   it("documents Codex turn ceilings as opaque and keeps budget.turns scoped to Claude/OpenCode", () => {

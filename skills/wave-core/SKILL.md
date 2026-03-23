@@ -14,7 +14,7 @@
 
 ## Coordination Protocol
 
-1. Read the shared summary and your inbox at the start of every major step.
+1. Read the shared summary and your inbox at the start of every major step. Summaries and inboxes may refresh during execution, so re-read before major decisions.
 2. Post a coordination record when any of these occur:
    - meaningful progress on an exit contract deliverable
    - a blocker is discovered or resolved
@@ -26,7 +26,21 @@
 4. Do not batch coordination. Post records as events occur so downstream agents see them promptly.
 5. When a record references another agent, name that agent explicitly.
 6. Coordination records are append-only. Do not edit or delete previous records; post corrections as new records.
-7. When you receive an inbox message that requires action, acknowledge it with a coordination record before proceeding.
+7. When you receive an inbox message that requires action, acknowledge it with a coordination record before proceeding. Unacknowledged requests become overdue and may be rerouted.
+
+## Coordination State
+
+The canonical coordination state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for human reading, not the scheduler truth.
+
+Operator tasks, rerun requests, proof bundles, and attempt lifecycle are tracked in a separate control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/`. Proof registries and retry overrides under `proof/` and `control/` are projections from this log.
+
+Operators interact through `wave control`:
+- `wave control status` — why the wave is blocked or retrying.
+- `wave control task` — create, list, and act on coordination tasks.
+- `wave control rerun` — targeted retry intent.
+- `wave control proof` — authoritative proof bundle lifecycle.
+
+Legacy `wave coord`, `wave retry`, and `wave proof` remain available as compatibility surfaces.
 
 ## Ownership & Boundaries
 
@@ -46,6 +60,8 @@
 - Runtime-facing proof must be real evidence (logs, health checks, build output), not future-work notes.
 - Proof must be durable. Transient output (terminal scrollback, ephemeral logs) is not proof unless captured into a file.
 - When proof cannot be produced within the wave, record the gap explicitly with the reason and the follow-up owner.
+- When the wave declares `### Proof artifacts`, those machine-visible local artifacts are required for closure in addition to deliverables and structured markers.
+- Operators may register authoritative proof bundles via `wave control proof register`. Registered proof has lifecycle state: `active`, `superseded`, or `revoked`. Only active bundles satisfy closure. Do not rely on proof that has been revoked or superseded.
 
 ## Closure Checklist
 
@@ -65,12 +81,15 @@ If any condition is not met, the wave remains open. Do not approximate closure.
 
 Closure runs in staged order:
 1. Implementation and proof (all implementation agents).
-2. cont-EVAL (if present) -- must report `satisfied` before integration runs.
-3. Integration -- must report `ready-for-doc-closure` before documentation and cont-QA run.
-4. Documentation -- must report `closed` or `no-change`.
-5. cont-QA -- final verdict. Only PASS allows the wave to close.
+2. Optional security review -- must report `clear` or `concerns` before integration.
+3. cont-EVAL (if present) -- must report `satisfied` before integration runs.
+4. Integration -- must report `ready-for-doc-closure` before documentation and cont-QA run.
+5. Documentation -- must report `closed` or `no-change`.
+6. cont-QA -- final verdict. Only PASS allows the wave to close.
 
 Do not skip stages. Each stage depends on the prior stage completing.
+
+An active rerun request blocks closure until consumed. If the operator has filed a rerun via `wave control rerun request`, the launcher applies it on the next retry and clears it afterward.
 
 ## Structured Markers Reference
 

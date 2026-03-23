@@ -18,9 +18,9 @@ Execute these steps in order:
 2. **Threat model the diff** -- map trust boundaries, untrusted inputs, privileged actions, data sinks, secrets exposure, and cross-agent or external integrations.
 3. **Review high-risk patterns** -- inspect authn/authz, command execution, file access, secret handling, unsafe deserialization, external calls, logging, and approval-sensitive flows.
 4. **Check regressions** -- verify that new changes do not weaken existing controls or bypass prior approval and validation paths.
-5. **Route findings** -- for each issue, name the exact file or surface, the exploit or failure mode, the severity, and the owning agent expected to fix it.
+5. **Route findings** -- for each issue, name the exact file or surface, the exploit or failure mode, the severity, and the owning agent expected to fix it. Use targeted coordination requests so the finding becomes a helper assignment.
 6. **Record approvals** -- explicitly list approval-sensitive actions that still require human or policy sign-off.
-7. **Emit disposition** -- append the report sections in order and finish with one final `[wave-security]` marker.
+7. **Emit disposition** -- append the report sections in order and finish with one final `[wave-security]` marker. Security closure runs before integration, so a `blocked` marker prevents the entire closure sequence from advancing.
 
 ## Review Checklist
 

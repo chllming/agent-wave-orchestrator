@@ -7,12 +7,20 @@ summary: "How to use delegated benchmark families, pinned benchmarks, and coordi
 
 Wave's benchmark catalog lives in `docs/evals/benchmark-catalog.json`.
 
+The executable local case corpus lives in `docs/evals/cases/`, and the benchmark runner is available through `wave benchmark`.
+Frozen external pilot manifests live in `docs/evals/pilots/`, and external comparison arm templates live in `docs/evals/arm-templates/`.
+An example command-template config shape lives in `docs/evals/external-command-config.sample.json`.
+A runnable SWE-bench Pro config for the local task harness lives in `docs/evals/external-command-config.swe-bench-pro.json`.
+
 It has two jobs:
 
 - give `cont-EVAL` a repo-governed menu of allowed benchmark families and benchmark ids
 - document what each benchmark is trying to catch, including coordination failure modes and static paper baselines
+- optionally point from benchmark ids to repo-local deterministic benchmark cases through `localCases`
 
 The catalog is reference metadata, not a run-history database. It tells the wave author and `cont-EVAL` what kinds of checks are allowed and what external benchmark or paper baseline those checks map to.
+
+The local case corpus is the executable side of that metadata. It gives the repo a deterministic way to score the current Wave substrate on summary fidelity, targeted inbox recall, capability routing, contradiction handling, and closure guards before moving on to costlier live suites.
 
 For a full authored wave example that uses these patterns, see [docs/reference/sample-waves.md](../reference/sample-waves.md).
 
@@ -83,6 +91,93 @@ The coordination-oriented families currently included in the catalog are:
   Use when the risk is information loss or distortion between the raw coordination log and derived artifacts like shared summaries, inboxes, ledger state, or integration summaries.
 - `contradiction-recovery`
   Use when the risk is false consensus, unresolved conflicting claims, or clarification chains that appear resolved without real repair.
+
+## Local Case Corpus
+
+The repo now ships deterministic local benchmark cases under `docs/evals/cases/`.
+
+Each case:
+
+- binds to one benchmark family and benchmark id
+- defines a coordination fixture plus expected facts, inboxes, assignments, or closure guards
+- is executable through `wave benchmark run`
+
+Useful commands:
+
+```bash
+pnpm exec wave benchmark list
+pnpm exec wave benchmark show --case wave-hidden-profile-private-evidence --json
+pnpm exec wave benchmark run --json
+```
+
+The default output path is `.tmp/wave-benchmarks/latest/`.
+
+These case runs are local benchmark artifacts, not committed run history.
+
+Native mode is deterministic on purpose. `wave benchmark run` is meant to prove the coordination substrate before we move to live external suites. Its logged outputs are:
+
+- per-case, per-arm `score`, `alignedScore`, `passed`, `direction`, `threshold`, `metrics`, `details`, and generated artifacts
+- family summaries with direction-aligned mean score and pass rate
+- arm comparisons with direction-aligned mean delta versus `single-agent` and bootstrap confidence intervals
+
+When `waveControl` reporting is enabled, native runs publish `benchmark_run` and `benchmark_item` events through the same telemetry spine as live waves. For the full native-mode contract and the rationale for each metric, see [wave-benchmark-program.md](./wave-benchmark-program.md) and [proof-metrics.md](../reference/proof-metrics.md).
+
+## External Benchmark Workflow
+
+The current direct external benchmark path starts with `SWE-bench Pro`.
+
+Why:
+
+- it keeps the first direct benchmark grounded in real repository bug-fix work
+- it has a public harness and official verifier path
+- it lets Wave compare `single-agent` and `full-wave` arms under matched settings
+
+The second direct benchmark slot is intentionally deferred until a later CooperBench-oriented pass.
+
+The frozen direct pilot is:
+
+- `docs/evals/pilots/swe-bench-pro-public-pilot.json`
+
+There is also a review-only diagnostic subset:
+
+- `docs/evals/pilots/swe-bench-pro-public-full-wave-review-10.json`
+
+Useful commands:
+
+```bash
+pnpm exec wave benchmark external-list
+pnpm exec wave benchmark external-show --adapter swe-bench-pro --json
+pnpm exec wave benchmark external-pilots --json
+pnpm exec wave benchmark external-run --adapter swe-bench-pro --command-config docs/evals/external-command-config.swe-bench-pro.json --dry-run --json
+pnpm exec wave benchmark external-run --adapter swe-bench-pro --manifest docs/evals/pilots/swe-bench-pro-public-full-wave-review-10.json --arm full-wave --command-config docs/evals/external-command-config.swe-bench-pro.json --json
+```
+
+For the first honest comparison:
+
+- compare only `single-agent` and `full-wave`
+- do not change model, executor, or budget assumptions between those two arms
+- treat review-only subsets as diagnostic material, not as canonical pairwise comparison evidence
+
+Each `wave benchmark external-run` output directory now includes:
+
+- `results.json`
+- `results.md`
+- `failure-review.json`
+- `failure-review.md`
+
+Start with `failure-review.md` when a review-only batch returns many failures. It splits
+verifier-image issues, setup or harness failures, trustworthy patch failures, and dry-run
+planning-only output so the batch is easier to interpret.
+
+When `waveControl` reporting is enabled, benchmark runs also publish through the same telemetry
+spine as live waves:
+
+- `benchmark_run` for the batch configuration and attestation hash
+- `benchmark_item` for each task/arm execution
+- `verification` for official harness output and linked verifier artifacts
+- `review` for publishability, validity, and failure classification
+
+That keeps benchmark trust evidence queryable alongside the runtime traces that produced it.
 
 ## How To Choose The Right Family
 
@@ -163,6 +258,6 @@ The benchmark catalog does not yet store:
 
 - local benchmark run history
 - local-vs-paper delta computation
-- automated benchmark execution plans
+- a second direct benchmark beyond the current SWE-bench Pro path
 
 For now it is the schema and policy layer that keeps eval authoring, `cont-EVAL`, and coordination benchmarking aligned.

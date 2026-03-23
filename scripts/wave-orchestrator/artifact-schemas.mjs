@@ -1,20 +1,30 @@
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
+import {
+  normalizeWaveControlReportMode,
+  normalizeWaveControlRunKind,
+} from "./wave-control-schema.mjs";
 
 export const MANIFEST_SCHEMA_VERSION = 1;
 export const GLOBAL_DASHBOARD_SCHEMA_VERSION = 1;
 export const WAVE_DASHBOARD_SCHEMA_VERSION = 1;
 export const RELAUNCH_PLAN_SCHEMA_VERSION = 1;
+export const RETRY_OVERRIDE_SCHEMA_VERSION = 1;
 export const ASSIGNMENT_SNAPSHOT_SCHEMA_VERSION = 1;
 export const DEPENDENCY_SNAPSHOT_SCHEMA_VERSION = 1;
+export const PROOF_REGISTRY_SCHEMA_VERSION = 1;
 export const RUN_STATE_SCHEMA_VERSION = 2;
+export const WAVE_CONTROL_DELIVERY_STATE_SCHEMA_VERSION = 1;
 
 export const MANIFEST_KIND = "wave-manifest";
 export const GLOBAL_DASHBOARD_KIND = "global-dashboard";
 export const WAVE_DASHBOARD_KIND = "wave-dashboard";
 export const RELAUNCH_PLAN_KIND = "wave-relaunch-plan";
+export const RETRY_OVERRIDE_KIND = "wave-retry-override";
 export const ASSIGNMENT_SNAPSHOT_KIND = "wave-assignment-snapshot";
 export const DEPENDENCY_SNAPSHOT_KIND = "wave-dependency-snapshot";
+export const PROOF_REGISTRY_KIND = "wave-proof-registry";
 export const RUN_STATE_KIND = "wave-run-state";
+export const WAVE_CONTROL_DELIVERY_STATE_KIND = "wave-control-delivery-state";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -25,6 +35,11 @@ function normalizeInteger(value, fallback = null) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeNonNegativeInteger(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function normalizeText(value, fallback = null) {
   const normalized = String(value ?? "").trim();
   return normalized || fallback;
@@ -32,6 +47,19 @@ function normalizeText(value, fallback = null) {
 
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function normalizeStringArray(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeText(value, null))
+        .filter(Boolean),
+    ),
+  );
 }
 
 export function normalizeManifest(payload) {
@@ -90,6 +118,42 @@ export function readRelaunchPlan(filePath, defaults = {}) {
 
 export function writeRelaunchPlan(filePath, payload, defaults = {}) {
   const normalized = normalizeRelaunchPlan(payload, defaults);
+  writeJsonAtomic(filePath, normalized);
+  return normalized;
+}
+
+export function normalizeRetryOverride(payload, defaults = {}) {
+  const source = isPlainObject(payload) ? payload : {};
+  return {
+    schemaVersion: RETRY_OVERRIDE_SCHEMA_VERSION,
+    kind: RETRY_OVERRIDE_KIND,
+    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
+    wave: normalizeInteger(source.wave, normalizeInteger(defaults.wave, null)),
+    selectedAgentIds: normalizeStringArray(source.selectedAgentIds),
+    reuseAttemptIds: normalizeStringArray(source.reuseAttemptIds),
+    reuseProofBundleIds: normalizeStringArray(source.reuseProofBundleIds),
+    reuseDerivedSummaries: source.reuseDerivedSummaries !== false,
+    invalidateComponentIds: normalizeStringArray(source.invalidateComponentIds),
+    clearReusableAgentIds: normalizeStringArray(source.clearReusableAgentIds),
+    preserveReusableAgentIds: normalizeStringArray(source.preserveReusableAgentIds),
+    resumePhase: normalizeText(source.resumePhase, null),
+    requestedBy: normalizeText(source.requestedBy, normalizeText(defaults.requestedBy, null)),
+    reason: normalizeText(source.reason, null),
+    applyOnce: source.applyOnce !== false,
+    createdAt: normalizeText(source.createdAt, toIsoTimestamp()),
+  };
+}
+
+export function readRetryOverride(filePath, defaults = {}) {
+  const payload = readJsonOrNull(filePath);
+  if (!payload) {
+    return null;
+  }
+  return normalizeRetryOverride(payload, defaults);
+}
+
+export function writeRetryOverride(filePath, payload, defaults = {}) {
+  const normalized = normalizeRetryOverride(payload, defaults);
   writeJsonAtomic(filePath, normalized);
   return normalized;
 }
@@ -164,6 +228,174 @@ export function readDependencySnapshot(filePath, defaults = {}) {
 
 export function writeDependencySnapshot(filePath, payload, defaults = {}) {
   const normalized = normalizeDependencySnapshot(payload, defaults);
+  writeJsonAtomic(filePath, normalized);
+  return normalized;
+}
+
+function normalizeProofArtifactEntry(entry) {
+  const source = isPlainObject(entry) ? entry : {};
+  return {
+    path: normalizeText(source.path, null),
+    kind: normalizeText(source.kind, null),
+    requiredFor: normalizeStringArray(source.requiredFor),
+    exists: source.exists === true,
+    sha256: normalizeText(source.sha256, null),
+  };
+}
+
+function normalizeProofComponentEntry(entry) {
+  const source = isPlainObject(entry) ? entry : {};
+  return {
+    componentId: normalizeText(source.componentId, null),
+    level: normalizeText(source.level, null),
+    state: normalizeText(source.state, null),
+    detail: normalizeText(source.detail, null),
+  };
+}
+
+function normalizeProofSummaryEntry(entry) {
+  const source = isPlainObject(entry) ? entry : {};
+  const state = normalizeText(source.state, null);
+  const completion = normalizeText(source.completion, null);
+  const durability = normalizeText(source.durability, null);
+  const proof = normalizeText(source.proof, null);
+  if (!state && !completion && !durability && !proof) {
+    return null;
+  }
+  return {
+    state,
+    completion,
+    durability,
+    proof,
+    detail: normalizeText(source.detail, null),
+  };
+}
+
+function normalizeDocDeltaEntry(entry) {
+  const source = isPlainObject(entry) ? entry : {};
+  const state = normalizeText(source.state, null);
+  if (!state) {
+    return null;
+  }
+  return {
+    state,
+    detail: normalizeText(source.detail, null),
+  };
+}
+
+function normalizeProofRegistryEntry(entry) {
+  const source = isPlainObject(entry) ? entry : {};
+  return {
+    id: normalizeText(source.id, null),
+    agentId: normalizeText(source.agentId, null),
+    state: normalizeText(source.state, null),
+    authoritative: source.authoritative === true,
+    recordedAt: normalizeText(source.recordedAt, toIsoTimestamp()),
+    recordedBy: normalizeText(source.recordedBy, null),
+    detail: normalizeText(source.detail, null),
+    summary: normalizeText(source.summary, null),
+    satisfyOwnedComponents: source.satisfyOwnedComponents === true,
+    proof: normalizeProofSummaryEntry(source.proof),
+    docDelta: normalizeDocDeltaEntry(source.docDelta),
+    components: (Array.isArray(source.components) ? source.components : [])
+      .map((item) => normalizeProofComponentEntry(item))
+      .filter((item) => item.componentId),
+    artifacts: (Array.isArray(source.artifacts) ? source.artifacts : [])
+      .map((item) => normalizeProofArtifactEntry(item))
+      .filter((item) => item.path),
+    scope: normalizeText(source.scope, null),
+    attestation: isPlainObject(source.attestation) ? cloneJson(source.attestation) : null,
+    satisfies: normalizeStringArray(source.satisfies),
+    supersedes: normalizeText(source.supersedes, null),
+    supersededBy: normalizeText(source.supersededBy, null),
+  };
+}
+
+export function normalizeProofRegistry(payload, defaults = {}) {
+  const source = isPlainObject(payload) ? payload : {};
+  return {
+    schemaVersion: PROOF_REGISTRY_SCHEMA_VERSION,
+    kind: PROOF_REGISTRY_KIND,
+    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
+    wave: normalizeInteger(source.wave, normalizeInteger(defaults.wave, null)),
+    updatedAt: normalizeText(source.updatedAt, toIsoTimestamp()),
+    entries: (Array.isArray(source.entries) ? source.entries : [])
+      .map((entry) => normalizeProofRegistryEntry(entry))
+      .filter((entry) => entry.id && entry.agentId),
+  };
+}
+
+export function readProofRegistry(filePath, defaults = {}) {
+  const payload = readJsonOrNull(filePath);
+  if (!payload) {
+    return null;
+  }
+  return normalizeProofRegistry(payload, defaults);
+}
+
+export function writeProofRegistry(filePath, payload, defaults = {}) {
+  const normalized = normalizeProofRegistry(payload, defaults);
+  writeJsonAtomic(filePath, normalized);
+  return normalized;
+}
+
+export function normalizeWaveControlDeliveryState(payload, defaults = {}) {
+  const source = isPlainObject(payload) ? payload : {};
+  return {
+    schemaVersion: WAVE_CONTROL_DELIVERY_STATE_SCHEMA_VERSION,
+    kind: WAVE_CONTROL_DELIVERY_STATE_KIND,
+    workspaceId: normalizeText(source.workspaceId, normalizeText(defaults.workspaceId, null)),
+    lane: normalizeText(source.lane, normalizeText(defaults.lane, null)),
+    runId: normalizeText(source.runId, normalizeText(defaults.runId, null)),
+    runKind: normalizeWaveControlRunKind(
+      source.runKind,
+      "waveControlDeliveryState.runKind",
+      normalizeText(defaults.runKind, "unknown"),
+    ),
+    reportMode: normalizeWaveControlReportMode(
+      source.reportMode,
+      "waveControlDeliveryState.reportMode",
+      normalizeText(defaults.reportMode, "metadata-plus-selected"),
+    ),
+    endpoint: normalizeText(source.endpoint, normalizeText(defaults.endpoint, null)),
+    queuePath: normalizeText(source.queuePath, normalizeText(defaults.queuePath, null)),
+    eventsPath: normalizeText(source.eventsPath, normalizeText(defaults.eventsPath, null)),
+    pendingCount: normalizeNonNegativeInteger(
+      source.pendingCount,
+      normalizeNonNegativeInteger(defaults.pendingCount, 0),
+    ),
+    sentCount: normalizeNonNegativeInteger(
+      source.sentCount,
+      normalizeNonNegativeInteger(defaults.sentCount, 0),
+    ),
+    failedCount: normalizeNonNegativeInteger(
+      source.failedCount,
+      normalizeNonNegativeInteger(defaults.failedCount, 0),
+    ),
+    lastEnqueuedAt: normalizeText(source.lastEnqueuedAt, normalizeText(defaults.lastEnqueuedAt, null)),
+    lastFlushAt: normalizeText(source.lastFlushAt, normalizeText(defaults.lastFlushAt, null)),
+    lastSuccessAt: normalizeText(source.lastSuccessAt, normalizeText(defaults.lastSuccessAt, null)),
+    lastError:
+      source.lastError === undefined
+        ? defaults.lastError ?? null
+        : isPlainObject(source.lastError)
+          ? source.lastError
+          : normalizeText(source.lastError, null),
+    recentEventIds: normalizeStringArray(source.recentEventIds ?? defaults.recentEventIds),
+    updatedAt: normalizeText(source.updatedAt, normalizeText(defaults.updatedAt, toIsoTimestamp())),
+  };
+}
+
+export function readWaveControlDeliveryState(filePath, defaults = {}) {
+  const payload = readJsonOrNull(filePath);
+  if (!payload) {
+    return null;
+  }
+  return normalizeWaveControlDeliveryState(payload, defaults);
+}
+
+export function writeWaveControlDeliveryState(filePath, payload, defaults = {}) {
+  const normalized = normalizeWaveControlDeliveryState(payload, defaults);
   writeJsonAtomic(filePath, normalized);
   return normalized;
 }

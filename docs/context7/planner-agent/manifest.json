@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-22T21:14:01.636Z",
+  "bundleId": "planner-agentic",
+  "libraryName": "wave-planner-agentic",
+  "defaultQuery": "Wave planning best practices, maturity alignment, closure gates, proof surfaces, rollout evidence, and coordination failure prevention",
+  "sourceRoot": "docs/research/agent-context-cache",
+  "targetRoot": "docs/context7/planner-agent",
+  "files": [
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/verified-multi-agent-orchestration-a-plan-execute-verify-replan-framework-for-complex-query-resolution.md",
+      "targetPath": "docs/context7/planner-agent/papers/verified-multi-agent-orchestration-a-plan-execute-verify-replan-framework-for-complex-query-resolution.md",
+      "title": "Verified Multi-Agent Orchestration: A Plan-Execute-Verify-Replan Framework for Complex Query Resolution",
+      "bytes": 35443,
+      "sha256": "7fecced650f5268e25ef10c10c46bc9b53ea334a39e7b04315c7d72cf663870b"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/todoevolve-learning-to-architect-agent-planning-systems.md",
+      "targetPath": "docs/context7/planner-agent/papers/todoevolve-learning-to-architect-agent-planning-systems.md",
+      "title": "TodoEvolve: Learning to Architect Agent Planning Systems",
+      "bytes": 67584,
+      "sha256": "e2e18bd732105115d3cb3eb226e8033f421634c790b2c3bbc576cefaeff92165"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation.md",
+      "targetPath": "docs/context7/planner-agent/papers/dova-deliberation-first-multi-agent-orchestration-for-autonomous-research-automation.md",
+      "title": "DOVA: Deliberation-First Multi-Agent Orchestration for Autonomous Research Automation",
+      "bytes": 36202,
+      "sha256": "d54ad0d331942cd62bd6e5cf2ed44edc577eceee6c5dadbfb88e072a96df06c0"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/why-do-multi-agent-llm-systems-fail.md",
+      "targetPath": "docs/context7/planner-agent/papers/why-do-multi-agent-llm-systems-fail.md",
+      "title": "Why Do Multi-Agent LLM Systems Fail?",
+      "bytes": 141179,
+      "sha256": "faaf6dd51ab9eb612b58bd00c9b0d13595daabd4b34078a24ed135e28b12868d"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md",
+      "targetPath": "docs/context7/planner-agent/papers/silo-bench-a-scalable-environment-for-evaluating-distributed-coordination-in-multi-agent-llm-systems.md",
+      "title": "Silo-Bench: A Scalable Environment for Evaluating Distributed Coordination in Multi-Agent LLM Systems",
+      "bytes": 76435,
+      "sha256": "e28334cd0891773f7044c7e29bbcc6c3ae79b701838a6b8526fffdf2c5e4c41d"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/dpbench-large-language-models-struggle-with-simultaneous-coordination.md",
+      "targetPath": "docs/context7/planner-agent/papers/dpbench-large-language-models-struggle-with-simultaneous-coordination.md",
+      "title": "DPBench: Large Language Models Struggle with Simultaneous Coordination",
+      "bytes": 54309,
+      "sha256": "22a37fd0fbcf5e21b89d9dba9e7d51298c93ad8baefd17dc3373373105f01f07"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/cooperbench-why-coding-agents-cannot-be-your-teammates-yet.md",
+      "targetPath": "docs/context7/planner-agent/papers/cooperbench-why-coding-agents-cannot-be-your-teammates-yet.md",
+      "title": "CooperBench: Why Coding Agents Cannot be Your Teammates Yet",
+      "bytes": 104926,
+      "sha256": "463a2f7129ad2869a80f2a697682fa57407a76d3d5cadf7a94234bfd55ef1992"
+    },
+    {
+      "kind": "paper",
+      "sourcePath": "docs/research/agent-context-cache/papers/incremental-planning-to-control-a-blackboard-based-problem-solver.md",
+      "targetPath": "docs/context7/planner-agent/papers/incremental-planning-to-control-a-blackboard-based-problem-solver.md",
+      "title": "Incremental Planning to Control a Blackboard-Based Problem Solver",
+      "bytes": 44369,
+      "sha256": "568fe7236b214fe0a24e0530513776ee5579e0366b9f277e8c0ebd49daea7b67"
+    },
+    {
+      "kind": "topic",
+      "sourcePath": "docs/research/agent-context-cache/topics/planning-and-orchestration.md",
+      "targetPath": "docs/context7/planner-agent/topics/planning-and-orchestration.md",
+      "title": "Planner Agentic Context7 Corpus",
+      "bytes": 1858,
+      "sha256": "5c8c00bc2c4b72330267ca8cce2889b2eaa3bbf02db49e90a1fb7b0eb9d0ef44"
+    }
+  ]
+}

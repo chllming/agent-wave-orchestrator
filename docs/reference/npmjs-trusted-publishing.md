@@ -2,7 +2,7 @@
 
 This repo now includes a dedicated npmjs publish workflow at [publish-npm.yml](../../.github/workflows/publish-npm.yml).
 
-The current `0.6.1` release procedure publishes through a repository Actions secret named `NPM_TOKEN`.
+The current `0.7.0` release procedure publishes through a repository Actions secret named `NPM_TOKEN`.
 
 ## What This Repo Already Does
 
@@ -18,7 +18,7 @@ The current `0.6.1` release procedure publishes through a repository Actions sec
    - package or scope access for `@chllming/wave-orchestration`
    - `Read and write` permission
    - `Bypass 2FA` enabled
-2. In the GitHub repo `chllming/wave-orchestration`, add that token as an Actions secret named `NPM_TOKEN`.
+2. In the GitHub repo `chllming/agent-wave-orchestrator`, add that token as an Actions secret named `NPM_TOKEN`.
 3. Rotate or revoke the token when no longer needed.
 
 ## GitHub Workflow Behavior
@@ -47,6 +47,6 @@ If this repo later needs private npm dependencies during CI, consider a separate
 1. Confirm [publish-npm.yml](../../.github/workflows/publish-npm.yml) is on the default branch.
 2. Confirm `NPM_TOKEN` exists in the GitHub repo secrets.
 3. Confirm the package version has been bumped and committed.
-4. Push the release commit and release tag, for example `v0.6.1`.
+4. Push the release commit and release tag, for example `v0.7.0`.
 5. Verify both `publish-npm.yml` and `publish-package.yml` start from the tag push.
 6. Verify the npmjs publish completes successfully for the tagged source.

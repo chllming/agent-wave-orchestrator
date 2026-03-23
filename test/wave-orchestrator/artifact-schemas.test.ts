@@ -8,10 +8,16 @@ import {
   normalizeWaveDashboardState,
   readAssignmentSnapshot,
   readDependencySnapshot,
+  readProofRegistry,
   readRelaunchPlan,
+  readRetryOverride,
+  readWaveControlDeliveryState,
   writeAssignmentSnapshot,
   writeDependencySnapshot,
+  writeProofRegistry,
   writeRelaunchPlan,
+  writeRetryOverride,
+  writeWaveControlDeliveryState,
 } from "../../scripts/wave-orchestrator/artifact-schemas.mjs";
 
 const tempDirs = [];
@@ -183,6 +189,132 @@ describe("artifact schemas", () => {
       wave: 9,
       attempt: 2,
       selectedAgentIds: ["A1"],
+    });
+  });
+
+  it("preserves rich retry override selectors in compatibility projections", () => {
+    const dir = makeTempDir();
+    const filePath = path.join(dir, "retry-override.json");
+    writeRetryOverride(
+      filePath,
+      {
+        lane: "main",
+        wave: 3,
+        selectedAgentIds: ["A1"],
+        reuseAttemptIds: ["attempt-9"],
+        reuseProofBundleIds: ["proof-A1-1"],
+        reuseDerivedSummaries: false,
+        invalidateComponentIds: ["shared-runtime"],
+        clearReusableAgentIds: ["A1"],
+        preserveReusableAgentIds: ["A2"],
+        requestedBy: "tester",
+      },
+      { lane: "main", wave: 3 },
+    );
+
+    expect(readJson(filePath)).toMatchObject({
+      reuseAttemptIds: ["attempt-9"],
+      reuseProofBundleIds: ["proof-A1-1"],
+      reuseDerivedSummaries: false,
+      invalidateComponentIds: ["shared-runtime"],
+      clearReusableAgentIds: ["A1"],
+      preserveReusableAgentIds: ["A2"],
+    });
+    expect(readRetryOverride(filePath, { lane: "main", wave: 3 })).toMatchObject({
+      reuseAttemptIds: ["attempt-9"],
+      reuseProofBundleIds: ["proof-A1-1"],
+      reuseDerivedSummaries: false,
+      invalidateComponentIds: ["shared-runtime"],
+      clearReusableAgentIds: ["A1"],
+      preserveReusableAgentIds: ["A2"],
+    });
+  });
+
+  it("preserves proof bundle lifecycle state in projected proof registries", () => {
+    const dir = makeTempDir();
+    const filePath = path.join(dir, "proof-registry.json");
+    writeProofRegistry(
+      filePath,
+      {
+        lane: "main",
+        wave: 4,
+        entries: [
+          {
+            id: "proof-A1-1",
+            agentId: "A1",
+            state: "revoked",
+            authoritative: true,
+            scope: "wave",
+            attestation: { source: "operator" },
+            satisfies: ["component-1"],
+            supersedes: "proof-A1-0",
+            supersededBy: "proof-A1-2",
+          },
+        ],
+      },
+      { lane: "main", wave: 4 },
+    );
+
+    expect(readJson(filePath)).toMatchObject({
+      entries: [
+        expect.objectContaining({
+          id: "proof-A1-1",
+          state: "revoked",
+          scope: "wave",
+          attestation: { source: "operator" },
+          satisfies: ["component-1"],
+          supersedes: "proof-A1-0",
+          supersededBy: "proof-A1-2",
+        }),
+      ],
+    });
+    expect(readProofRegistry(filePath, { lane: "main", wave: 4 })).toMatchObject({
+      entries: [
+        expect.objectContaining({
+          id: "proof-A1-1",
+          state: "revoked",
+          scope: "wave",
+          attestation: { source: "operator" },
+          satisfies: ["component-1"],
+          supersedes: "proof-A1-0",
+          supersededBy: "proof-A1-2",
+        }),
+      ],
+    });
+  });
+
+  it("writes and reads wave-control delivery state", () => {
+    const dir = makeTempDir();
+    const filePath = path.join(dir, "wave-control-delivery.json");
+    writeWaveControlDeliveryState(filePath, {
+      workspaceId: "wave_repo_1234abcd",
+      lane: "main",
+      runKind: "roadmap",
+      reportMode: "metadata-plus-selected",
+      queuePath: ".tmp/main-wave-launcher/control-plane/telemetry/pending",
+      eventsPath: ".tmp/main-wave-launcher/control-plane/telemetry/events.jsonl",
+      pendingCount: 2,
+      sentCount: 5,
+      failedCount: 1,
+      recentEventIds: ["wctl-1", "wctl-2"],
+    });
+
+    expect(readJson(filePath)).toMatchObject({
+      schemaVersion: 1,
+      kind: "wave-control-delivery-state",
+      workspaceId: "wave_repo_1234abcd",
+      lane: "main",
+      runKind: "roadmap",
+      reportMode: "metadata-plus-selected",
+      pendingCount: 2,
+      sentCount: 5,
+      failedCount: 1,
+      recentEventIds: ["wctl-1", "wctl-2"],
+    });
+    expect(readWaveControlDeliveryState(filePath)).toMatchObject({
+      queuePath: ".tmp/main-wave-launcher/control-plane/telemetry/pending",
+      eventsPath: ".tmp/main-wave-launcher/control-plane/telemetry/events.jsonl",
+      pendingCount: 2,
     });
   });
 });

@@ -210,7 +210,8 @@ function buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
     systemPromptPath,
     `${renderHarnessSystemPrompt(agent, "claude")}${skillText ? `\n\n${skillText}` : ""}\n`,
   );
-  const tokens = [executor.claude.command, "-p", "--no-session-persistence"];
+  const command = executor?.claude?.command || "claude";
+  const tokens = [command, "-p", "--no-session-persistence"];
   const settingsPath = buildClaudeSettingsPath(executor, overlayDir);
   appendSingleValueFlag(tokens, "--output-format", executor.claude.outputFormat || "text");
   appendSingleValueFlag(tokens, "--model", executor.claude.model || executor.model);
@@ -234,7 +235,7 @@ function buildClaudeLaunchSpec({ agent, promptPath, logPath, overlayDir }) {
   );
   return {
     executorId: "claude",
-    command: executor.claude.command,
+    command,
     useRateLimitRetries: true,
     invocationLines: [
       `task_prompt=$(cat ${shellQuote(promptPath)})`,

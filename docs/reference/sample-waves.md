@@ -1,23 +1,29 @@
 ---
 title: "Sample Waves"
-summary: "A showcase-first sample wave that demonstrates the current 0.6.1 Wave surface."
+summary: "Showcase-first sample waves that demonstrate the current 0.7.0 Wave surface."
 ---
 
 # Sample Waves
 
-This guide points to one showcase-first sample wave that demonstrates the current `0.6.1` authored Wave surface.
+This guide points to showcase-first sample waves that demonstrate the current `0.7.0` authored Wave surface.
 
-The example is intentionally denser than a typical production wave. Its job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready file.
+The examples are intentionally denser than typical production waves. Their job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready files.
 
-## Canonical Example
+## Canonical Examples
+
+- [High-fidelity repo-landed rollout wave](../plans/examples/wave-example-rollout-fidelity.md)
+  Shows what a good `repo-landed` outcome looks like when one promoted component only closes honestly if desired-state records, reconcile-loop substrate, and cluster-view surfaces land together. It emphasizes maturity discipline, explicit deliverables, and shared-plan closure without drifting into `pilot-live` claims.
 
 - [Full modern sample wave](../plans/examples/wave-example-live-proof.md)
-  Shows the combined `0.6.1` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
+  Shows the combined `0.7.0` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
 
-## What This Example Teaches
+## What These Examples Teach
 
-- the standard closure-role structure with `A0`, `E0`, `A8`, and `A9`
-- wave-level `## Eval targets`
+- the standard closure-role structure with `A0`, `A8`, and `A9`
+- `E0` and wave-level `## Eval targets` in the full modern sample
+- honest `repo-landed` maturity framing without `pilot-live` drift
+- multi-slice component promotion where all sibling owners must land together
+- shared-plan and component-matrix closure as part of the architecture truth
 - delegated versus pinned benchmark selection
 - coordination benchmark families from `docs/evals/benchmark-catalog.json`
 - richer executor blocks, runtime budgets, and retry policy
@@ -32,8 +38,11 @@ The example is intentionally denser than a typical production wave. Its job is t
 
 ## Feature Coverage Map
 
-This sample covers the main surfaces added or hardened for `0.6.1`:
+Together these samples cover the main surfaces added or hardened for `0.7.0`:
 
+- repo-landed maturity discipline and anti-overclaim framing
+- explicit shared-plan closure for future-wave safety
+- coordinated component slices with per-agent deliverables
 - planner-era authored wave structure
 - cross-runtime `### Skills`
 - richer `### Executor` blocks and runtime budgets
@@ -53,6 +62,7 @@ This sample covers the main surfaces added or hardened for `0.6.1`:
 Copy more literally when:
 
 - you need the section layout
+- you want a concrete example of what good repo-landed wave fidelity looks like
 - you want concrete wording for delegated versus pinned benchmark targets
 - you want a proof-first owner example with local artifact bundles and sticky retry
 
@@ -65,23 +75,24 @@ Adapt more aggressively when:
 
 ## How This Example Maps To Other Docs
 
-- Use [docs/guides/planner.md](../guides/planner.md) for the planner-generated baseline, then use this sample to see how a human would enrich the generated draft.
-- Use [docs/evals/README.md](../evals/README.md) with this sample when you need to see delegated and pinned benchmark targets in a real wave.
-- Use [docs/reference/live-proof-waves.md](./live-proof-waves.md) with this sample when you need proof-first authoring for `pilot-live` and above.
+- Use [docs/guides/planner.md](../guides/planner.md) for the planner-generated baseline, then use these samples to see how a human would enrich the generated draft for either repo-landed or proof-first work.
+- Use [docs/evals/README.md](../evals/README.md) with the full modern sample when you need to see delegated and pinned benchmark targets in a real wave.
+- Use [docs/reference/live-proof-waves.md](./live-proof-waves.md) with the full modern sample when you need proof-first authoring for `pilot-live` and above.
 - Use [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md) for the operational runbook that explains how the launcher interprets these sections.
 
 ## Suggested Reading Order
 
-1. Start with [Full modern sample wave](../plans/examples/wave-example-live-proof.md).
-2. Read [docs/evals/README.md](../evals/README.md) if you want more background on benchmark target selection.
-3. Read [docs/reference/live-proof-waves.md](./live-proof-waves.md) if you want more detail on proof-first `pilot-live` authoring.
+1. Start with [High-fidelity repo-landed rollout wave](../plans/examples/wave-example-rollout-fidelity.md) if you want the clearest example of good closure-ready wave fidelity for a repo-only outcome.
+2. Read [Full modern sample wave](../plans/examples/wave-example-live-proof.md) if you want the denser proof-first and eval-heavy surface.
+3. Read [docs/evals/README.md](../evals/README.md) if you want more background on benchmark target selection.
+4. Read [docs/reference/live-proof-waves.md](./live-proof-waves.md) if you want more detail on proof-first `pilot-live` authoring.
 
-## Why This Example Lives In `docs/plans/examples/`
+## Why These Examples Live In `docs/plans/examples/`
 
-The example lives outside `docs/plans/waves/` on purpose.
+The examples live outside `docs/plans/waves/` on purpose.
 
 That keeps it:
 
 - easy to browse as teaching material
 - clearly separate from the repo's real launcher-facing wave sequence
-- safe to evolve as reference material without implying that it is part of the current lane's actual plan history
+- safe to evolve as reference material without implying that they are part of the current lane's actual plan history

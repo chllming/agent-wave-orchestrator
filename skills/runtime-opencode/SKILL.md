@@ -46,6 +46,7 @@ Both the agent prompt and injected instructions are authoritative. When they con
 - When an edit depends on understanding adjacent code, read the relevant context first.
 - If a needed change falls outside your ownership, record it as a follow-up request naming the owning agent, the file, and the change.
 - Generated overlays (context bundles, summaries) are read-only reference. Do not edit overlay files.
+- Do not edit files under `.tmp/` (coordination logs, control-plane events, proof registries, dashboards, traces). These are managed by the launcher and operator tooling.
 
 ## Customization
 

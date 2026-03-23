@@ -455,6 +455,7 @@ export function buildExecutionPrompt({
     "- Follow repository instructions in AGENTS.md and CLAUDE.md if present.",
     "- Read the compiled shared summary and your compiled inbox before taking action on every turn.",
     "- Post a coordination record on every meaningful turn with progress, decisions, blockers, handoffs, evidence, or explicit acknowledgement.",
+    "- If your inbox or the coordination log shows a targeted open request for you, your first durable action is to acknowledge it, resolve it, or emit a clarification or human-feedback request. Silent targeted requests are treated as active blockers.",
     "- Re-read the generated board projection before major edits, before commit or push, and before your final report.",
     "- If you change interfaces or contracts, include exact files and exact keys or fields affected.",
     "- If your task touches persisted state, implement the required schema or migration work instead of leaving TODOs.",
@@ -508,6 +509,89 @@ export function buildExecutionPrompt({
     "```",
     agent.prompt.trim(),
     "```",
+  ].join("\n");
+}
+
+export function buildResidentOrchestratorPrompt({
+  lane,
+  wave,
+  waveFile,
+  orchestratorId,
+  coordinationLogPath,
+  messageBoardPath,
+  sharedSummaryPath,
+  dashboardPath,
+  triagePath = null,
+  rolePrompt = "",
+}) {
+  const coordinationCommand = [
+    "pnpm exec wave coord post",
+    `--lane ${lane}`,
+    `--wave ${wave}`,
+    '--agent "launcher"',
+    '--kind "<request|ack|decision|blocker|clarification-request|orchestrator-guidance|resolved-by-policy|human-escalation|human-feedback>"',
+    '--summary "<one-line summary>"',
+    '--detail "<short detail>"',
+  ].join(" ");
+  const feedbackCommand = [
+    "pnpm exec wave-feedback ask",
+    `--lane ${lane}`,
+    `--wave ${wave}`,
+    '--agent "launcher"',
+    `--orchestrator-id ${orchestratorId}`,
+    '--question "<specific clarification needed>"',
+    '--context "<why repo-state or routed ownership was insufficient>"',
+    "--timeout-seconds 30",
+  ].join(" ");
+  const roleSection = String(rolePrompt || "").trim();
+  return [
+    `Working directory: ${REPO_ROOT}`,
+    "",
+    `You are the resident Wave orchestrator for lane ${lane}, wave ${wave}.`,
+    "Your job is to stay alive for the duration of the wave, monitor coordination state, and intervene when timing, routing, or escalation policy requires it.",
+    "The launcher remains the scheduler truth and closure authority. You are an intervention and triage role, not a product-code owner.",
+    "",
+    "Hard limits:",
+    "- Do not edit product code, test code, docs, or owned deliverables.",
+    "- Do not claim another agent's ownership slice or emit proof markers for owned implementation work.",
+    "- Do not declare the wave complete or override launcher gate results.",
+    "",
+    "Primary responsibilities:",
+    "- Monitor the canonical coordination log, shared summary, wave dashboard, and feedback triage artifacts.",
+    "- Keep clarification handling orchestrator-first: resolve from repo state, ownership, prior decisions, or targeted rerouting before opening human escalation.",
+    "- Watch for overdue acknowledgements, stale clarification chains, and pending human tickets.",
+    "- Post durable coordination records and orchestrator notes when you intervene.",
+    "- Stay available. If there is no immediate action to take, keep monitoring instead of exiting early.",
+    "",
+    "Files for this run:",
+    `- Wave file: ${waveFile}`,
+    `- Coordination log: ${coordinationLogPath}`,
+    `- Shared summary: ${sharedSummaryPath}`,
+    `- Wave dashboard: ${dashboardPath}`,
+    `- Message board projection: ${messageBoardPath}`,
+    ...(triagePath ? [`- Feedback triage log: ${triagePath}`] : []),
+    "",
+    "Action surface:",
+    `- Coordination command: \`${coordinationCommand}\``,
+    `- Human feedback command: \`${feedbackCommand}\``,
+    "- Use repository inspection and read-only analysis aggressively before escalating anything to a human.",
+    "- When you route or reroute work, name the owner, exact unblock condition, and the artifact or decision needed.",
+    "",
+    "Operating loop:",
+    "1. Read the shared summary, dashboard, and coordination log.",
+    "2. Identify open clarifications, open clarification-linked requests, overdue acknowledgements, and human-feedback state.",
+    "3. If action is needed, write a durable coordination update and explain the policy basis for the action.",
+    "4. If nothing needs action, continue monitoring. Do not exit until the wave is clearly terminal or the launcher stops the session.",
+    "",
+    ...(roleSection
+      ? [
+          "Resident orchestrator role prompt:",
+          "```text",
+          roleSection,
+          "```",
+          "",
+        ]
+      : []),
   ].join("\n");
 }
 

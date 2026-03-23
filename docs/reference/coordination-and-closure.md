@@ -48,6 +48,8 @@ The runtime writes several different artifacts, but they do different jobs:
 
 The important rule is that the JSONL coordination log is the scheduler truth. The markdown board is a projection for humans. See [wave-orchestrator.md](../plans/wave-orchestrator.md).
 
+Live waves now keep refreshing that derived state while agents are still running. Shared summaries, inboxes, dashboard coordination metrics, and clarification routing are not only recomputed at attempt boundaries; they are also refreshed during active wave execution so stale clarification and acknowledgement timing is machine-visible before the attempt ends.
+
 ## What Agents Should Use
 
 Use the coordination log for durable state:
@@ -64,6 +66,17 @@ Use the coordination log for durable state:
   Use this for assertions that integration should reconcile.
 - `clarification-request`
   Use this when an ambiguity must be triaged before work can safely continue.
+
+## What Stewards and Orchestrators May Also Use
+
+- `ack`
+  Acknowledge receipt of a request or clarification. Resets the acknowledgement timer.
+- `decision`
+  Record a binding decision that downstream agents should follow.
+- `orchestrator-guidance`
+  Non-binding guidance from the resident orchestrator.
+
+Implementation agents normally do not need these kinds.
 
 Practical rule:
 
@@ -133,7 +146,7 @@ At this point A1 can be locally done.
 Example:
 
 ```bash
-pnpm exec wave coord post \
+pnpm exec wave control task create \
   --lane main \
   --wave 4 \
   --agent A1 \
@@ -150,6 +163,8 @@ What happens next:
 - the launcher derives a helper assignment for `agent:A8`
 - that assignment is written into the assignment snapshot
 - the shared summary and A8 inbox now show the open helper work
+
+`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into blocking task edges; plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner.
 
 ### Step 3: Why A1 Can Be Done But The Wave Is Still Blocked
 
@@ -213,12 +228,23 @@ What happens next:
 
 1. the launcher triages the clarification from repo policy, ownership, prior decisions, and routing context
 2. if it can answer inside the wave, it writes the resolution back into coordination state
-3. if it cannot, it creates human feedback or escalation artifacts
-4. until that chain is resolved, clarification remains a closure barrier
+3. if another owner can answer it, the launcher opens a targeted follow-up request and keeps the clarification chain blocking
+4. only after policy and routed follow-up paths are exhausted does it create human feedback or escalation artifacts
+5. until that chain is resolved, clarification remains a closure barrier and any routed follow-up also remains blocking helper work
 
 Important implication:
 
 - even if code is landed, an open clarification chain can still block the wave
+- a routed clarification that stays `open` past the acknowledgement policy can be rerouted during the same live attempt instead of waiting for a full retry cycle
+- operators can now inspect and intervene through one command surface:
+
+```bash
+pnpm exec wave control status --lane main --wave 10 --agent A7 --json
+pnpm exec wave control task act reassign --lane main --wave 10 --id clarify-a7-rollout --to A1
+pnpm exec wave control task act resolve --lane main --wave 10 --id escalation-clarify-a7-rollout --detail "Published command surface covers this question."
+```
+
+That keeps clarification routing, dismissal, escalation, and human-answer handling inside the canonical coordination state instead of forcing ad hoc file edits.
 
 ## End-To-End Example: Required Dependency
 
@@ -370,11 +396,26 @@ When closure fails, the launcher does not always relaunch the entire wave.
 It tries to relaunch only the implicated owners:
 
 - agents named by the failure
+- sibling owners that still owe shared promoted-component proof after a landed owner already passed its slice
 - helper assignees
 - dependency owners where relevant
 - the closure stewards needed after that state changes
 
 That is why the system can safely reuse already-valid implementation slices while still forcing the wave to stay blocked until the right follow-up work is done.
+
+Operators now have a first-class override path for that recovery flow:
+
+```bash
+pnpm exec wave control rerun get --lane main --wave 10 --json
+pnpm exec wave control rerun request --lane main --wave 10 --agent A2 --agent A7 --clear-reuse A2 --reason "Resume sibling-owned component closure"
+```
+
+The canonical rerun request is written under `.tmp/<lane>-wave-launcher/control-plane/`, projected to `.tmp/<lane>-wave-launcher/control/` for compatibility, consumed by the launcher on the next retry decision, and then cleared by default after one application. This is the supported path for:
+
+- rerunning only specific owners
+- preserving explicit reuse selectors such as attempt ids, proof bundle ids, derived-summary reuse, and invalidated component ids through the compatibility projection
+- clearing reuse for selected agents without wiping the whole wave state
+- resuming at the real remaining implementation owners instead of restarting or stopping at the wrong sibling
 
 ## Common Mistakes
 

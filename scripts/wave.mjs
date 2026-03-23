@@ -24,7 +24,10 @@ function printHelp() {
   wave feedback [feedback options]
   wave dashboard [dashboard options]
   wave local [local executor options]
+  wave control [control-plane options]
   wave coord [coordination options]
+  wave retry [retry control options]
+  wave proof [proof registry options]
   wave dep [dependency options]
   wave benchmark [benchmark options]
 
@@ -102,10 +105,34 @@ if (["init", "upgrade", "self-update", "changelog", "doctor"].includes(subcomman
     console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
+} else if (subcommand === "control") {
+  try {
+    const { runControlCli } = await import("./wave-orchestrator/control-cli.mjs");
+    await runControlCli(rest);
+  } catch (error) {
+    console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 } else if (subcommand === "coord") {
   try {
     const { runCoordinationCli } = await import("./wave-orchestrator/coord-cli.mjs");
     await runCoordinationCli(rest);
+  } catch (error) {
+    console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+} else if (subcommand === "retry") {
+  try {
+    const { runRetryCli } = await import("./wave-orchestrator/retry-cli.mjs");
+    await runRetryCli(rest);
+  } catch (error) {
+    console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+} else if (subcommand === "proof") {
+  try {
+    const { runProofCli } = await import("./wave-orchestrator/proof-cli.mjs");
+    await runProofCli(rest);
   } catch (error) {
     console.error(`[wave] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { augmentSummaryWithProofRegistry } from "./proof-registry.mjs";
 import { readJsonOrNull } from "./shared.mjs";
 import { buildGateSnapshot } from "./launcher.mjs";
 import {
@@ -59,7 +60,7 @@ function buildReplayLanePaths(metadata) {
   };
 }
 
-function buildReplayAgentRuns(dir, wave, metadata) {
+function buildReplayAgentRuns(dir, wave, metadata, proofRegistry = null) {
   const isHermeticTrace = Number(metadata?.traceVersion) >= 2;
   return (metadata?.agents || []).map((agentMetadata) => {
     const waveAgent =
@@ -69,6 +70,11 @@ function buildReplayAgentRuns(dir, wave, metadata) {
       };
     const summaryPath = absoluteBundlePath(dir, agentMetadata.summaryPath);
     const summaryPayload = summaryPath ? readJsonOrNull(summaryPath) : null;
+    const augmentedSummary = augmentSummaryWithProofRegistry(
+      waveAgent,
+      summaryPayload && typeof summaryPayload === "object" ? summaryPayload : null,
+      proofRegistry,
+    );
     return {
       agent: {
         ...waveAgent,
@@ -86,8 +92,8 @@ function buildReplayAgentRuns(dir, wave, metadata) {
       statusPath: absoluteBundlePath(dir, agentMetadata.statusPath),
       summaryPath,
       summary:
-        summaryPayload && typeof summaryPayload === "object"
-          ? summaryPayload
+        augmentedSummary
+          ? augmentedSummary
           : !isHermeticTrace
             ? agentMetadata.summary || null
             : null,
@@ -174,7 +180,7 @@ export function replayTraceBundle(dir) {
     };
   }
   const lanePaths = buildReplayLanePaths(bundle.metadata);
-  const agentRuns = buildReplayAgentRuns(dir, wave, bundle.metadata);
+  const agentRuns = buildReplayAgentRuns(dir, wave, bundle.metadata, bundle.proofRegistry || null);
   const derivedState = {
     coordinationState: bundle.coordinationState,
     ledger: bundle.ledger,

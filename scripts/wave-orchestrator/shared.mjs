@@ -19,6 +19,9 @@ export const DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS = 20;
 export const DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS = 180;
 export const DEFAULT_AGENT_LAUNCH_STAGGER_MS = 1200;
 export const DEFAULT_WAIT_PROGRESS_INTERVAL_MS = 3000;
+export const DEFAULT_LIVE_COORDINATION_REFRESH_MS = 15000;
+export const DEFAULT_COORDINATION_ACK_TIMEOUT_MS = 5 * 60 * 1000;
+export const DEFAULT_COORDINATION_RESOLUTION_STALE_MS = 30 * 60 * 1000;
 export const DEFAULT_REFRESH_MS = 2000;
 export const DEFAULT_WATCH_REFRESH_MS = 2000;
 export const DEFAULT_WAIT_TIMEOUT_SECONDS = 1800;
@@ -109,6 +112,21 @@ export function buildWorkspaceTmuxToken(workspaceRoot = REPO_ROOT) {
   return `${repoBase}_${repoHash}`;
 }
 
+function buildTelemetryProjectId(config) {
+  return (
+    String(config?.waveControl?.projectId || config?.projectId || config?.projectName || path.basename(REPO_ROOT))
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || "wave"
+  );
+}
+
+function readRuntimeVersion() {
+  return String(readJsonOrNull(path.join(PACKAGE_ROOT, "package.json"))?.version || "").trim() || null;
+}
+
 export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
   const config = options.config || loadWaveConfig();
   const baseLaneProfile = resolveLaneProfile(config, laneInput || config.defaultLane);
@@ -176,10 +194,14 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     messageboardsDir: path.join(stateDir, "messageboards"),
     dashboardsDir: path.join(stateDir, "dashboards"),
     coordinationDir: path.join(stateDir, "coordination"),
+    controlDir: path.join(stateDir, "control"),
+    controlPlaneDir: path.join(stateDir, "control-plane"),
+    telemetryDir: path.join(stateDir, "control-plane", "telemetry"),
     assignmentsDir: path.join(stateDir, "assignments"),
     inboxesDir: path.join(stateDir, "inboxes"),
     ledgerDir: path.join(stateDir, "ledger"),
     integrationDir: path.join(stateDir, "integration"),
+    proofDir: path.join(stateDir, "proof"),
     securityDir: path.join(stateDir, "security"),
     dependencySnapshotsDir: path.join(stateDir, "dependencies"),
     docsQueueDir: path.join(stateDir, "docs-queue"),
@@ -224,6 +246,10 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     executors: laneProfile.executors,
     skills: laneProfile.skills,
     capabilityRouting: laneProfile.capabilityRouting,
+    projectId: buildTelemetryProjectId(config),
+    runtimeVersion: readRuntimeVersion(),
+    orchestratorId: null,
+    waveControl: laneProfile.waveControl,
     defaultManifestPath: path.join(stateDir, "waves.manifest.json"),
     defaultRunStatePath: path.join(stateDir, "run-state.json"),
     globalDashboardPath: path.join(stateDir, "dashboards", "global.json"),

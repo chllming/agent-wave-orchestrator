@@ -44,6 +44,7 @@ All context is in the prompt and added directories. There is no system prompt la
 - **No persistent state** -- each session starts clean. Do not rely on artifacts from previous sessions unless they are committed to the repo.
 - **Filesystem scope** -- write only to paths within the workspace. The sandbox may reject writes outside the project root.
 - **External APIs** -- avoid calling external APIs unless the task explicitly requires live verification. If network is unavailable, record the gap as a proof limitation.
+- **Runtime state** -- do not edit files under `.tmp/` (coordination logs, control-plane events, proof registries, dashboards, traces). These are managed by the launcher and operator tooling. You may read them when they appear in `--add-dir` bundles.
 
 <!-- CUSTOMIZE: List allowed network targets or external API endpoints for your project here. -->
 

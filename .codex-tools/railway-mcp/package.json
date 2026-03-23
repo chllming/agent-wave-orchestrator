@@ -1,0 +1,11 @@
+{
+  "name": "railway-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repo-local Railway MCP launcher for wave-orchestration.",
+  "license": "ISC",
+  "dependencies": {
+    "@railway/cli": "^4.30.5",
+    "@railway/mcp-server": "^0.1.8"
+  }
+}

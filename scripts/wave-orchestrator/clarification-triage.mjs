@@ -8,7 +8,11 @@ import {
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
 import { createFeedbackRequest } from "./feedback.mjs";
-import { ensureDirectory, writeTextAtomic } from "./shared.mjs";
+import {
+  DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
+  ensureDirectory,
+  writeTextAtomic,
+} from "./shared.mjs";
 
 const MAX_ROUTED_CLARIFICATION_CYCLES = 2;
 
@@ -303,12 +307,12 @@ function openEscalationForClarification(coordinationState, clarificationId) {
   );
 }
 
-function latestRouteAttempt(requests) {
-  return requests.reduce(
-    (maxAttempt, record) =>
-      Math.max(maxAttempt, Number.parseInt(String(record.attempt || 0), 10) || 0),
-    0,
-  );
+function recordAgeMs(record, nowMs = Date.now()) {
+  const startedAtMs = Date.parse(record?.createdAt || record?.updatedAt || "");
+  if (!Number.isFinite(startedAtMs)) {
+    return null;
+  }
+  return Math.max(0, nowMs - startedAtMs);
 }
 
 function supersedeOpenRequests(coordinationLogPath, requests, attempt) {
@@ -323,6 +327,23 @@ function supersedeOpenRequests(coordinationLogPath, requests, attempt) {
       attempt,
       updatedAt: undefined,
     });
+  }
+}
+
+function supersedeOpenEscalations(triagePath, coordinationLogPath, escalations, attempt, detail) {
+  for (const escalation of escalations) {
+    if (!isOpenCoordinationStatus(escalation.status)) {
+      continue;
+    }
+    const nextRecord = {
+      ...escalation,
+      status: "superseded",
+      detail,
+      attempt,
+      updatedAt: undefined,
+    };
+    appendTriageRecord(triagePath, nextRecord);
+    appendCoordinationRecord(coordinationLogPath, nextRecord);
   }
 }
 
@@ -409,6 +430,7 @@ function escalateClarificationToHuman({
     orchestratorId,
     question: record.summary || "Clarification requested",
     context: record.detail || "",
+    recordTelemetry: true,
   });
   const escalationId = `escalation-${humanRequest.requestId}`;
   const escalationRecord = {
@@ -440,6 +462,7 @@ export function triageClarificationRequests({
   orchestratorId,
   attempt = 0,
   resolutionContext = {},
+  ackTimeoutMs = DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
 }) {
   ensureDirectory(lanePaths.feedbackTriageDir);
   const triagePath = triageLogPath(lanePaths, wave.wave);
@@ -453,11 +476,29 @@ export function triageClarificationRequests({
     const openLinkedRequests = linkedRequests.filter((entry) =>
       isOpenCoordinationStatus(entry.status),
     );
+    const openAckPendingLinkedRequests = openLinkedRequests.filter(
+      (entry) => entry.status === "open",
+    );
+    const activeLinkedRequests = openLinkedRequests.filter((entry) => entry.status !== "open");
     const resolvedLinkedRequest = linkedRequests.find((entry) =>
       ["resolved", "closed"].includes(entry.status),
     );
     const resolvedEscalation = resolvedEscalationForClarification(coordinationState, record.id);
+    const openEscalations = (coordinationState?.humanEscalations || []).filter(
+      (entry) =>
+        entry.closureCondition === clarificationClosureCondition(record.id) &&
+        isOpenCoordinationStatus(entry.status),
+    );
     if (resolvedLinkedRequest || resolvedEscalation) {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded because clarification ${record.id} was already resolved.`,
+        );
+      }
       updateClarificationRecord(
         coordinationLogPath,
         record,
@@ -476,6 +517,15 @@ export function triageClarificationRequests({
       coordinationState,
     });
     if (resolution?.type === "policy") {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded by policy resolution for clarification ${record.id}.`,
+        );
+      }
       updateClarificationRecord(coordinationLogPath, record, "resolved", resolution.guidance, attempt);
       appendTriageRecord(triagePath, {
         id: `triage-${record.id}-policy`,
@@ -512,8 +562,17 @@ export function triageClarificationRequests({
     }
 
     if (resolution?.type === "route") {
+      if (openEscalations.length > 0) {
+        supersedeOpenEscalations(
+          triagePath,
+          coordinationLogPath,
+          openEscalations,
+          attempt,
+          `Superseded by routed clarification follow-up for ${record.id}.`,
+        );
+        changed = true;
+      }
       const routeCycles = linkedRequests.length;
-      const lastRouteAttempt = latestRouteAttempt(linkedRequests);
       if (openLinkedRequests.length === 0) {
         createClarificationRoute({
           triagePath,
@@ -529,8 +588,15 @@ export function triageClarificationRequests({
         changed = true;
         continue;
       }
-      if (attempt > lastRouteAttempt && routeCycles < MAX_ROUTED_CLARIFICATION_CYCLES) {
-        supersedeOpenRequests(coordinationLogPath, openLinkedRequests, attempt);
+      if (activeLinkedRequests.length > 0) {
+        continue;
+      }
+      const timedOutLinkedRequests = openAckPendingLinkedRequests.filter((entry) => {
+        const ageMs = recordAgeMs(entry);
+        return Number.isFinite(ageMs) && ageMs >= ackTimeoutMs;
+      });
+      if (timedOutLinkedRequests.length > 0 && routeCycles < MAX_ROUTED_CLARIFICATION_CYCLES) {
+        supersedeOpenRequests(coordinationLogPath, timedOutLinkedRequests, attempt);
         createClarificationRoute({
           triagePath,
           coordinationLogPath,
@@ -545,8 +611,8 @@ export function triageClarificationRequests({
         changed = true;
         continue;
       }
-      if (attempt > lastRouteAttempt && routeCycles >= MAX_ROUTED_CLARIFICATION_CYCLES) {
-        if (openEscalationForClarification(coordinationState, record.id)) {
+      if (timedOutLinkedRequests.length > 0 && routeCycles >= MAX_ROUTED_CLARIFICATION_CYCLES) {
+        if (openEscalations.length > 0 || openEscalationForClarification(coordinationState, record.id)) {
           continue;
         }
         const escalationRecord = escalateClarificationToHuman({

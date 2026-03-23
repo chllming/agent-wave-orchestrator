@@ -781,7 +781,13 @@ describe("trace bundles", () => {
     });
     expect(replay.quality.runtimeFallbackCount).toBe(1);
     expect(replay.quality.runtimeFallbackRate).toBeGreaterThan(0);
+    expect(replay.quality.oldestOpenCoordinationAgeMs).not.toBeNull();
+    expect(replay.quality.oldestUnackedRequestAgeMs).toBeNull();
+    expect(replay.quality.overdueAckCount).toBeGreaterThanOrEqual(0);
+    expect(replay.quality.overdueClarificationCount).toBeGreaterThanOrEqual(0);
+    expect(replay.quality.openHumanEscalationCount).toBeGreaterThanOrEqual(0);
     expect(replay.quality.meanTimeToFirstAckMs).not.toBeNull();
+    expect(replay.quality.meanTimeToResolutionMs).not.toBeNull();
     expect(replay.quality.meanTimeToBlockerResolutionMs).not.toBeNull();
     expect(replay.quality.contQaReversal).toBe(true);
 
@@ -1328,6 +1334,71 @@ describe("trace bundles", () => {
       expect(replay.ok).toBe(false);
       expect(replay.gateSnapshot.overall.gate).toBe("clarificationBarrier");
       expect(replay.quality.humanEscalationCount).toBeGreaterThan(0);
+    },
+    30000,
+  );
+
+  it(
+    "keeps routed clarification follow-up blocking without opening a human escalation",
+    () => {
+      const repoDir = makeTempDir();
+      writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+      const initResult = runWaveCli(["init"], repoDir);
+      expect(initResult.status).toBe(0);
+      configureRepoExecutorsForLiveTrace(repoDir);
+      configureWaveExecutorsForLiveTrace(repoDir);
+
+      seedCoordinationRecord(repoDir, {
+        id: "clarify-doc-follow-up",
+        lane: "main",
+        wave: 0,
+        agentId: "A1",
+        kind: "clarification-request",
+        targets: ["launcher"],
+        status: "open",
+        priority: "high",
+        artifactRefs: ["docs/plans/master-plan.md"],
+        dependsOn: [],
+        closureCondition: "",
+        confidence: "medium",
+        summary: "Need the approved shared-plan rollback wording",
+        detail: "Implementation needs the documentation owner to confirm the rollback wording before closure.",
+        source: "agent",
+      });
+
+      const launchResult = runWaveCli(
+        [
+          "launch",
+          "--lane",
+          "main",
+          "--no-context7",
+          "--no-dashboard",
+          "--timeout-minutes",
+          "1",
+          "--max-retries-per-wave",
+          "0",
+        ],
+        repoDir,
+      );
+      expect(launchResult.status).not.toBe(0);
+
+      const replay = replayTraceBundle(traceAttemptDirForRepo(repoDir, 1));
+      expect(replay.ok).toBe(false);
+      expect(replay.gateSnapshot.overall.gate).toBe("helperAssignmentBarrier");
+      expect(replay.gateSnapshot.helperAssignmentBarrier.statusCode).toBe("helper-assignment-open");
+      expect(replay.gateSnapshot.clarificationBarrier.statusCode).toBe("clarification-follow-up-open");
+      expect(replay.quality.humanEscalationCount).toBe(0);
+      expect(replay.quality.orchestratorResolvedClarificationCount).toBeGreaterThan(0);
+
+      const coordinationState = readMaterializedCoordinationState(
+        path.join(repoDir, ".tmp", "main-wave-launcher", "coordination", "wave-0.jsonl"),
+      );
+      expect(coordinationState.byId.get("route-clarify-doc-follow-up-1")).toMatchObject({
+        kind: "request",
+        status: "open",
+      });
+      expect(coordinationState.humanEscalations).toEqual([]);
     },
     30000,
   );

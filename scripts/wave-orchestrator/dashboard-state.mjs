@@ -149,6 +149,13 @@ export function buildWaveDashboardState({
     helperAssignmentsOpen: 0,
     inboundDependenciesOpen: 0,
     outboundDependenciesOpen: 0,
+    coordinationOpen: 0,
+    openClarifications: 0,
+    openHumanEscalations: 0,
+    oldestOpenCoordinationAgeMs: null,
+    oldestUnackedRequestAgeMs: null,
+    overdueAckCount: 0,
+    overdueClarificationCount: 0,
     agents: agentRuns.map((run) => ({
       agentId: run.agent.agentId,
       title: run.agent.title,
@@ -200,6 +207,7 @@ export function buildGlobalDashboardState({
       maxRetriesPerWave: options.maxRetriesPerWave,
       dashboard: options.dashboard,
       cleanupSessions: options.cleanupSessions,
+      residentOrchestrator: options.residentOrchestrator === true,
       orchestratorId: options.orchestratorId,
       orchestratorBoardPath: options.orchestratorBoardPath
         ? path.relative(REPO_ROOT, options.orchestratorBoardPath)
@@ -235,6 +243,13 @@ export function buildGlobalDashboardState({
       helperAssignmentsOpen: 0,
       inboundDependenciesOpen: 0,
       outboundDependenciesOpen: 0,
+      coordinationOpen: 0,
+      openClarifications: 0,
+      openHumanEscalations: 0,
+      oldestOpenCoordinationAgeMs: null,
+      oldestUnackedRequestAgeMs: null,
+      overdueAckCount: 0,
+      overdueClarificationCount: 0,
       lastMessage: "",
       deployments: [],
       infraFindings: [],
@@ -323,6 +338,13 @@ export function syncGlobalWaveFromWaveDashboard(globalState, waveDashboard) {
   entry.helperAssignmentsOpen = waveDashboard.helperAssignmentsOpen || 0;
   entry.inboundDependenciesOpen = waveDashboard.inboundDependenciesOpen || 0;
   entry.outboundDependenciesOpen = waveDashboard.outboundDependenciesOpen || 0;
+  entry.coordinationOpen = waveDashboard.coordinationOpen || 0;
+  entry.openClarifications = waveDashboard.openClarifications || 0;
+  entry.openHumanEscalations = waveDashboard.openHumanEscalations || 0;
+  entry.oldestOpenCoordinationAgeMs = waveDashboard.oldestOpenCoordinationAgeMs ?? null;
+  entry.oldestUnackedRequestAgeMs = waveDashboard.oldestUnackedRequestAgeMs ?? null;
+  entry.overdueAckCount = waveDashboard.overdueAckCount || 0;
+  entry.overdueClarificationCount = waveDashboard.overdueClarificationCount || 0;
   entry.deployments = agents
     .filter((agent) => agent.deploymentState)
     .map((agent) => ({

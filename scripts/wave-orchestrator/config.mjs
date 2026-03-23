@@ -2,10 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { WORKSPACE_ROOT } from "./roots.mjs";
 import {
+  PLANNER_CONTEXT7_BUNDLE_ID,
+  PLANNER_CONTEXT7_DEFAULT_QUERY,
+  PLANNER_CONTEXT7_RESEARCH_TOPIC_PATHS,
+} from "./planner-context.mjs";
+import {
   emptySkillsConfig,
   mergeSkillsConfig,
   normalizeSkillsConfig,
 } from "./skills.mjs";
+import { normalizeWaveControlReportMode } from "./wave-control-schema.mjs";
 
 const REPO_ROOT = WORKSPACE_ROOT;
 
@@ -34,6 +40,30 @@ export const DEFAULT_REQUIRED_PROMPT_REFERENCES = [
   "docs/reference/repository-guidance.md",
   "docs/research/agent-context-sources.md",
 ];
+export const DEFAULT_PLANNER_AGENTIC_EXECUTOR_PROFILE = "planning-readonly";
+export const DEFAULT_PLANNER_AGENTIC_MAX_WAVES = 3;
+export const DEFAULT_PLANNER_AGENTIC_MAX_REPLAN_ITERATIONS = 1;
+export const DEFAULT_PLANNER_AGENTIC_CONTEXT7_BUNDLE = PLANNER_CONTEXT7_BUNDLE_ID;
+export const DEFAULT_PLANNER_AGENTIC_CONTEXT7_QUERY = PLANNER_CONTEXT7_DEFAULT_QUERY;
+export const DEFAULT_PLANNER_AGENTIC_CORE_CONTEXT_PATHS = [
+  "AGENTS.md",
+  "wave.config.json",
+  "docs/roadmap.md",
+  "docs/plans/current-state.md",
+  "docs/plans/master-plan.md",
+  "docs/plans/wave-orchestrator.md",
+  "docs/reference/sample-waves.md",
+  "docs/plans/examples/wave-example-live-proof.md",
+  "docs/reference/live-proof-waves.md",
+  "docs/plans/component-cutover-matrix.md",
+  "docs/plans/component-cutover-matrix.json",
+  "docs/reference/wave-planning-lessons.md",
+  "docs/research/coordination-failure-review.md",
+];
+export const DEFAULT_PLANNER_AGENTIC_LESSONS_PATHS = [
+  "docs/reference/wave-planning-lessons.md",
+];
+export const DEFAULT_PLANNER_AGENTIC_RESEARCH_TOPIC_PATHS = PLANNER_CONTEXT7_RESEARCH_TOPIC_PATHS;
 export const SUPPORTED_EXECUTOR_MODES = ["codex", "claude", "opencode", "local"];
 export const DEFAULT_EXECUTOR_MODE = "codex";
 export const DEFAULT_CODEX_COMMAND = "codex";
@@ -41,6 +71,26 @@ export const DEFAULT_CODEX_SANDBOX_MODE = "danger-full-access";
 export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
 export const DEFAULT_CLAUDE_COMMAND = "claude";
 export const DEFAULT_OPENCODE_COMMAND = "opencode";
+export const DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR = "WAVE_CONTROL_AUTH_TOKEN";
+export const DEFAULT_WAVE_CONTROL_REPORT_MODE = "metadata-plus-selected";
+export const DEFAULT_WAVE_CONTROL_REQUEST_TIMEOUT_MS = 5000;
+export const DEFAULT_WAVE_CONTROL_FLUSH_BATCH_SIZE = 25;
+export const DEFAULT_WAVE_CONTROL_MAX_PENDING_EVENTS = 1000;
+export const DEFAULT_WAVE_CONTROL_SELECTED_ARTIFACT_KINDS = [
+  "trace-run-metadata",
+  "trace-quality",
+  "trace-outcome",
+  "integration-summary",
+  "proof-registry",
+  "agent-summary",
+  "control-plane-log",
+  "benchmark-results",
+  "benchmark-failure-review",
+  "verification-stdout",
+  "verification-stderr",
+  "verification-output-manifest",
+  "benchmark-patch-manifest",
+];
 const LEGACY_EVALUATOR_ROLE_KEYS = new Map([
   ["evaluatorAgentId", "contQaAgentId"],
   ["evaluatorRolePromptPath", "contQaRolePromptPath"],
@@ -334,6 +384,65 @@ function normalizeValidation(rawValidation = {}) {
   };
 }
 
+function normalizePlannerAgentic(rawAgentic = {}) {
+  const plannerAgentic =
+    rawAgentic && typeof rawAgentic === "object" && !Array.isArray(rawAgentic)
+      ? rawAgentic
+      : {};
+  return {
+    executorProfile: String(
+      plannerAgentic.executorProfile || DEFAULT_PLANNER_AGENTIC_EXECUTOR_PROFILE,
+    )
+      .trim()
+      .toLowerCase(),
+    defaultMaxWaves:
+      normalizeOptionalPositiveInt(
+        plannerAgentic.defaultMaxWaves,
+        "planner.agentic.defaultMaxWaves",
+        DEFAULT_PLANNER_AGENTIC_MAX_WAVES,
+      ) || DEFAULT_PLANNER_AGENTIC_MAX_WAVES,
+    maxReplanIterations:
+      normalizeOptionalPositiveInt(
+        plannerAgentic.maxReplanIterations,
+        "planner.agentic.maxReplanIterations",
+        DEFAULT_PLANNER_AGENTIC_MAX_REPLAN_ITERATIONS,
+      ) || DEFAULT_PLANNER_AGENTIC_MAX_REPLAN_ITERATIONS,
+    context7Bundle: String(
+      plannerAgentic.context7Bundle || DEFAULT_PLANNER_AGENTIC_CONTEXT7_BUNDLE,
+    )
+      .trim()
+      .toLowerCase(),
+    context7Query:
+      normalizeOptionalString(
+        plannerAgentic.context7Query,
+        DEFAULT_PLANNER_AGENTIC_CONTEXT7_QUERY,
+      ) || DEFAULT_PLANNER_AGENTIC_CONTEXT7_QUERY,
+    coreContextPaths:
+      normalizeOptionalPathArray(
+        plannerAgentic.coreContextPaths,
+        "planner.agentic.coreContextPaths",
+      ) || DEFAULT_PLANNER_AGENTIC_CORE_CONTEXT_PATHS,
+    lessonsPaths:
+      normalizeOptionalPathArray(
+        plannerAgentic.lessonsPaths,
+        "planner.agentic.lessonsPaths",
+      ) || DEFAULT_PLANNER_AGENTIC_LESSONS_PATHS,
+    researchTopicPaths:
+      normalizeOptionalPathArray(
+        plannerAgentic.researchTopicPaths,
+        "planner.agentic.researchTopicPaths",
+      ) || DEFAULT_PLANNER_AGENTIC_RESEARCH_TOPIC_PATHS,
+  };
+}
+
+function normalizePlanner(rawPlanner = {}) {
+  const planner =
+    rawPlanner && typeof rawPlanner === "object" && !Array.isArray(rawPlanner) ? rawPlanner : {};
+  return {
+    agentic: normalizePlannerAgentic(planner.agentic),
+  };
+}
+
 function normalizeCapabilityRouting(rawCapabilityRouting = {}) {
   const preferredAgentsInput =
     rawCapabilityRouting && typeof rawCapabilityRouting === "object"
@@ -418,6 +527,62 @@ function normalizeRuntimePolicy(rawRuntimePolicy = {}) {
       runtimePolicy.fallbackExecutorOrder,
       "runtimePolicy.fallbackExecutorOrder",
     ),
+  };
+}
+
+function normalizeWaveControl(rawWaveControl = {}, label = "waveControl") {
+  const waveControl =
+    rawWaveControl && typeof rawWaveControl === "object" && !Array.isArray(rawWaveControl)
+      ? rawWaveControl
+      : {};
+  const reportMode = normalizeWaveControlReportMode(
+    waveControl.reportMode,
+    `${label}.reportMode`,
+    DEFAULT_WAVE_CONTROL_REPORT_MODE,
+  );
+  const enabled =
+    reportMode !== "disabled" && normalizeOptionalBoolean(waveControl.enabled, true);
+  return {
+    enabled,
+    endpoint: normalizeOptionalString(waveControl.endpoint, null),
+    workspaceId: normalizeOptionalString(waveControl.workspaceId, null),
+    projectId: normalizeOptionalString(waveControl.projectId, null),
+    authTokenEnvVar:
+      normalizeOptionalString(waveControl.authTokenEnvVar, DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR) ||
+      DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+    reportMode,
+    uploadArtifactKinds: normalizeOptionalStringArray(
+      waveControl.uploadArtifactKinds,
+      DEFAULT_WAVE_CONTROL_SELECTED_ARTIFACT_KINDS,
+    ),
+    requestTimeoutMs:
+      normalizeOptionalPositiveInt(
+        waveControl.requestTimeoutMs,
+        `${label}.requestTimeoutMs`,
+        DEFAULT_WAVE_CONTROL_REQUEST_TIMEOUT_MS,
+      ) || DEFAULT_WAVE_CONTROL_REQUEST_TIMEOUT_MS,
+    flushBatchSize:
+      normalizeOptionalPositiveInt(
+        waveControl.flushBatchSize,
+        `${label}.flushBatchSize`,
+        DEFAULT_WAVE_CONTROL_FLUSH_BATCH_SIZE,
+      ) || DEFAULT_WAVE_CONTROL_FLUSH_BATCH_SIZE,
+    maxPendingEvents:
+      normalizeOptionalPositiveInt(
+        waveControl.maxPendingEvents,
+        `${label}.maxPendingEvents`,
+        DEFAULT_WAVE_CONTROL_MAX_PENDING_EVENTS,
+      ) || DEFAULT_WAVE_CONTROL_MAX_PENDING_EVENTS,
+    captureCoordinationRecords: normalizeOptionalBoolean(
+      waveControl.captureCoordinationRecords,
+      true,
+    ),
+    captureControlPlaneEvents: normalizeOptionalBoolean(
+      waveControl.captureControlPlaneEvents,
+      true,
+    ),
+    captureTraceBundles: normalizeOptionalBoolean(waveControl.captureTraceBundles, true),
+    captureBenchmarkRuns: normalizeOptionalBoolean(waveControl.captureBenchmarkRuns, true),
   };
 }
 
@@ -811,9 +976,11 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     roles: normalizeRoles(rawConfig.roles),
     validation: normalizeValidation(rawConfig.validation),
     executors: normalizeExecutors(rawConfig.executors),
+    planner: normalizePlanner(rawConfig.planner),
     skills: normalizeLaneSkills(rawConfig.skills, "skills"),
     capabilityRouting: normalizeCapabilityRouting(rawConfig.capabilityRouting),
     runtimePolicy: normalizeRuntimePolicy(rawConfig.runtimePolicy),
+    waveControl: normalizeWaveControl(rawConfig.waveControl, "waveControl"),
     sharedPlanDocs,
     lanes,
     configPath,
@@ -867,6 +1034,13 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
       ? { fallbackExecutorOrder: laneConfig.fallbackExecutorOrder }
       : {}),
   });
+  const waveControl = normalizeWaveControl(
+    {
+      ...config.waveControl,
+      ...(laneConfig.waveControl || {}),
+    },
+    `${lane}.waveControl`,
+  );
   return {
     lane,
     docsDir,
@@ -882,6 +1056,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane) {
     skills,
     capabilityRouting,
     runtimePolicy,
+    waveControl,
     paths: {
       terminalsPath: normalizeRepoRelativePath(
         laneConfig.terminalsPath || config.paths.terminalsPath,

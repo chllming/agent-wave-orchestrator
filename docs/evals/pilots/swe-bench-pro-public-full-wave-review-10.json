@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "id": "swe-bench-pro-public-full-wave-review-10",
+  "benchmarkId": "swe-bench-pro",
+  "title": "SWE-bench Pro Public Full-Wave Review 10",
+  "split": "public",
+  "sampleStrategy": "first-listed-per-repo-from-frozen-20-task-pilot",
+  "sampleSource": "Derived from docs/evals/pilots/swe-bench-pro-public-pilot.json by taking the first listed task for each repository pair in the frozen 20-task public pilot.",
+  "derivedFromManifestPath": "docs/evals/pilots/swe-bench-pro-public-pilot.json",
+  "reviewOnly": true,
+  "reviewScope": "multi-agent-only-diagnostic",
+  "tasks": [
+    {
+      "taskId": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "repoLanguage": "js"
+    },
+    {
+      "taskId": "instance_qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f34c",
+      "repo": "qutebrowser/qutebrowser",
+      "repoLanguage": "python"
+    },
+    {
+      "taskId": "instance_ansible__ansible-f327e65d11bb905ed9f15996024f857a95592629-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "repo": "ansible/ansible",
+      "repoLanguage": "python"
+    },
+    {
+      "taskId": "instance_internetarchive__openlibrary-4a5d2a7d24c9e4c11d3069220c0685b736d5ecde-v13642507b4fc1f8d234172bf8129942da2c2ca26",
+      "repo": "internetarchive/openlibrary",
+      "repoLanguage": "python"
+    },
+    {
+      "taskId": "instance_gravitational__teleport-3fa6904377c006497169945428e8197158667910-v626ec2a48416b10a88641359a169d99e935ff037",
+      "repo": "gravitational/teleport",
+      "repoLanguage": "go"
+    },
+    {
+      "taskId": "instance_navidrome__navidrome-7073d18b54da7e53274d11c9e2baef1242e8769e",
+      "repo": "navidrome/navidrome",
+      "repoLanguage": "go"
+    },
+    {
+      "taskId": "instance_element-hq__element-web-33e8edb3d508d6eefb354819ca693b7accc695e7",
+      "repo": "element-hq/element-web",
+      "repoLanguage": "js"
+    },
+    {
+      "taskId": "instance_future-architect__vuls-407407d306e9431d6aa0ab566baa6e44e5ba2904",
+      "repo": "future-architect/vuls",
+      "repoLanguage": "go"
+    },
+    {
+      "taskId": "instance_flipt-io__flipt-e42da21a07a5ae35835ec54f74004ebd58713874",
+      "repo": "flipt-io/flipt",
+      "repoLanguage": "go"
+    },
+    {
+      "taskId": "instance_protonmail__webclients-2c3559cad02d1090985dba7e8eb5a129144d9811",
+      "repo": "protonmail/webclients",
+      "repoLanguage": "js"
+    }
+  ]
+}

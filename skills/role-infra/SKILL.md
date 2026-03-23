@@ -18,7 +18,8 @@ Execute these steps for each infra surface assigned in the wave:
 2. **Verify each surface** -- check the current state of each surface against the required state.
 3. **Classify state** -- assign a status to each surface using the classification system below.
 4. **Emit markers** -- produce one `[infra-status]` marker per surface verified.
-5. **Coordinate** -- post coordination records for any surface that blocks other agents or requires human approval.
+5. **Coordinate** -- post coordination records for any surface that blocks other agents or requires human approval. Use targeted requests so the finding becomes a helper assignment with an explicit owner.
+6. **Check dependencies** -- if the wave has inbound cross-lane dependency tickets, verify they are resolved before declaring infra conformance.
 
 ## Verification Surfaces
 

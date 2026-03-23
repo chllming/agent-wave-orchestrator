@@ -1866,12 +1866,24 @@ function mergeUniqueStringArrays(...lists) {
   );
 }
 
+function mergeDefinedExecutorValues(...sections) {
+  const merged = {};
+  for (const section of sections) {
+    if (!section || typeof section !== "object") {
+      continue;
+    }
+    for (const [key, value] of Object.entries(section)) {
+      if (value === null || value === undefined) {
+        continue;
+      }
+      merged[key] = cloneExecutorValue(value);
+    }
+  }
+  return merged;
+}
+
 function mergeExecutorSections(baseSection, profileSection, inlineSection, arrayKeys = []) {
-  const merged = {
-    ...(cloneExecutorValue(baseSection) || {}),
-    ...(cloneExecutorValue(profileSection) || {}),
-    ...(cloneExecutorValue(inlineSection) || {}),
-  };
+  const merged = mergeDefinedExecutorValues(baseSection, profileSection, inlineSection);
   for (const key of arrayKeys) {
     const mergedArray = mergeUniqueStringArrays(
       baseSection?.[key],

@@ -31,6 +31,8 @@ When running a local smoke validation, verify each of the following:
 5. **Skill resolution** -- all skills referenced in the wave definition resolve to existing skill directories with valid `skill.json` and `SKILL.md` files.
 6. **Context bundle integrity** -- if overlays or context bundles are generated, they exist at the declared paths and are non-empty.
 7. **Role assignment consistency** -- each agent has exactly one role, and the role matches a known role skill.
+8. **Proof artifact declarations** -- if the wave declares `### Proof artifacts`, verify the paths are concrete and plausible. Local smoke cannot verify artifact content but can validate declaration structure.
+9. **Control-plane readiness** -- verify the control-plane directory structure exists. Local smoke validates directory layout, not event content.
 
 Report each check as pass, fail, or skip with a one-line reason.
 

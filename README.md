@@ -20,6 +20,8 @@ The framework does three things:
   Wave builds runtime context from repo state, project memory, skills, Context7, and generated overlays.
 - `The system is inspectable and replayable.`
   Dry-run previews, logs, dashboards, ledgers, traces, and replay make the system debuggable instead of mysterious.
+- `Telemetry is local-first and proof-oriented.`
+  Wave Control records typed run, proof, and benchmark events without making remote delivery part of the scheduler's critical path.
 
 ## How The Architecture Works
 
@@ -43,6 +45,8 @@ The framework does three things:
   Exit contracts, proof artifacts, eval markers, and closure stewards stop waves from closing on narrative-only PASS.
 - `Replay and audit`
   Traces capture the attempt so failures can be inspected and replayed instead of guessed from screenshots.
+- `Telemetry and control plane`
+  Local-first event spools plus the Railway-hosted Wave Control service keep proof, benchmark validity, and selected artifacts queryable across runs.
 
 ## Example Output
 
@@ -69,22 +73,24 @@ Recent multi-agent research keeps returning to the same failure modes:
 - `Premature closure`
   Agents say they are done before proof, evals, or integrated state actually support PASS.
 
-Wave is built to mitigate those failures with canonical shared state, generated blackboard projections, explicit ownership, goal-driven, proof-bounded closure, and replayable traces. For the research framing and the current gaps, see [docs/research/coordination-failure-review.md](./docs/research/coordination-failure-review.md).
+Wave is built to mitigate those failures with canonical shared state, generated blackboard projections, explicit ownership, goal-driven, proof-bounded closure, replayable traces, and local-first telemetry. For the research framing and the current gaps, see [docs/research/coordination-failure-review.md](./docs/research/coordination-failure-review.md). For the concrete signal map, see [docs/reference/proof-metrics.md](./docs/reference/proof-metrics.md).
 
 ## Quick Start
 
 Current release:
 
-- `@chllming/wave-orchestration@0.6.3`
-- Release tag: [`v0.6.3`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.3)
+- `@chllming/wave-orchestration@0.7.0`
+- Release tag: [`v0.7.0`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.0)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.6.3`:
+Highlights in `0.7.0`:
 
-- Runtime launch entrypoints now check npmjs for a newer published package in the background, cache the result under `.wave/package-update-check.json`, and warn on stderr when the workspace is behind.
-- `wave self-update` now gives downstream repos a one-command update path that detects the workspace package manager, updates the dependency, shows the changelog delta, and records the workspace upgrade report.
-- Autonomous and ad-hoc flows suppress nested notices so operators see at most one update banner per top-level run, and structured stdout remains clean for JSON consumers.
+- Unified `wave control` operator CLI with `status`, `task`, `rerun`, `proof`, and `telemetry` surfaces, replacing the separate `wave coord`/`wave retry`/`wave proof` commands (which remain as compatibility surfaces).
+- Canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` with event-sourced materialization for proof bundles, rerun requests, operator tasks, and attempt lifecycle.
+- Wave Control telemetry: local-first event queueing with best-effort batch delivery to a Railway-hosted analysis endpoint, configurable report modes, selective artifact upload, and durable Postgres-backed querying by workspace, project, orchestrator, and runtime version.
+- Live-wave orchestration refresh that keeps coordination surfaces current during execution, including overdue acknowledgement tracking and stale clarification rerouting.
+- Resident orchestrator support via `--resident-orchestrator` for long-running non-owning monitoring sessions.
 
 Requirements:
 
@@ -93,6 +99,7 @@ Requirements:
 - `tmux` on `PATH` for dashboarded runs
 - at least one executor on `PATH`: `codex`, `claude`, or `opencode`
 - optional: `CONTEXT7_API_KEY` for launcher-side prefetch
+- optional: `WAVE_CONTROL_AUTH_TOKEN` for remote Wave Control reporting
 
 Install into another repo:
 
@@ -124,6 +131,9 @@ pnpm exec wave draft --wave 1 --template implementation
 # Run one wave with a real executor
 pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access
 
+# Disable Wave Control reporting for a single launcher run
+pnpm exec wave launch --lane main --no-telemetry
+
 # Inspect operator surfaces
 pnpm exec wave feedback list --lane main --pending
 pnpm exec wave dep show --lane main --wave 0 --json
@@ -143,6 +153,24 @@ pnpm test
 node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 ```
 
+## Railway MCP
+
+This repo includes a repo-local Railway MCP launcher so Codex, Claude, and Cursor can all talk to the same Railway project from the same checkout.
+
+- launcher: `.codex-tools/railway-mcp/start.sh`
+- project MCP config: `.mcp.json`
+- Cursor MCP config: `.cursor/.mcp.json`
+- Claude project settings: `.claude/settings.json`
+- Railway project id: `b2427e79-3de9-49c3-aa5a-c86db83123c0`
+
+One-time local checks:
+
+```bash
+railway whoami
+railway link --project b2427e79-3de9-49c3-aa5a-c86db83123c0
+codex mcp list
+```
+
 ## Learn More
 
 - [docs/README.md](./docs/README.md): docs map and suggested structure
@@ -151,9 +179,13 @@ node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 - [docs/concepts/context7-vs-skills.md](./docs/concepts/context7-vs-skills.md): compiled context, external truth, and repo-owned operating knowledge
 - [docs/guides/planner.md](./docs/guides/planner.md): `wave project` and `wave draft` workflow
 - [docs/guides/terminal-surfaces.md](./docs/guides/terminal-surfaces.md): tmux, VS Code terminal registry, and dry-run surfaces
+- [docs/reference/sample-waves.md](./docs/reference/sample-waves.md): showcase-first authored waves, including a high-fidelity repo-landed rollout example
+- [docs/plans/examples/wave-example-rollout-fidelity.md](./docs/plans/examples/wave-example-rollout-fidelity.md): concrete example of what good wave fidelity looks like for a narrow, closure-ready outcome
 - [docs/plans/wave-orchestrator.md](./docs/plans/wave-orchestrator.md): operator runbook
 - [docs/plans/context7-wave-orchestrator.md](./docs/plans/context7-wave-orchestrator.md): Context7 setup and bundle authoring
 - [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): executor, runtime, and skill-projection configuration
+- [docs/reference/wave-control.md](./docs/reference/wave-control.md): local-first telemetry contract and Railway control-plane model
+- [docs/reference/proof-metrics.md](./docs/reference/proof-metrics.md): README failure cases mapped to concrete telemetry and benchmark evidence
 - [docs/reference/skills.md](./docs/reference/skills.md): skill bundle format, resolution order, and runtime projection
 - [docs/research/coordination-failure-review.md](./docs/research/coordination-failure-review.md): MAS failure modes from the research and how Wave responds
 - [CHANGELOG.md](./CHANGELOG.md): release history

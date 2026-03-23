@@ -1,16 +1,16 @@
 {
   "name": "@chllming/wave-orchestration",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "license": "MIT",
   "description": "Generic wave-based multi-agent orchestration for repository work.",
   "packageManager": "pnpm@10.23.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chllming/wave-orchestration.git"
+    "url": "git+https://github.com/chllming/agent-wave-orchestrator.git"
   },
-  "homepage": "https://github.com/chllming/wave-orchestration#readme",
+  "homepage": "https://github.com/chllming/agent-wave-orchestrator#readme",
   "bugs": {
-    "url": "https://github.com/chllming/wave-orchestration/issues"
+    "url": "https://github.com/chllming/agent-wave-orchestrator/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -36,6 +36,7 @@
     "context7:api-check": "bash scripts/context7-export-env.sh run bash scripts/context7-api-check.sh",
     "research:import-agent-context": "node scripts/research/import-agent-context-archive.mjs scripts/research/manifests/agent-context-expanded-2026-03-22.mjs",
     "research:index-agent-context": "node scripts/research/generate-agent-context-indexes.mjs",
+    "research:sync-planner-context7": "node scripts/research/sync-planner-context7-bundle.mjs",
     "research:refresh-agent-context": "pnpm research:import-agent-context && pnpm research:index-agent-context",
     "test": "vitest run --config vitest.config.ts",
     "wave": "node scripts/wave.mjs",

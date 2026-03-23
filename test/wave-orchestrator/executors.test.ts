@@ -249,6 +249,68 @@ File ownership (only touch these paths):
     });
   });
 
+  it("inherits global Claude runtime scalars when a profile only overrides effort", () => {
+    const laneProfile = makeLaneProfile();
+    laneProfile.executors.profiles["review-opus"] = {
+      id: "claude",
+      claude: {
+        effort: "high",
+      },
+    };
+    const wave = applyExecutorSelectionsToWave(
+      parseWaveContent(
+        `# Wave 4 - Claude Inheritance
+
+## Agent A1: Review Worker
+
+### Executor
+
+- profile: review-opus
+
+### Prompt
+\`\`\`text
+File ownership (only touch these paths):
+- docs/plans/master-plan.md
+\`\`\`
+`,
+        "/tmp/wave-4.md",
+        { laneProfile },
+      ),
+      { laneProfile },
+    );
+
+    expect(wave.agents[0]?.executorResolved).toMatchObject({
+      id: "claude",
+      profile: "review-opus",
+      claude: {
+        command: "claude",
+        appendSystemPromptMode: "append",
+        outputFormat: "text",
+        effort: "high",
+      },
+    });
+
+    const dir = registerTempPath(fs.mkdtempSync(path.join(os.tmpdir(), "wave-executor-claude-inherit-")));
+    const promptPath = path.join(dir, "prompt.md");
+    const logPath = path.join(dir, "agent.log");
+    const overlayDir = path.join(dir, "claude");
+    fs.writeFileSync(promptPath, "Prompt body\n", "utf8");
+
+    const spec = buildExecutorLaunchSpec({
+      agent: {
+        ...wave.agents[0],
+        skillsResolved: { promptText: "" },
+      },
+      promptPath,
+      logPath,
+      overlayDir,
+    });
+
+    expect(spec.invocationLines[1]).toContain("claude -p --no-session-persistence");
+    expect(spec.invocationLines[1]).toContain("--output-format 'text'");
+    expect(spec.invocationLines[1]).toContain("--effort 'high'");
+  });
+
   it("parses advanced Codex, Claude, and OpenCode executor settings", () => {
     const wave = applyExecutorSelectionsToWave(
       parseWaveContent(

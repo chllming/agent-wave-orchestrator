@@ -197,6 +197,41 @@ describe("loadBenchmarkCatalog", () => {
       /sotaBaseline\.metric is required/,
     );
   });
+
+  it("indexes repo-local benchmark cases declared in the catalog", () => {
+    const dir = makeTempDir();
+    const benchmarkCatalogPath = writeCatalog(dir, {
+      version: 2,
+      families: {
+        "hidden-profile-pooling": {
+          title: "Hidden Profile Pooling",
+          summary: "Distributed-information coordination benchmarks.",
+          localCases: ["wave-family-level-case"],
+          benchmarks: {
+            "private-evidence-integration": {
+              title: "Private Evidence Integration",
+              summary: "Use distributed facts in the final answer.",
+              localCases: ["wave-hidden-profile-private-evidence"],
+            },
+          },
+        },
+      },
+    });
+
+    const catalog = loadBenchmarkCatalog({ benchmarkCatalogPath });
+    expect(catalog.families["hidden-profile-pooling"].localCases).toEqual(["wave-family-level-case"]);
+    expect(
+      catalog.families["hidden-profile-pooling"].benchmarks["private-evidence-integration"].localCases,
+    ).toEqual(["wave-hidden-profile-private-evidence"]);
+    expect(catalog.localCaseIndex["wave-family-level-case"]).toMatchObject({
+      familyId: "hidden-profile-pooling",
+      benchmarkId: null,
+    });
+    expect(catalog.localCaseIndex["wave-hidden-profile-private-evidence"]).toMatchObject({
+      familyId: "hidden-profile-pooling",
+      benchmarkId: "private-evidence-integration",
+    });
+  });
 });
 
 describe("validateEvalTargets", () => {

@@ -1,0 +1,8 @@
+{
+  "adapters": {
+    "swe-bench-pro": {
+      "single-agent": "node \"scripts/wave-orchestrator/swe-bench-pro-task.mjs\" run --instance \"{task_id}\" --arm \"{arm}\" --model \"{model_id}\" --reasoning-effort \"{reasoning_effort}\" --max-wall-clock-minutes \"{max_wall_clock_minutes}\" --max-turns \"{max_turns}\"",
+      "full-wave": "node \"scripts/wave-orchestrator/swe-bench-pro-task.mjs\" run --instance \"{task_id}\" --arm \"{arm}\" --model \"{model_id}\" --reasoning-effort \"{reasoning_effort}\" --max-wall-clock-minutes \"{max_wall_clock_minutes}\" --max-turns \"{max_turns}\""
+    }
+  }
+}

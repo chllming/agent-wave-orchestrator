@@ -69,6 +69,7 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
     sharedSummaryText,
     inboxPath,
     inboxText,
+    promptOverride = "",
     orchestratorId,
     agentRateLimitRetries,
     agentRateLimitBaseDelaySeconds,
@@ -101,27 +102,29 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
       artifacts: skillArtifacts,
     };
   }
-  const prompt = buildExecutionPrompt({
-    lane: lanePaths.lane,
-    wave,
-    agent,
-    orchestratorId,
-    messageBoardPath,
-    messageBoardSnapshot,
-    sharedSummaryPath,
-    sharedSummaryText,
-    inboxPath,
-    inboxText,
-    context7,
-    componentPromotions: resolvedWaveDefinition.componentPromotions,
-    evalTargets: resolvedWaveDefinition.evalTargets,
-    benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
-    sharedPlanDocs: lanePaths.sharedPlanDocs,
-    contQaAgentId: lanePaths.contQaAgentId,
-    contEvalAgentId: lanePaths.contEvalAgentId,
-    integrationAgentId: lanePaths.integrationAgentId,
-    documentationAgentId: lanePaths.documentationAgentId,
-  });
+  const prompt =
+    String(promptOverride || "").trim() ||
+    buildExecutionPrompt({
+      lane: lanePaths.lane,
+      wave,
+      agent,
+      orchestratorId,
+      messageBoardPath,
+      messageBoardSnapshot,
+      sharedSummaryPath,
+      sharedSummaryText,
+      inboxPath,
+      inboxText,
+      context7,
+      componentPromotions: resolvedWaveDefinition.componentPromotions,
+      evalTargets: resolvedWaveDefinition.evalTargets,
+      benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
+      sharedPlanDocs: lanePaths.sharedPlanDocs,
+      contQaAgentId: lanePaths.contQaAgentId,
+      contEvalAgentId: lanePaths.contEvalAgentId,
+      integrationAgentId: lanePaths.integrationAgentId,
+      documentationAgentId: lanePaths.documentationAgentId,
+    });
   const promptHash = hashAgentPromptFingerprint(agent);
   fs.writeFileSync(promptPath, `${prompt}\n`, "utf8");
   const launchSpec = buildExecutorLaunchSpec({

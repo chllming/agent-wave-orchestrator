@@ -30,12 +30,16 @@ These docs are your responsibility when the wave changes their content:
 | `docs/plans/component-cutover-matrix.md` and `.json` | Component maturity levels advance, new components are declared, or next-safe assumptions change. |
 | `docs/roadmap.md` | Roadmap items are completed, reordered, or newly added. |
 | `docs/reference/migration-*.md` | Migration steps are added, changed, or completed. |
+| `CHANGELOG.md` | Feature, fix, or behavioral changes ship in a new version. |
+| `docs/plans/wave-orchestrator.md` | Runtime behavior, CLI surface, or configuration changes. |
 
 These docs are **not** your responsibility:
 
 - Implementation-specific docs (inline code comments, subsystem READMEs, API docs generated from code) stay with the implementation owner.
 - Role definition docs under `docs/agents/` are updated by the orchestrator or planner, not by the wave documentation steward.
 - Research docs under `docs/research/` stay with the research role.
+
+When an ad-hoc run reports a shared-plan delta, documentation closure still queues the canonical shared-plan docs alongside the ad-hoc closure report.
 
 ## No-Change Protocol
 

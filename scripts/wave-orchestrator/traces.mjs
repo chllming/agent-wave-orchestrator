@@ -1,7 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
-import { openClarificationLinkedRequests, readCoordinationLog, serializeCoordinationState } from "./coordination-store.mjs";
+import {
+  buildCoordinationResponseMetrics,
+  openClarificationLinkedRequests,
+  readCoordinationLog,
+  serializeCoordinationState,
+} from "./coordination-store.mjs";
+import { readControlPlaneEvents } from "./control-plane.mjs";
 import {
   isContEvalReportOnlyAgent,
   isSecurityReviewAgent,
@@ -18,6 +24,10 @@ import {
   writeTextAtomic,
 } from "./shared.mjs";
 import { summarizeResolvedSkills } from "./skills.mjs";
+import {
+  buildWaveControlArtifactFromPath,
+  safeQueueWaveControlEvent,
+} from "./wave-control-client.mjs";
 
 export const TRACE_VERSION = 2;
 const LEGACY_TRACE_VERSION = 1;
@@ -287,6 +297,7 @@ function computeAckAndBlockerTimings(coordinationRecords) {
   const resolvedStatuses = new Set(["resolved", "closed", "superseded", "cancelled"]);
   const ackDurations = [];
   const blockerDurations = [];
+  const resolutionDurations = [];
   for (const history of grouped.values()) {
     const first = history[0];
     const startMs = Date.parse(first.createdAt || first.updatedAt || "");
@@ -300,6 +311,13 @@ function computeAckAndBlockerTimings(coordinationRecords) {
         ackDurations.push(ackMs - startMs);
       }
     }
+    if (["request", "clarification-request", "human-feedback", "human-escalation"].includes(first.kind)) {
+      const resolved = history.find((record) => resolvedStatuses.has(record.status));
+      const resolvedMs = Date.parse(resolved?.updatedAt || "");
+      if (Number.isFinite(resolvedMs) && resolvedMs >= startMs) {
+        resolutionDurations.push(resolvedMs - startMs);
+      }
+    }
     if (first.kind === "blocker") {
       const resolved = history.find((record) => resolvedStatuses.has(record.status));
       const resolvedMs = Date.parse(resolved?.updatedAt || "");
@@ -310,8 +328,37 @@ function computeAckAndBlockerTimings(coordinationRecords) {
   }
   return {
     meanTimeToFirstAckMs: averageOrNull(ackDurations),
+    meanTimeToResolutionMs: averageOrNull(resolutionDurations),
     meanTimeToBlockerResolutionMs: averageOrNull(blockerDurations),
   };
+}
+
+function latestRecordTimestampMs(record) {
+  const updatedAtMs = Date.parse(record?.updatedAt || "");
+  if (Number.isFinite(updatedAtMs)) {
+    return updatedAtMs;
+  }
+  const createdAtMs = Date.parse(record?.createdAt || "");
+  return Number.isFinite(createdAtMs) ? createdAtMs : null;
+}
+
+function resolveCoordinationSnapshotNowMs(coordinationRecords, coordinationState) {
+  const records = Array.isArray(coordinationRecords) && coordinationRecords.length > 0
+    ? coordinationRecords
+    : Array.isArray(coordinationState?.records) && coordinationState.records.length > 0
+      ? coordinationState.records
+      : Array.isArray(coordinationState?.latestRecords)
+        ? coordinationState.latestRecords
+        : [];
+  let latestMs = null;
+  for (const record of records) {
+    const recordMs = latestRecordTimestampMs(record);
+    if (!Number.isFinite(recordMs)) {
+      continue;
+    }
+    latestMs = latestMs === null ? recordMs : Math.max(latestMs, recordMs);
+  }
+  return latestMs;
 }
 
 function computeAssignmentAndDependencyTimings(coordinationRecords, dependencySnapshot = null) {
@@ -455,6 +502,15 @@ export function buildQualityMetrics({
     coordinationRecords,
     dependencySnapshot,
   );
+  const coordinationSnapshotNowMs = resolveCoordinationSnapshotNowMs(
+    coordinationRecords,
+    coordinationState,
+  );
+  const responseMetrics = buildCoordinationResponseMetrics(coordinationState, {
+    ...(Number.isFinite(coordinationSnapshotNowMs)
+      ? { nowMs: coordinationSnapshotNowMs }
+      : {}),
+  });
   const documentationItems = Array.isArray(docsQueue?.items) ? docsQueue.items : [];
   const unresolvedClarificationCount = (coordinationState?.clarifications || []).filter((record) =>
     ["open", "acknowledged", "in_progress"].includes(record.status),
@@ -494,7 +550,13 @@ export function buildQualityMetrics({
     meanTimeToCapabilityAssignmentMs: assignmentTimings.meanTimeToCapabilityAssignmentMs,
     meanTimeToDependencyResolutionMs: assignmentTimings.meanTimeToDependencyResolutionMs,
     helperTaskAssignmentCount: (capabilityAssignments || []).filter((assignment) => assignment.assignedAgentId).length,
+    oldestOpenCoordinationAgeMs: responseMetrics.oldestOpenCoordinationAgeMs,
+    oldestUnackedRequestAgeMs: responseMetrics.oldestUnackedRequestAgeMs,
+    overdueAckCount: responseMetrics.overdueAckCount,
+    overdueClarificationCount: responseMetrics.overdueClarificationCount,
+    openHumanEscalationCount: responseMetrics.openHumanEscalationCount,
     meanTimeToFirstAckMs: timings.meanTimeToFirstAckMs,
+    meanTimeToResolutionMs: timings.meanTimeToResolutionMs,
     meanTimeToBlockerResolutionMs: timings.meanTimeToBlockerResolutionMs,
     contQaReversal: contQaReversalFromHistory(effectiveHistory, gateSnapshot),
     finalRecommendation: integrationSummary?.recommendation || "unknown",
@@ -722,6 +784,8 @@ export function writeTraceBundle({
   securitySummary = null,
   integrationSummary,
   integrationMarkdownPath,
+  proofRegistryPath = null,
+  controlPlanePath = null,
   clarificationTriage,
   agentRuns,
   quality,
@@ -791,6 +855,18 @@ export function writeTraceBundle({
     dir,
     integrationMarkdownPath,
     path.join(dir, "integration.md"),
+    false,
+  );
+  const proofRegistryArtifact = copyArtifactDescriptor(
+    dir,
+    proofRegistryPath,
+    path.join(dir, "proof-registry.json"),
+    false,
+  );
+  const controlPlaneArtifact = copyArtifactDescriptor(
+    dir,
+    controlPlanePath,
+    path.join(dir, "control-plane.raw.jsonl"),
     false,
   );
   const qualityArtifact = writeArtifactDescriptor(
@@ -933,6 +1009,8 @@ export function writeTraceBundle({
       security: securityArtifact,
       integration: integrationArtifact,
       integrationMarkdown: integrationMarkdownArtifact,
+      proofRegistry: proofRegistryArtifact,
+      controlPlane: controlPlaneArtifact,
       componentMatrix: componentMatrixArtifact,
       componentMatrixMarkdown: componentMatrixMarkdownArtifact,
       outcome: outcomeArtifact,
@@ -952,7 +1030,82 @@ export function writeTraceBundle({
     present: true,
     sha256: null,
   };
-  writeJsonAtomic(path.join(dir, "run-metadata.json"), metadata);
+  const runMetadataPath = path.join(dir, "run-metadata.json");
+  writeJsonAtomic(runMetadataPath, metadata);
+  if (lanePaths?.waveControl?.captureTraceBundles !== false) {
+    safeQueueWaveControlEvent(lanePaths, {
+      category: "trace",
+      entityType: "artifact",
+      entityId: `wave-${wave.wave}-attempt-${attempt}-trace-bundle`,
+      action: "bundle-written",
+      source: "launcher",
+      actor: "launcher",
+      recordedAt: metadata.capturedAt,
+      identity: {
+        lane: lanePaths?.lane || null,
+        wave: wave.wave,
+        attempt,
+        runKind: lanePaths?.runKind || "roadmap",
+        runId: lanePaths?.runId || null,
+      },
+      tags: ["trace", "attempt-bundle"],
+      data: {
+        traceDir: relativePathOrNull(dir, REPO_ROOT),
+        finalRecommendation: quality?.finalRecommendation || null,
+        gate: normalizedGateSnapshot?.overall?.gate || null,
+      },
+      artifacts: [
+        {
+          ...buildWaveControlArtifactFromPath(runMetadataPath, {
+            kind: "trace-run-metadata",
+            required: true,
+            uploadPolicy: "selected",
+          }),
+          sourcePath: runMetadataPath,
+        },
+        {
+          ...buildWaveControlArtifactFromPath(path.join(dir, "quality.json"), {
+            kind: "trace-quality",
+            required: true,
+            uploadPolicy: "selected",
+          }),
+          sourcePath: path.join(dir, "quality.json"),
+        },
+        {
+          ...buildWaveControlArtifactFromPath(path.join(dir, "outcome.json"), {
+            kind: "trace-outcome",
+            required: true,
+            uploadPolicy: "selected",
+          }),
+          sourcePath: path.join(dir, "outcome.json"),
+        },
+        {
+          ...buildWaveControlArtifactFromPath(path.join(dir, "integration.json"), {
+            kind: "integration-summary",
+            required: true,
+            uploadPolicy: "selected",
+          }),
+          sourcePath: path.join(dir, "integration.json"),
+        },
+        {
+          ...buildWaveControlArtifactFromPath(path.join(dir, "proof-registry.json"), {
+            kind: "proof-registry",
+            required: false,
+            uploadPolicy: "selected",
+          }),
+          sourcePath: path.join(dir, "proof-registry.json"),
+        },
+        {
+          ...buildWaveControlArtifactFromPath(path.join(dir, "control-plane.raw.jsonl"), {
+            kind: "control-plane-log",
+            required: false,
+            uploadPolicy: "metadata-only",
+          }),
+          sourcePath: path.join(dir, "control-plane.raw.jsonl"),
+        },
+      ],
+    });
+  }
   return dir;
 }
 
@@ -967,12 +1120,14 @@ export function loadTraceBundle(dir) {
     manifest,
     coordinationState,
     coordinationRecords,
+    controlPlaneEvents: readControlPlaneEvents(path.join(dir, "control-plane.raw.jsonl")),
     ledger: readJsonOrNull(path.join(dir, "ledger.json")),
     docsQueue: readJsonOrNull(path.join(dir, "docs-queue.json")),
     capabilityAssignments: readJsonOrNull(path.join(dir, "capability-assignments.json")),
     dependencySnapshot: readJsonOrNull(path.join(dir, "dependency-snapshot.json")),
     securitySummary: readJsonOrNull(path.join(dir, "security.json")),
     integrationSummary: readJsonOrNull(path.join(dir, "integration.json")),
+    proofRegistry: readJsonOrNull(path.join(dir, "proof-registry.json")),
     quality: readJsonOrNull(path.join(dir, "quality.json")),
     storedOutcome: readJsonOrNull(path.join(dir, "outcome.json")),
     structuredSignals: readJsonOrNull(path.join(dir, "structured-signals.json")),

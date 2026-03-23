@@ -1,6 +1,7 @@
 node_modules/
 .tmp/
 .wave/
+.railway/
 .vscode/terminals.json
 dist/
 coverage/

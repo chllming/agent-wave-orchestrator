@@ -31,6 +31,7 @@ Execute these steps in order:
 - Prefer **targeted changes** over broad rewrites. Each change should address a specific gap identified in the review step.
 - Never skip the rerun step. Every change must be validated.
 - If a tune step introduces a regression in another target, revert the change and record the trade-off.
+- Summaries and inboxes may refresh during execution. Re-read context before each iteration to pick up new evidence or coordination records from other agents.
 
 ## Benchmark Recording
 

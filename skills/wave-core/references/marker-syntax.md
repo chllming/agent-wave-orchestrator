@@ -17,34 +17,42 @@ Example:
 ## wave-eval (cont-EVAL closure)
 Emitted by: cont-EVAL agent (E0)
 Format:
-`[wave-eval] state=<satisfied|needs-more-work|blocked> target_ids=<comma-separated-ids> benchmark_ids=<comma-separated-ids> detail=<short-note>`
+`[wave-eval] state=<satisfied|needs-more-work|blocked> targets=<n> benchmarks=<n> regressions=<n> target_ids=<comma-separated-ids> benchmark_ids=<comma-separated-ids> detail=<short-note>`
 
 Example:
-`[wave-eval] state=satisfied target_ids=prompt-quality,response-accuracy benchmark_ids=bench-01,bench-02 detail=all-targets-within-threshold`
+`[wave-eval] state=satisfied targets=2 benchmarks=2 regressions=0 target_ids=prompt-quality,response-accuracy benchmark_ids=bench-01,bench-02 detail=all-targets-within-threshold`
 
 ## wave-integration (integration closure)
 Emitted by: Integration steward (A8)
 Format:
-`[wave-integration] state=<ready-for-doc-closure|needs-more-work> blockers=<count> detail=<short-note>`
+`[wave-integration] state=<ready-for-doc-closure|needs-more-work> claims=<n> conflicts=<n> blockers=<n> detail=<short-note>`
 
 Example:
-`[wave-integration] state=ready-for-doc-closure blockers=0 detail=all-agents-coherent-no-contradictions`
+`[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=all-agents-coherent-no-contradictions`
 
 ## wave-doc-closure (documentation closure)
 Emitted by: Documentation steward (A9)
 Format:
-`[wave-doc-closure] state=<closed|no-change|needs-work> affected=<comma-separated-file-list> detail=<short-note>`
+`[wave-doc-closure] state=<closed|no-change|delta> paths=<comma-separated-file-list> detail=<short-note>`
 
 Example:
-`[wave-doc-closure] state=closed affected=docs/plans/current-state.md,docs/plans/component-cutover-matrix.md detail=status-and-ownership-updated`
+`[wave-doc-closure] state=closed paths=docs/plans/current-state.md,docs/plans/component-cutover-matrix.md detail=status-and-ownership-updated`
+
+## wave-security (security review)
+Emitted by: Security reviewer
+Format:
+`[wave-security] state=<clear|concerns|blocked> findings=<n> approvals=<n> detail=<short-note>`
+
+Example:
+`[wave-security] state=clear findings=0 approvals=0 detail=no-blocking-security-findings`
 
 ## infra-status (infrastructure verification)
 Emitted by: Infra agent
 Format:
-`[infra-status] kind=<conformance|role-drift|dependency|identity|admission|action> surface=<name> state=<pass|warn|fail> detail=<short-note>`
+`[infra-status] kind=<conformance|role-drift|dependency|identity|admission|action> target=<surface> state=<checking|setup-required|setup-in-progress|conformant|drift|blocked|failed|action-required|action-approved|action-complete> detail=<short-note>`
 
 Example:
-`[infra-status] kind=dependency surface=node-22 state=pass detail=node-v22.15.0-confirmed`
+`[infra-status] kind=dependency target=node-22 state=conformant detail=node-v22.15.0-confirmed`
 
 ## deploy-status (deployment verification)
 Emitted by: Deploy agent

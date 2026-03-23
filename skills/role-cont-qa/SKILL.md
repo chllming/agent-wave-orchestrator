@@ -16,13 +16,16 @@ Use this skill when the agent is the wave's final cont-QA closure steward.
 
 Execute these steps in order. Do not skip steps.
 
-1. **Receive evidence** -- collect all implementation proof, coordination records, integration marker, doc closure marker, and cont-EVAL marker (if present).
-2. **Review vs exit contracts** -- walk each agent's exit contract line by line. For each line, confirm a proof artifact backs it. Record pass or gap.
+1. **Receive evidence** -- collect all implementation proof, coordination records, integration marker, doc closure marker, cont-EVAL marker (if present), and security marker (if present).
+2. **Review vs exit contracts** -- walk each agent's exit contract line by line. For each line, confirm a proof artifact backs it. Record pass or gap. When the wave declares `### Proof artifacts`, verify those machine-visible artifacts are present.
 3. **Review vs promotions** -- walk each declared component promotion. Confirm evidence shows the component reached the declared target level, not just that adjacent code landed.
-4. **Verify integration** -- confirm the `[wave-integration]` marker shows `ready-for-doc-closure`. Check that no later coordination records contradict it.
-5. **Verify doc closure** -- confirm the `[wave-doc-closure]` marker shows `closed` or `no-change`. If `no-change`, verify the reasoning is valid given what the wave changed.
-6. **Verify cont-EVAL** -- if the wave includes cont-EVAL, confirm the `[wave-eval]` marker shows `satisfied` with matching `target_ids` and `benchmark_ids` and zero regressions.
-7. **Verdict** -- apply the decision tree below and emit the final verdict and gate marker.
+4. **Verify proof registry** -- check whether operator-registered proof bundles exist. Confirm they are `active` (not `revoked` or `superseded`). Only active bundles count as evidence.
+5. **Verify integration** -- confirm the `[wave-integration]` marker shows `ready-for-doc-closure`. Check that no later coordination records contradict it.
+6. **Verify doc closure** -- confirm the `[wave-doc-closure]` marker shows `closed` or `no-change`. If `no-change`, verify the reasoning is valid given what the wave changed.
+7. **Verify cont-EVAL** -- if the wave includes cont-EVAL, confirm the `[wave-eval]` marker shows `satisfied` with matching `target_ids` and `benchmark_ids` and zero regressions.
+8. **Verify security** -- if the wave includes a security review, confirm the `[wave-security]` marker shows `clear` or `concerns`. A `blocked` marker prevents closure.
+9. **Verify no pending rerun** -- confirm no active rerun request is outstanding. An uncleared rerun blocks closure.
+10. **Verdict** -- apply the decision tree below and emit the final verdict and gate marker.
 
 ## Evidence Review Checklist
 
@@ -38,6 +41,10 @@ Walk each item. Any unchecked item is a potential blocker.
 - [ ] cont-EVAL marker (if present) is `satisfied` with matching ids and zero regressions.
 - [ ] Runtime-facing proof is real evidence, not future-work notes or speculative validation.
 - [ ] No contradictions exist between implementation claims, integration summary, docs, and runtime state.
+- [ ] Declared `### Proof artifacts` (if present) exist as files.
+- [ ] Proof registry bundles are `active`, not `revoked` or `superseded`.
+- [ ] No active rerun request is pending.
+- [ ] Security marker (if present) shows `clear` or `concerns`, not `blocked`.
 
 ## Verdict Decision Tree
 

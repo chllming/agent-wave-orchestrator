@@ -36,6 +36,15 @@ afterEach(() => {
 });
 
 describe("runtime dry-run harness", () => {
+  it("documents the no-telemetry launcher flag in help output", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    const helpResult = runWaveCli(["launch", "--help"], repoDir);
+    expect(helpResult.status).toBe(0);
+    expect(helpResult.stdout).toContain("--no-telemetry");
+  });
+
   it("materializes prompts and executor overlays for codex, claude, and opencode", () => {
     const repoDir = makeTempDir();
     writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });

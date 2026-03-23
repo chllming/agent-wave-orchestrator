@@ -67,6 +67,7 @@ When rollback is necessary:
 4. Emit a `[deploy-status]` marker with `state=rolled-back`.
 5. Post a coordination record so integration and cont-QA see the rollback.
 6. Do not claim the deploy surface is healthy after a rollback. The wave's deploy exit contract is not met.
+7. If a rollback occurs, any operator-registered proof that relied on the deployed state should be superseded or revoked via `wave control proof supersede` or `wave control proof revoke`.
 
 ## Marker Format
 

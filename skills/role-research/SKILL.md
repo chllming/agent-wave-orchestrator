@@ -53,6 +53,7 @@ Escalate to the integration steward or post a coordination record when:
 - Uncertainty is high enough that proceeding without resolution could cause rework.
 - The research question requires access to systems or files outside your declared scope.
 - An external dependency has a breaking change, deprecation, or security advisory.
+- A finding affects a cross-lane dependency that may need a dependency ticket.
 
 ## Customization
 

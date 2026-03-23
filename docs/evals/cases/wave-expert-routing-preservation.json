@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "id": "wave-expert-routing-preservation",
+  "title": "Expert Routing Preservation",
+  "summary": "A capability-targeted request should route to the database specialist rather than diffuse into generic ownership.",
+  "familyId": "expertise-leverage",
+  "benchmarkId": "expert-routing-preservation",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "expertise-routing",
+    "primaryMetric": "capability-routing-precision",
+    "thresholds": {
+      "capability-routing-precision": 100,
+      "expert-preservation-rate": 100
+    },
+    "practicalWinThreshold": 25
+  },
+  "expectations": {
+    "requiredAssignments": [
+      {
+        "requestId": "req-covering-index",
+        "assignedAgentId": "a2"
+      }
+    ],
+    "targetedInboxes": {
+      "a2": ["database expert says add a covering index on tenant_id and updated_at"]
+    }
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "capabilityRouting": {
+      "preferredAgents": {
+        "database": ["a2"]
+      }
+    },
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "Generalist Owner",
+        "ownedPaths": ["src/reporting/service.ts"],
+        "capabilities": ["runtime"]
+      },
+      {
+        "agentId": "a2",
+        "title": "Database Specialist",
+        "ownedPaths": ["db/indexes/reporting.sql"],
+        "capabilities": ["database"]
+      }
+    ],
+    "records": [
+      {
+        "id": "req-covering-index",
+        "kind": "request",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a8",
+        "targets": ["capability:database"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["db/indexes/reporting.sql"],
+        "summary": "database expert says add a covering index on tenant_id and updated_at",
+        "detail": "The database specialist should own this request rather than having it averaged away."
+      }
+    ]
+  }
+}

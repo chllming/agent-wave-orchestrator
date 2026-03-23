@@ -42,6 +42,23 @@ function packagedSkillFiles() {
   return files.toSorted();
 }
 
+function packagedPlannerContextFiles() {
+  const plannerContextRoot = path.join(PACKAGE_ROOT, "docs", "context7", "planner-agent");
+  const files = [];
+  const visit = (targetDir) => {
+    for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      const fullPath = path.join(targetDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+      } else {
+        files.push(path.relative(PACKAGE_ROOT, fullPath).replaceAll(path.sep, "/"));
+      }
+    }
+  };
+  visit(plannerContextRoot);
+  return files.toSorted();
+}
+
 function runWaveCli(args, options = {}) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd: options.cwd || REPO_ROOT,
@@ -72,6 +89,9 @@ describe("wave init", () => {
     expect(fs.existsSync(path.join(repoDir, "docs", "plans", "waves", "wave-0.md"))).toBe(true);
     expect(
       fs.existsSync(path.join(repoDir, "docs", "reference", "runtime-config", "README.md")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(repoDir, "docs", "context7", "planner-agent", "manifest.json")),
     ).toBe(true);
     const installState = JSON.parse(
       fs.readFileSync(path.join(repoDir, ".wave", "install-state.json"), "utf8"),
@@ -143,9 +163,28 @@ describe("wave init", () => {
       "docs/agents/wave-cont-eval-role.md",
       "docs/agents/wave-documentation-role.md",
       "docs/agents/wave-integration-role.md",
+      "docs/agents/wave-planner-role.md",
       "docs/agents/wave-security-role.md",
       "docs/context7/bundles.json",
       "docs/evals/benchmark-catalog.json",
+      "docs/evals/external-benchmarks.json",
+      "docs/evals/external-command-config.sample.json",
+      "docs/evals/external-command-config.swe-bench-pro.json",
+      "docs/evals/wave-benchmark-program.md",
+      "docs/evals/pilots/README.md",
+      "docs/evals/pilots/swe-bench-pro-public-pilot.json",
+      "docs/evals/pilots/swe-bench-pro-public-full-wave-review-10.json",
+      "docs/evals/arm-templates/README.md",
+      "docs/evals/arm-templates/single-agent.json",
+      "docs/evals/arm-templates/full-wave.json",
+      "docs/evals/cases/README.md",
+      "docs/evals/cases/wave-hidden-profile-private-evidence.json",
+      "docs/evals/cases/wave-premature-closure-guard.json",
+      "docs/evals/cases/wave-silo-cross-agent-state.json",
+      "docs/evals/cases/wave-blackboard-inbox-targeting.json",
+      "docs/evals/cases/wave-contradiction-conflict.json",
+      "docs/evals/cases/wave-simultaneous-lockstep.json",
+      "docs/evals/cases/wave-expert-routing-preservation.json",
       "docs/plans/component-cutover-matrix.json",
       "docs/plans/component-cutover-matrix.md",
       "docs/plans/context7-wave-orchestrator.md",
@@ -154,8 +193,11 @@ describe("wave init", () => {
       "docs/plans/migration.md",
       "docs/plans/wave-orchestrator.md",
       "docs/plans/waves/wave-0.md",
+      "docs/plans/examples/wave-benchmark-improvement.md",
+      "docs/reference/wave-planning-lessons.md",
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md",
+      ...packagedPlannerContextFiles(),
       ...packagedSkillFiles(),
     ]) {
       const targetPath = path.join(repoDir, relPath);
@@ -191,14 +233,36 @@ describe("wave upgrade", () => {
       "docs/agents/wave-cont-qa-role.md",
       "docs/agents/wave-cont-eval-role.md",
       "docs/agents/wave-documentation-role.md",
+      "docs/agents/wave-planner-role.md",
       "docs/agents/wave-security-role.md",
       "docs/context7/bundles.json",
       "docs/evals/benchmark-catalog.json",
+      "docs/evals/external-benchmarks.json",
+      "docs/evals/external-command-config.sample.json",
+      "docs/evals/external-command-config.swe-bench-pro.json",
+      "docs/evals/wave-benchmark-program.md",
+      "docs/evals/pilots/README.md",
+      "docs/evals/pilots/swe-bench-pro-public-pilot.json",
+      "docs/evals/pilots/swe-bench-pro-public-full-wave-review-10.json",
+      "docs/evals/arm-templates/README.md",
+      "docs/evals/arm-templates/single-agent.json",
+      "docs/evals/arm-templates/full-wave.json",
+      "docs/evals/cases/README.md",
+      "docs/evals/cases/wave-hidden-profile-private-evidence.json",
+      "docs/evals/cases/wave-premature-closure-guard.json",
+      "docs/evals/cases/wave-silo-cross-agent-state.json",
+      "docs/evals/cases/wave-blackboard-inbox-targeting.json",
+      "docs/evals/cases/wave-contradiction-conflict.json",
+      "docs/evals/cases/wave-simultaneous-lockstep.json",
+      "docs/evals/cases/wave-expert-routing-preservation.json",
       "docs/plans/current-state.md",
       "docs/plans/master-plan.md",
       "docs/plans/migration.md",
+      "docs/plans/examples/wave-benchmark-improvement.md",
+      "docs/reference/wave-planning-lessons.md",
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md",
+      ...packagedPlannerContextFiles(),
       ...packagedSkillFiles(),
     ]) {
       const targetPath = path.join(repoDir, relPath);

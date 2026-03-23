@@ -3,6 +3,7 @@ import baseManifest from "./harness-and-blackboard-2026-03-21.mjs";
 const TOPICS = {
   HARNESS: "harnesses-and-practice",
   PLANNING: "planning-and-orchestration",
+  COOPERATION: "agent-cooperation-and-coordination",
   LONG_RUNNING: "long-running-agents-and-compaction",
   SKILLS: "skills-and-procedural-memory",
   BLACKBOARD: "blackboard-and-shared-workspaces",
@@ -520,6 +521,22 @@ const planningManifest = [
     mapsTo: "Distributed-information coordination benchmarks with simultaneous constraints.",
     fit: "Useful benchmark for testing whether coordination-heavy planning systems scale beyond serial reasoning.",
     topics: [TOPICS.PLANNING, TOPICS.REPO],
+  }),
+  arxivPaper("2601.13295", {
+    title: "CooperBench: Why Coding Agents Cannot be Your Teammates Yet",
+    slug: "cooperbench-why-coding-agents-cannot-be-your-teammates-yet",
+    authors:
+      "Arpandeep Khatua, Hao Zhu, Peter Tran, Arya Prabhudesai, Frederic Sadrieh, Johann K. Lieberwirth, Xinkai Yu, Yicheng Fu, Michael J. Ryan, Jiaxin Pei, Diyi Yang",
+    year: 2026,
+    researchBucket: "P0 direct hits",
+    mapsTo:
+      "Collaborative coding benchmark for inter-agent cooperation, communication quality, commitment tracking, and coordination failures.",
+    fit: "Direct benchmark for whether coding agents behave like usable teammates instead of isolated solo solvers.",
+    additionalSource: "https://cooperbench.com",
+    additionalPdf: "https://cooperbench.com/static/pdfs/main.pdf",
+    notes:
+      "Project site hosts the same paper PDF plus leaderboard, dataset, and trajectory viewer for the benchmark.",
+    topics: [TOPICS.PLANNING, TOPICS.COOPERATION, TOPICS.REPO],
   }),
   arxivPaper("2602.01011", {
     title: "Multi-Agent Teams Hold Experts Back",

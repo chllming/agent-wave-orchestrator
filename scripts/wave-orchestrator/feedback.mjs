@@ -21,6 +21,7 @@ import {
   truncate,
   writeJsonAtomic,
 } from "./shared.mjs";
+import { safeQueueWaveControlEvent } from "./wave-control-client.mjs";
 
 function sanitizeToken(value) {
   const token = String(value || "")
@@ -59,6 +60,7 @@ export function createFeedbackRequest({
   orchestratorId,
   question,
   context,
+  recordTelemetry = false,
 }) {
   ensureDirectory(feedbackRequestsDir);
   const requestId = buildRequestId({ lane, wave, agentId });
@@ -83,6 +85,31 @@ export function createFeedbackRequest({
     }
     writeJsonAtomic(filePath, payload);
   });
+  if (recordTelemetry) {
+    try {
+      const lanePaths = buildLanePaths(lane);
+      safeQueueWaveControlEvent(lanePaths, {
+        category: "feedback",
+        entityType: "human_input",
+        entityId: requestId,
+        action: "requested",
+        source: "orchestrator",
+        actor: orchestratorId || "orchestrator",
+        recordedAt: now,
+        identity: {
+          lane,
+          wave,
+          agentId,
+          runKind: lanePaths.runKind,
+          runId: lanePaths.runId,
+        },
+        tags: ["feedback", "human-input"],
+        data: payload,
+      });
+    } catch {
+      // Best-effort telemetry only.
+    }
+  }
   return { requestId, filePath, payload };
 }
 
@@ -93,6 +120,7 @@ export function answerFeedbackRequest({
   response,
   operator = "human-operator",
   force = false,
+  recordTelemetry = false,
 }) {
   const lockPath = path.join(feedbackStateDir, "requests.lock");
   let answeredPayload = null;
@@ -117,6 +145,31 @@ export function answerFeedbackRequest({
     };
     writeJsonAtomic(filePath, answeredPayload);
   });
+  if (recordTelemetry) {
+    try {
+      const lanePaths = buildLanePaths(answeredPayload?.lane || DEFAULT_WAVE_LANE);
+      safeQueueWaveControlEvent(lanePaths, {
+        category: "feedback",
+        entityType: "human_input",
+        entityId: answeredPayload.id,
+        action: "answered",
+        source: "operator",
+        actor: operator,
+        recordedAt: answeredPayload?.updatedAt || toIsoTimestamp(),
+        identity: {
+          lane: answeredPayload?.lane || DEFAULT_WAVE_LANE,
+          wave: answeredPayload?.wave ?? null,
+          agentId: answeredPayload?.agentId || null,
+          runKind: lanePaths.runKind,
+          runId: lanePaths.runId,
+        },
+        tags: ["feedback", "human-input", "answered"],
+        data: answeredPayload,
+      });
+    } catch {
+      // Best-effort telemetry only.
+    }
+  }
   return answeredPayload;
 }
 
@@ -292,6 +345,7 @@ export async function runFeedbackCli(argv) {
       orchestratorId: options.orchestratorId,
       question: options.question,
       context: options.context,
+      recordTelemetry: true,
     });
     console.log(`[wave-human-feedback] created ${result.requestId}`);
     console.log(`file: ${path.relative(REPO_ROOT, result.filePath)}`);
@@ -316,6 +370,7 @@ export async function runFeedbackCli(argv) {
       response: options.response,
       operator: options.operator,
       force: options.force,
+      recordTelemetry: true,
     });
     console.log(`[wave-human-feedback] answered ${options.id}`);
     return;

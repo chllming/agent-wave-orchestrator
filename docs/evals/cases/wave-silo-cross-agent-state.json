@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "id": "wave-silo-cross-agent-state",
+  "title": "Cross-Agent State Reconstruction",
+  "summary": "The correct diagnosis requires facts from both the API and queue owners and should only reconstruct cleanly in the full Wave arm.",
+  "familyId": "silo-escape",
+  "benchmarkId": "cross-agent-state-reconstruction",
+  "kind": "projection",
+  "supportedArms": ["single-agent", "multi-agent-minimal", "full-wave"],
+  "scoring": {
+    "kind": "state-reconstruction",
+    "primaryMetric": "global-state-reconstruction-rate",
+    "thresholds": {
+      "global-state-reconstruction-rate": 100,
+      "summary-fact-retention-rate": 100
+    },
+    "practicalWinThreshold": 20
+  },
+  "expectations": {
+    "globalFacts": [
+      "api retries are saturating the worker queue",
+      "queue lag only spikes after the retry fanout begins"
+    ],
+    "summaryFacts": ["api retries are saturating the worker queue"],
+    "targetedInboxes": {
+      "a1": ["queue lag only spikes after the retry fanout begins"],
+      "a2": ["api retries are saturating the worker queue"]
+    }
+  },
+  "fixture": {
+    "lane": "main",
+    "waveNumber": 0,
+    "primaryAgentId": "a1",
+    "agents": [
+      {
+        "agentId": "a1",
+        "title": "API Owner",
+        "ownedPaths": ["src/api/retries.ts"],
+        "capabilities": ["api"]
+      },
+      {
+        "agentId": "a2",
+        "title": "Queue Owner",
+        "ownedPaths": ["src/queue/worker.ts"],
+        "capabilities": ["queue"]
+      }
+    ],
+    "records": [
+      {
+        "id": "block-api-fanout",
+        "kind": "blocker",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a1",
+        "targets": ["agent:a2"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/api/retries.ts", "src/queue/worker.ts"],
+        "summary": "api retries are saturating the worker queue",
+        "detail": "The API owner sees retry fanout but needs queue evidence to reconstruct the full state."
+      },
+      {
+        "id": "block-queue-lag",
+        "kind": "blocker",
+        "lane": "main",
+        "wave": 0,
+        "agentId": "a2",
+        "targets": ["agent:a1"],
+        "status": "open",
+        "priority": "high",
+        "artifactRefs": ["src/queue/worker.ts", "src/api/retries.ts"],
+        "summary": "queue lag only spikes after the retry fanout begins",
+        "detail": "The queue owner sees the lag pattern but needs the API owner's retry context."
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "railway-mcp-server": {
+      "command": "/home/coder/wave-orchestration/.codex-tools/railway-mcp/start.sh",
+      "args": [],
+      "env": {
+        "RAILWAY_PROJECT_ID": "b2427e79-3de9-49c3-aa5a-c86db83123c0"
+      }
+    }
+  }
+}

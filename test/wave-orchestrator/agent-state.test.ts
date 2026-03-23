@@ -135,6 +135,59 @@ describe("buildAgentExecutionSummary", () => {
     expect(summary.docDelta).toBeNull();
   });
 
+  it("falls back to line-by-line parsing when the log tail ends inside an unmatched fence", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a2.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "Assigned implementation prompt:",
+        "```text",
+        "Required final markers:",
+        "[wave-proof] completion=integrated durability=durable proof=integration state=met detail=real-proof",
+        "[wave-doc-delta] state=owned paths=docs/plans/example.md detail=real-doc",
+        "[wave-component] component=rollout-cores-and-cluster-view level=pilot-live state=met detail=real-component",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A2" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary.proof).toMatchObject({
+      completion: "integrated",
+      durability: "durable",
+      proof: "integration",
+      state: "met",
+      detail: "real-proof",
+    });
+    expect(summary.docDelta).toMatchObject({
+      state: "owned",
+      paths: ["docs/plans/example.md"],
+      detail: "real-doc",
+    });
+    expect(summary.components).toEqual([
+      {
+        componentId: "rollout-cores-and-cluster-view",
+        level: "pilot-live",
+        state: "met",
+        detail: "real-component",
+      },
+    ]);
+    expect(summary.structuredSignalDiagnostics).toMatchObject({
+      proof: { rawCount: 1, acceptedCount: 1 },
+      docDelta: { rawCount: 1, acceptedCount: 1 },
+      component: {
+        rawCount: 1,
+        acceptedCount: 1,
+        seenComponentIds: ["rollout-cores-and-cluster-view"],
+      },
+    });
+  });
+
   it("parses cont-EVAL target_ids and benchmark_ids from the final eval marker", () => {
     const dir = makeTempDir();
     const logPath = path.join(dir, "e0.log");
@@ -343,6 +396,96 @@ describe("buildAgentExecutionSummary", () => {
     const rewritten = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
     expect(rewritten.structuredSignalDiagnostics).toBeTruthy();
     expect(rewritten.proof).toMatchObject({ state: "met" });
+  });
+
+  it("refreshes stale execution summaries when diagnostics exist but required markers are still missing", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-10-10-a2.status");
+    const summaryPath = statusPath.replace(/\.status$/i, ".summary.json");
+    const logPath = path.join(dir, "wave-10-10-a2.log");
+
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=integrated durability=durable proof=integration state=met detail=real-proof",
+        "- [wave-doc-delta] state=owned paths=docs/plans/example.md detail=real-doc",
+        "- [wave-component] component=rollout-cores-and-cluster-view level=pilot-live state=met detail=real-component",
+      ].join("\n"),
+      "utf8",
+    );
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          agentId: "A2",
+          proof: null,
+          docDelta: null,
+          components: [],
+          structuredSignalDiagnostics: {
+            proof: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            docDelta: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            docClosure: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            integration: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            eval: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            security: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            gate: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            gap: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+            component: { rawCount: 0, acceptedCount: 0, rejectedSamples: [], seenComponentIds: [] },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const summary = readAgentExecutionSummary(statusPath, {
+      agent: {
+        agentId: "A2",
+        exitContract: {
+          completion: "integrated",
+          durability: "durable",
+          proof: "integration",
+          docImpact: "owned",
+        },
+        components: ["rollout-cores-and-cluster-view"],
+      },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary).toMatchObject({
+      proof: {
+        completion: "integrated",
+        durability: "durable",
+        proof: "integration",
+        state: "met",
+      },
+      docDelta: {
+        state: "owned",
+        paths: ["docs/plans/example.md"],
+      },
+      components: [
+        {
+          componentId: "rollout-cores-and-cluster-view",
+          level: "pilot-live",
+          state: "met",
+        },
+      ],
+      structuredSignalDiagnostics: {
+        proof: { rawCount: 1, acceptedCount: 1 },
+        docDelta: { rawCount: 1, acceptedCount: 1 },
+        component: {
+          rawCount: 1,
+          acceptedCount: 1,
+          seenComponentIds: ["rollout-cores-and-cluster-view"],
+        },
+      },
+    });
+
+    const rewritten = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+    expect(rewritten.proof).toMatchObject({ state: "met" });
+    expect(rewritten.structuredSignalDiagnostics.proof).toMatchObject({ rawCount: 1, acceptedCount: 1 });
   });
 
   it("preserves valid legacy summaries when diagnostics are missing but proof markers already exist", () => {

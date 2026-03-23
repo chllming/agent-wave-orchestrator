@@ -22,13 +22,13 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
-## Upgrading From 0.6.x To 0.7.2
+## Upgrading From 0.6.x To 0.7.3
 
 Read `CHANGELOG.md` first, then treat this section as the repo-owned migration checklist for adopted `0.6.x` workspaces.
 
 `wave upgrade` updates the installed runtime only. It does not copy planner starter files into a repo that already owns its docs, skills, and Context7 bundles.
 
-`0.7.2` also hardens proof-centric closure handling: final implementation markers now parse when emitted as Markdown list items, malformed marker syntax now surfaces explicit parse errors instead of generic missing-marker failures, and incomplete implementation work should stay inside the required final markers with `state=gap` instead of trailing `[wave-gap]` lines.
+`0.7.3` keeps the proof-centric closure hardening from `0.7.2` and closes the remaining parser hole: malformed unmatched end-of-tail fenced blocks no longer hide later final implementation markers, stale summaries rebuild when required proof/doc/component fields are still missing even if diagnostics already exist, malformed marker syntax still surfaces explicit parse errors, and incomplete implementation work should stay inside the required final markers with `state=gap` instead of trailing `[wave-gap]` lines.
 
 ### Required Repo Changes
 

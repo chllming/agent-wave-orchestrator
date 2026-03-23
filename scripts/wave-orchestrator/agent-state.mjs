@@ -140,6 +140,21 @@ function parseStructuredSignalCandidate(line) {
   };
 }
 
+function appendParsedStructuredSignalCandidates(lines, candidates, { requireAll = false } = {}) {
+  const parsedCandidates = [];
+  for (const line of lines || []) {
+    const candidate = parseStructuredSignalCandidate(line);
+    if (candidate) {
+      parsedCandidates.push(candidate);
+      continue;
+    }
+    if (requireAll) {
+      return;
+    }
+  }
+  candidates.push(...parsedCandidates);
+}
+
 function collectStructuredSignalCandidates(text) {
   if (!text) {
     return [];
@@ -153,12 +168,7 @@ function collectStructuredSignalCandidates(text) {
         fenceLines = [];
         continue;
       }
-      const fenceCandidates = fenceLines
-        .map((line) => parseStructuredSignalCandidate(line))
-        .filter(Boolean);
-      if (fenceCandidates.length > 0 && fenceCandidates.length === fenceLines.length) {
-        candidates.push(...fenceCandidates);
-      }
+      appendParsedStructuredSignalCandidates(fenceLines, candidates, { requireAll: true });
       fenceLines = null;
       continue;
     }
@@ -173,6 +183,9 @@ function collectStructuredSignalCandidates(text) {
     if (candidate) {
       candidates.push(candidate);
     }
+  }
+  if (fenceLines !== null) {
+    appendParsedStructuredSignalCandidates(fenceLines, candidates);
   }
   return candidates;
 }
@@ -576,27 +589,27 @@ function summaryNeedsStructuredSignalRefresh(payload, options = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return false;
   }
-  if (payload.structuredSignalDiagnostics && typeof payload.structuredSignalDiagnostics === "object") {
-    return false;
-  }
   const agent = options.agent;
   const contract = normalizeExitContract(agent?.exitContract);
   if (!contract) {
     return false;
   }
-  if (!payload.proof || !payload.docDelta) {
-    return true;
-  }
+  const missingProofOrDocDelta = !payload.proof || !payload.docDelta;
   const ownedComponents = Array.isArray(agent?.components) ? agent.components : [];
-  if (ownedComponents.length === 0) {
-    return false;
-  }
   const componentMarkers = new Map(
     Array.isArray(payload.components)
       ? payload.components.map((component) => [component.componentId, component])
       : [],
   );
-  return ownedComponents.some((componentId) => !componentMarkers.has(componentId));
+  const missingOwnedComponents =
+    ownedComponents.length > 0 && ownedComponents.some((componentId) => !componentMarkers.has(componentId));
+  if (missingProofOrDocDelta || missingOwnedComponents) {
+    return true;
+  }
+  if (payload.structuredSignalDiagnostics && typeof payload.structuredSignalDiagnostics === "object") {
+    return false;
+  }
+  return false;
 }
 
 function refreshExecutionSummaryIfStale(summaryPathOrStatusPath, payload, options = {}) {

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.7.3 - 2026-03-23
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, sample-wave docs, and npm publishing runbook to advertise `0.7.3` as the current release surface.
+
+### Fixed And Hardened
+
+- Implementation summary parsing now falls back to normal line-by-line structured-marker extraction when a log tail ends inside an unmatched fenced block, so malformed prompt or transcript tails cannot hide later final implementation markers.
+- Proof-centric summary repair now refreshes stale `.summary.json` files when required proof/doc/component fields are missing, even if a prior run already wrote a `structuredSignalDiagnostics` object with incorrect zero-count data.
+
+### Testing And Validation
+
+- Added regression coverage for unmatched end-of-tail fenced logs and stale diagnostics-backed implementation summaries.
+
 ## 0.7.2 - 2026-03-23
 
 ### Changed

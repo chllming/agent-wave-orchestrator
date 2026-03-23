@@ -11,12 +11,14 @@ import {
 } from "./config.mjs";
 import {
   appendOrchestratorBoardEntry,
+  buildResidentOrchestratorPrompt,
   ensureOrchestratorBoard,
   feedbackStateSignature,
   readWaveHumanFeedbackRequests,
 } from "./coordination.mjs";
 import {
   appendCoordinationRecord,
+  buildCoordinationResponseMetrics,
   compileAgentInbox,
   compileSharedSummary,
   isOpenCoordinationStatus,
@@ -54,6 +56,8 @@ import {
   DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS,
   DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS,
   DEFAULT_AGENT_RATE_LIMIT_RETRIES,
+  DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
+  DEFAULT_LIVE_COORDINATION_REFRESH_MS,
   DEFAULT_MAX_RETRIES_PER_WAVE,
   DEFAULT_TIMEOUT_MINUTES,
   DEFAULT_WAVE_LANE,
@@ -129,6 +133,18 @@ import {
 } from "./agent-state.mjs";
 import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
 import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
+import {
+  augmentSummaryWithProofRegistry,
+  readWaveProofRegistry,
+  waveProofRegistryPath,
+} from "./proof-registry.mjs";
+import {
+  clearWaveRetryOverride,
+  readWaveRelaunchPlanSnapshot,
+  readWaveRetryOverride,
+  resolveRetryOverrideRuns,
+  waveRelaunchPlanPath,
+} from "./retry-control.mjs";
 import { buildQualityMetrics, writeTraceBundle } from "./traces.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
 import { readProjectProfile, resolveDefaultTerminalSurface } from "./project-profile.mjs";
@@ -149,7 +165,6 @@ import {
   writeDependencySnapshotMarkdown,
 } from "./routing-state.mjs";
 import {
-  readRelaunchPlan,
   writeAssignmentSnapshot,
   writeDependencySnapshot,
   writeRelaunchPlan,
@@ -219,6 +234,8 @@ Options:
                         Disable orchestrator coordination board updates for this run
   --coordination-note <text>
                         Optional startup intent note appended to orchestrator board
+  --resident-orchestrator
+                        Launch an additional long-running resident orchestrator session for the wave
   --no-context7         Disable launcher-side Context7 prefetch/injection
   --help                 Show this help message
 `);
@@ -249,6 +266,7 @@ function parseArgs(argv) {
     cleanupSessions: true,
     keepTerminals: false,
     context7Enabled: true,
+    residentOrchestrator: false,
     orchestratorId: null,
     orchestratorBoardPath: null,
     coordinationNote: "",
@@ -305,6 +323,8 @@ function parseArgs(argv) {
       orchestratorBoardProvided = true;
     } else if (arg === "--coordination-note") {
       options.coordinationNote = String(argv[++i] || "").trim();
+    } else if (arg === "--resident-orchestrator") {
+      options.residentOrchestrator = true;
     } else if (arg === "--state-file") {
       options.runStatePath = path.resolve(REPO_ROOT, argv[++i] || "");
       stateFileProvided = true;
@@ -530,17 +550,19 @@ function materializeAgentExecutionSummaryForRun(wave, runInfo) {
 }
 
 function readRunExecutionSummary(runInfo, wave = null) {
+  const applyProofRegistry = (summary) =>
+    runInfo?.proofRegistry ? augmentSummaryWithProofRegistry(runInfo.agent, summary, runInfo.proofRegistry) : summary;
   if (runInfo?.summary && typeof runInfo.summary === "object") {
-    return runInfo.summary;
+    return applyProofRegistry(runInfo.summary);
   }
   if (runInfo?.summaryPath && fs.existsSync(runInfo.summaryPath)) {
-    return readAgentExecutionSummary(runInfo.summaryPath);
+    return applyProofRegistry(readAgentExecutionSummary(runInfo.summaryPath));
   }
   if (runInfo?.statusPath && fs.existsSync(agentSummaryPathFromStatusPath(runInfo.statusPath))) {
-    return readAgentExecutionSummary(runInfo.statusPath);
+    return applyProofRegistry(readAgentExecutionSummary(runInfo.statusPath));
   }
   if (wave && runInfo?.statusPath && runInfo?.logPath && fs.existsSync(runInfo.statusPath)) {
-    return materializeAgentExecutionSummaryForRun(wave, runInfo);
+    return applyProofRegistry(materializeAgentExecutionSummaryForRun(wave, runInfo));
   }
   return null;
 }
@@ -594,12 +616,8 @@ function waveIntegrationMarkdownPath(lanePaths, waveNumber) {
   return path.join(lanePaths.integrationDir, `wave-${waveNumber}.md`);
 }
 
-function waveRelaunchPlanPath(lanePaths, waveNumber) {
-  return path.join(lanePaths.statusDir, `relaunch-plan-wave-${waveNumber}.json`);
-}
-
 function readWaveRelaunchPlan(lanePaths, waveNumber) {
-  return readRelaunchPlan(waveRelaunchPlanPath(lanePaths, waveNumber), { wave: waveNumber });
+  return readWaveRelaunchPlanSnapshot(lanePaths, waveNumber);
 }
 
 function writeWaveRelaunchPlan(lanePaths, waveNumber, payload) {
@@ -1377,6 +1395,7 @@ function writeWaveDerivedState({
     capabilityAssignments,
     dependencySnapshot,
   });
+  const responseMetrics = buildCoordinationResponseMetrics(coordinationState);
   const messageBoardPath = path.join(lanePaths.messageboardsDir, `wave-${wave.wave}.md`);
   writeCoordinationBoardProjection(messageBoardPath, {
     wave: wave.wave,
@@ -1398,6 +1417,7 @@ function writeWaveDerivedState({
     integrationMarkdownPath: waveIntegrationMarkdownPath(lanePaths, wave.wave),
     securityMarkdownPath: waveSecurityMarkdownPath(lanePaths, wave.wave),
     ledger,
+    responseMetrics,
     sharedSummaryPath,
     sharedSummaryText: sharedSummary.text,
     inboxesByAgentId,
@@ -1415,6 +1435,23 @@ function applyDerivedStateToDashboard(dashboardState, derivedState) {
   ).length;
   dashboardState.inboundDependenciesOpen = (derivedState.dependencySnapshot?.openInbound || []).length;
   dashboardState.outboundDependenciesOpen = (derivedState.dependencySnapshot?.openOutbound || []).length;
+  dashboardState.coordinationOpen = derivedState.coordinationState?.openRecords?.length || 0;
+  dashboardState.openClarifications =
+    (derivedState.coordinationState?.clarifications || []).filter((record) =>
+      isOpenCoordinationStatus(record.status),
+    ).length;
+  dashboardState.openHumanEscalations =
+    derivedState.responseMetrics?.openHumanEscalationCount ||
+    (derivedState.coordinationState?.humanEscalations || []).filter((record) =>
+      isOpenCoordinationStatus(record.status),
+    ).length;
+  dashboardState.oldestOpenCoordinationAgeMs =
+    derivedState.responseMetrics?.oldestOpenCoordinationAgeMs ?? null;
+  dashboardState.oldestUnackedRequestAgeMs =
+    derivedState.responseMetrics?.oldestUnackedRequestAgeMs ?? null;
+  dashboardState.overdueAckCount = derivedState.responseMetrics?.overdueAckCount || 0;
+  dashboardState.overdueClarificationCount =
+    derivedState.responseMetrics?.overdueClarificationCount || 0;
 }
 
 export function readWaveImplementationGate(wave, agentRuns) {
@@ -1849,6 +1886,198 @@ function listLaneTmuxSessionNames(lanePaths) {
   );
 }
 
+function residentOrchestratorRolePromptPath() {
+  return path.join(REPO_ROOT, "docs", "agents", "wave-orchestrator-role.md");
+}
+
+function loadResidentOrchestratorRolePrompt() {
+  const filePath = residentOrchestratorRolePromptPath();
+  if (!fs.existsSync(filePath)) {
+    return "Monitor the wave, triage clarification timing, and intervene through coordination records only.";
+  }
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function defaultResidentExecutorState(options) {
+  if (options.executorMode === "claude") {
+    return {
+      id: "claude",
+      role: "orchestrator",
+      selectedBy: "resident-orchestrator",
+      budget: { minutes: options.timeoutMinutes },
+      claude: {
+        command: "claude",
+      },
+    };
+  }
+  if (options.executorMode === "opencode") {
+    return {
+      id: "opencode",
+      role: "orchestrator",
+      selectedBy: "resident-orchestrator",
+      budget: { minutes: options.timeoutMinutes },
+      opencode: {
+        command: "opencode",
+      },
+    };
+  }
+  return {
+    id: "codex",
+    role: "orchestrator",
+    selectedBy: "resident-orchestrator",
+    budget: { minutes: options.timeoutMinutes },
+    codex: {
+      command: "codex",
+      sandbox: options.codexSandboxMode,
+    },
+  };
+}
+
+function buildResidentExecutorState(executorTemplate, options) {
+  const source = executorTemplate
+    ? JSON.parse(JSON.stringify(executorTemplate))
+    : defaultResidentExecutorState(options);
+  source.role = "orchestrator";
+  source.selectedBy = "resident-orchestrator";
+  source.budget = {
+    ...(source.budget || {}),
+    minutes: Math.max(
+      Number.parseInt(String(source?.budget?.minutes || 0), 10) || 0,
+      options.timeoutMinutes,
+    ),
+  };
+  if (source.id === "codex") {
+    source.codex = {
+      ...(source.codex || {}),
+      command: source?.codex?.command || "codex",
+      sandbox: source?.codex?.sandbox || options.codexSandboxMode,
+    };
+  } else if (source.id === "claude") {
+    source.claude = {
+      ...(source.claude || {}),
+      command: source?.claude?.command || "claude",
+    };
+  } else if (source.id === "opencode") {
+    source.opencode = {
+      ...(source.opencode || {}),
+      command: source?.opencode?.command || "opencode",
+    };
+  }
+  return source;
+}
+
+function buildResidentOrchestratorRun({
+  lanePaths,
+  wave,
+  agentRuns,
+  derivedState,
+  dashboardPath,
+  runTag,
+  options,
+}) {
+  const executorTemplate =
+    agentRuns.find((run) => run.agent.executorResolved?.id === options.executorMode)?.agent
+      ?.executorResolved ||
+    agentRuns.find((run) => run.agent.executorResolved)?.agent?.executorResolved ||
+    null;
+  const executorResolved = buildResidentExecutorState(executorTemplate, options);
+  if (executorResolved.id === "local") {
+    return {
+      run: null,
+      skipReason: "Resident orchestrator requires codex, claude, or opencode; local executor is not suitable.",
+    };
+  }
+  const agent = {
+    agentId: "ORCH",
+    title: "Resident Orchestrator",
+    slug: `${wave.wave}-resident-orchestrator`,
+    prompt: loadResidentOrchestratorRolePrompt(),
+    executorResolved,
+  };
+  const baseName = `wave-${wave.wave}-resident-orchestrator`;
+  const sessionName = `${lanePaths.tmuxSessionPrefix}${wave.wave}_resident_orchestrator_${runTag}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_",
+  );
+  return {
+    run: {
+      agent,
+      sessionName,
+      promptPath: path.join(lanePaths.promptsDir, `${baseName}.prompt.md`),
+      logPath: path.join(lanePaths.logsDir, `${baseName}.log`),
+      statusPath: path.join(lanePaths.statusDir, `${baseName}.status`),
+      promptOverride: buildResidentOrchestratorPrompt({
+        lane: lanePaths.lane,
+        wave: wave.wave,
+        waveFile: wave.file,
+        orchestratorId: options.orchestratorId,
+        coordinationLogPath: derivedState.coordinationLogPath,
+        messageBoardPath: derivedState.messageBoardPath,
+        sharedSummaryPath: derivedState.sharedSummaryPath,
+        dashboardPath,
+        triagePath: derivedState.clarificationTriage?.triagePath || null,
+        rolePrompt: agent.prompt,
+      }),
+    },
+    skipReason: "",
+  };
+}
+
+function monitorResidentOrchestratorSession({
+  lanePaths,
+  run,
+  waveNumber,
+  recordCombinedEvent,
+  appendCoordination,
+  sessionState,
+}) {
+  if (!run || sessionState?.closed === true) {
+    return false;
+  }
+  if (fs.existsSync(run.statusPath)) {
+    sessionState.closed = true;
+    const exitCode = readStatusCodeIfPresent(run.statusPath);
+    recordCombinedEvent({
+      level: exitCode === 0 ? "info" : "warn",
+      agentId: run.agent.agentId,
+      message:
+        exitCode === 0
+          ? "Resident orchestrator exited; launcher continues as the control plane."
+          : `Resident orchestrator exited with code ${exitCode}; launcher continues as the control plane.`,
+    });
+    appendCoordination({
+      event: "resident_orchestrator_exit",
+      waves: [waveNumber],
+      status: exitCode === 0 ? "resolved" : "warn",
+      details:
+        exitCode === 0
+          ? "Resident orchestrator session ended before wave completion."
+          : `Resident orchestrator session ended with code ${exitCode} before wave completion.`,
+      actionRequested: "None",
+    });
+    return true;
+  }
+  const activeSessions = new Set(listLaneTmuxSessionNames(lanePaths));
+  if (!activeSessions.has(run.sessionName)) {
+    sessionState.closed = true;
+    recordCombinedEvent({
+      level: "warn",
+      agentId: run.agent.agentId,
+      message:
+        "Resident orchestrator session disappeared before writing a status file; launcher continues as the control plane.",
+    });
+    appendCoordination({
+      event: "resident_orchestrator_missing",
+      waves: [waveNumber],
+      status: "warn",
+      details: `tmux session ${run.sessionName} disappeared before ${path.relative(REPO_ROOT, run.statusPath)} was written.`,
+      actionRequested: "None",
+    });
+    return true;
+  }
+  return false;
+}
+
 function isWaveDashboardBackedByLiveSession(lanePaths, dashboardPath, activeSessionNames) {
   const waveMatch = path.basename(dashboardPath).match(/^wave-(\d+)\.json$/);
   if (!waveMatch) {
@@ -2107,12 +2336,14 @@ function monitorWaveHumanFeedback({
     agentIds: agentRuns.map((run) => run.agent.agentId),
     orchestratorId,
   });
+  let changed = false;
   for (const request of requests) {
     const signature = feedbackStateSignature(request);
     if (feedbackStateByRequestId.get(request.id) === signature) {
       continue;
     }
     feedbackStateByRequestId.set(request.id, signature);
+    changed = true;
     const question = request.question || "n/a";
     const context = request.context ? `; context=${request.context}` : "";
     const responseOperator = request.responseOperator || "human-operator";
@@ -2225,6 +2456,7 @@ function monitorWaveHumanFeedback({
       }
     }
   }
+  return changed;
 }
 
 function proofCentricReuseBlocked(derivedState) {
@@ -2424,7 +2656,10 @@ export function hasReusableSuccessStatus(agent, statusPath, options = {}) {
   if (!summary) {
     return false;
   }
-  if (!validateImplementationSummary(agent, summary).ok) {
+  const effectiveSummary = options.proofRegistry
+    ? augmentSummaryWithProofRegistry(agent, summary, options.proofRegistry)
+    : summary;
+  if (!validateImplementationSummary(agent, effectiveSummary).ok) {
     return false;
   }
   if (proofCentricReuseBlocked(options.derivedState)) {
@@ -3071,10 +3306,12 @@ export async function runLauncherCli(argv) {
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.dashboardsDir);
   ensureDirectory(lanePaths.coordinationDir);
+  ensureDirectory(lanePaths.controlDir);
   ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
+  ensureDirectory(lanePaths.proofDir);
   ensureDirectory(lanePaths.securityDir);
   ensureDirectory(lanePaths.dependencySnapshotsDir);
   ensureDirectory(lanePaths.docsQueueDir);
@@ -3393,6 +3630,8 @@ export async function runLauncherCli(argv) {
       let dashboardState = null;
       let terminalEntries = [];
       let terminalsAppended = false;
+      let residentOrchestratorRun = null;
+      const residentOrchestratorState = { closed: false };
 
       const flushDashboards = () => {
         if (!dashboardState) {
@@ -3455,6 +3694,10 @@ export async function runLauncherCli(argv) {
         });
 
         const refreshDerivedState = (attemptNumber = 0) => {
+          const proofRegistry = readWaveProofRegistry(lanePaths, wave.wave);
+          for (const run of agentRuns) {
+            run.proofRegistry = proofRegistry;
+          }
           const summariesByAgentId = Object.fromEntries(
             agentRuns
               .map((run) => [run.agent.agentId, readRunExecutionSummary(run, wave)])
@@ -3489,6 +3732,7 @@ export async function runLauncherCli(argv) {
 
         refreshDerivedState(0);
         let persistedRelaunchPlan = readWaveRelaunchPlan(lanePaths, wave.wave);
+        let retryOverride = readWaveRetryOverride(lanePaths, wave.wave);
 
         dashboardState = buildWaveDashboardState({
           lane: lanePaths.lane,
@@ -3500,15 +3744,81 @@ export async function runLauncherCli(argv) {
           agentRuns,
         });
         applyDerivedStateToDashboard(dashboardState, derivedState);
+        const feedbackStateByRequestId = new Map();
+        const coordinationAlertState = {
+          overdueAckSignature: "",
+          overdueClarificationSignature: "",
+        };
+        let lastLiveCoordinationRefreshAt = 0;
+        const emitCoordinationAlertEvents = (currentDerivedState = derivedState) => {
+          const responseMetrics =
+            currentDerivedState?.responseMetrics ||
+            buildCoordinationResponseMetrics(currentDerivedState?.coordinationState);
+          const overdueAckSignature = (responseMetrics?.overdueAckRecordIds || []).join(",");
+          if (
+            overdueAckSignature &&
+            overdueAckSignature !== coordinationAlertState.overdueAckSignature
+          ) {
+            recordCombinedEvent({
+              level: "warn",
+              message: `Overdue acknowledgements in coordination state: ${overdueAckSignature}.`,
+            });
+            appendCoordination({
+              event: "coordination_ack_overdue",
+              waves: [wave.wave],
+              status: "warn",
+              details: `records=${overdueAckSignature}; ack_timeout_ms=${DEFAULT_COORDINATION_ACK_TIMEOUT_MS}`,
+              actionRequested:
+                "Assigned owners should acknowledge, resolve, or reroute the targeted coordination items.",
+            });
+          }
+          coordinationAlertState.overdueAckSignature = overdueAckSignature;
+          const overdueClarificationSignature = (responseMetrics?.overdueClarificationIds || []).join(
+            ",",
+          );
+          if (
+            overdueClarificationSignature &&
+            overdueClarificationSignature !== coordinationAlertState.overdueClarificationSignature
+          ) {
+            recordCombinedEvent({
+              level: "warn",
+              message: `Stale clarification chains remain open: ${overdueClarificationSignature}.`,
+            });
+            appendCoordination({
+              event: "clarification_chain_stale",
+              waves: [wave.wave],
+              status: "warn",
+              details: `clarifications=${overdueClarificationSignature}`,
+              actionRequested:
+                "The orchestrator should reroute, resolve, or escalate the stale clarification chain.",
+            });
+          }
+          coordinationAlertState.overdueClarificationSignature = overdueClarificationSignature;
+        };
+        const refreshActiveCoordinationState = (attemptNumber = 0, { force = false } = {}) => {
+          const nowMs = Date.now();
+          if (!force && nowMs - lastLiveCoordinationRefreshAt < DEFAULT_LIVE_COORDINATION_REFRESH_MS) {
+            return false;
+          }
+          refreshDerivedState(attemptNumber);
+          lastLiveCoordinationRefreshAt = nowMs;
+          updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
+          emitCoordinationAlertEvents(derivedState);
+          flushDashboards();
+          return true;
+        };
 
+        const retryOverrideClearedAgentIds = new Set(retryOverride?.clearReusableAgentIds || []);
         const preCompletedAgentIds = new Set(
           agentRuns
             .filter(
               (run) =>
+                !retryOverrideClearedAgentIds.has(run.agent.agentId) &&
                 !isClosureAgentId(run.agent.agentId, lanePaths) &&
                 hasReusableSuccessStatus(run.agent, run.statusPath, {
                   wave,
                   derivedState,
+                  proofRegistry: readWaveProofRegistry(lanePaths, wave.wave),
                 }),
             )
             .map((run) => run.agent.agentId),
@@ -3535,6 +3845,7 @@ export async function runLauncherCli(argv) {
           });
         }
         flushDashboards();
+        emitCoordinationAlertEvents(derivedState);
 
         if (options.dashboard && currentWaveDashboardTerminalEntry) {
           launchWaveDashboardSession(lanePaths, {
@@ -3542,6 +3853,61 @@ export async function runLauncherCli(argv) {
             dashboardPath,
             messageBoardPath,
           });
+        }
+
+        if (options.residentOrchestrator) {
+          const residentSetup = buildResidentOrchestratorRun({
+            lanePaths,
+            wave,
+            agentRuns,
+            derivedState,
+            dashboardPath,
+            runTag,
+            options,
+          });
+          if (residentSetup.skipReason) {
+            recordCombinedEvent({
+              level: "warn",
+              message: residentSetup.skipReason,
+            });
+          } else if (residentSetup.run) {
+            residentOrchestratorRun = residentSetup.run;
+            const launchResult = await launchAgentSession(lanePaths, {
+              wave: wave.wave,
+              waveDefinition: wave,
+              agent: residentOrchestratorRun.agent,
+              sessionName: residentOrchestratorRun.sessionName,
+              promptPath: residentOrchestratorRun.promptPath,
+              logPath: residentOrchestratorRun.logPath,
+              statusPath: residentOrchestratorRun.statusPath,
+              messageBoardPath: derivedState.messageBoardPath,
+              messageBoardSnapshot: derivedState.messageBoardText,
+              sharedSummaryPath: derivedState.sharedSummaryPath,
+              sharedSummaryText: derivedState.sharedSummaryText,
+              inboxPath: null,
+              inboxText: "",
+              promptOverride: residentOrchestratorRun.promptOverride,
+              orchestratorId: options.orchestratorId,
+              agentRateLimitRetries: options.agentRateLimitRetries,
+              agentRateLimitBaseDelaySeconds: options.agentRateLimitBaseDelaySeconds,
+              agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
+              context7Enabled: options.context7Enabled,
+            });
+            residentOrchestratorRun.lastPromptHash = launchResult?.promptHash || null;
+            residentOrchestratorRun.lastExecutorId =
+              launchResult?.executorId || residentOrchestratorRun.agent.executorResolved?.id || null;
+            recordCombinedEvent({
+              agentId: residentOrchestratorRun.agent.agentId,
+              message: `Resident orchestrator launched in tmux session ${residentOrchestratorRun.sessionName}`,
+            });
+            appendCoordination({
+              event: "resident_orchestrator_start",
+              waves: [wave.wave],
+              status: "running",
+              details: `session=${residentOrchestratorRun.sessionName}; executor=${residentOrchestratorRun.lastExecutorId || "unknown"}`,
+              actionRequested: "None",
+            });
+          }
         }
 
         const availableRuns = agentRuns.filter((run) => !preCompletedAgentIds.has(run.agent.agentId));
@@ -3563,18 +3929,49 @@ export async function runLauncherCli(argv) {
           lanePaths,
           wave,
         );
+        const overrideRuns = resolveRetryOverrideRuns(availableRuns, retryOverride, lanePaths, wave);
+        if (overrideRuns.unknownAgentIds.length > 0) {
+          appendCoordination({
+            event: "retry_override_invalid",
+            waves: [wave.wave],
+            status: "warn",
+            details: `unknown_agents=${overrideRuns.unknownAgentIds.join(",")}`,
+            actionRequested:
+              "Retry override references agent ids that do not exist in the current wave definition.",
+          });
+          clearWaveRetryOverride(lanePaths, wave.wave);
+          retryOverride = null;
+        }
         let runsToLaunch =
-          persistedRuns.length > 0 ? persistedRuns : selectInitialWaveRuns(availableRuns, lanePaths);
+          overrideRuns.unknownAgentIds.length === 0 && overrideRuns.runs.length > 0
+            ? overrideRuns.runs
+            : persistedRuns.length > 0
+              ? persistedRuns
+              : selectInitialWaveRuns(availableRuns, lanePaths);
+        if (overrideRuns.runs.length > 0) {
+          appendCoordination({
+            event: "retry_override_applied",
+            waves: [wave.wave],
+            status: "running",
+            details: `agents=${overrideRuns.selectedAgentIds.join(",")}; requested_by=${retryOverride?.requestedBy || "human-operator"}`,
+            actionRequested: "None",
+          });
+          if (retryOverride?.applyOnce !== false) {
+            clearWaveRetryOverride(lanePaths, wave.wave);
+            retryOverride = null;
+          }
+        }
         let attempt = 1;
         let traceAttempt = 1;
-        const feedbackStateByRequestId = new Map();
         let completionGateSnapshot = null;
         let completionTraceDir = null;
 
         while (attempt <= options.maxRetriesPerWave + 1) {
           refreshDerivedState(attempt - 1);
+          lastLiveCoordinationRefreshAt = Date.now();
           dashboardState.attempt = attempt;
           updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
+          emitCoordinationAlertEvents(derivedState);
           flushDashboards();
           recordCombinedEvent({
             message: `Attempt ${attempt}/${options.maxRetriesPerWave + 1}; launching agents: ${runsToLaunch.map((run) => run.agent.agentId).join(", ") || "none"}`,
@@ -3703,7 +4100,7 @@ export async function runLauncherCli(argv) {
                   pendingAgentIds,
                   (event) => recordCombinedEvent(event),
                 );
-                monitorWaveHumanFeedback({
+                const feedbackChanged = monitorWaveHumanFeedback({
                   lanePaths,
                   waveNumber: wave.wave,
                   agentRuns: runsToLaunch,
@@ -3713,8 +4110,21 @@ export async function runLauncherCli(argv) {
                   recordCombinedEvent,
                   appendCoordination,
                 });
-                updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
-                flushDashboards();
+                const residentChanged = monitorResidentOrchestratorSession({
+                  lanePaths,
+                  run: residentOrchestratorRun,
+                  waveNumber: wave.wave,
+                  recordCombinedEvent,
+                  appendCoordination,
+                  sessionState: residentOrchestratorState,
+                });
+                const refreshed = refreshActiveCoordinationState(attempt, {
+                  force: feedbackChanged || residentChanged,
+                });
+                if (!refreshed) {
+                  updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
+                  flushDashboards();
+                }
               },
             );
             failures = waitResult.failures;
@@ -3723,6 +4133,8 @@ export async function runLauncherCli(argv) {
 
           materializeAgentExecutionSummaries(wave, agentRuns);
           refreshDerivedState(attempt);
+          lastLiveCoordinationRefreshAt = Date.now();
+          emitCoordinationAlertEvents(derivedState);
           failures = reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures);
           for (const failure of failures) {
             if (failure.statusCode === "shared-component-sibling-pending") {
@@ -4162,6 +4574,7 @@ export async function runLauncherCli(argv) {
             securitySummary: derivedState.securitySummary,
             integrationSummary: derivedState.integrationSummary,
             integrationMarkdownPath: derivedState.integrationMarkdownPath,
+            proofRegistryPath: waveProofRegistryPath(lanePaths, wave.wave),
             clarificationTriage: derivedState.clarificationTriage,
             agentRuns,
             structuredSignals,
@@ -4294,7 +4707,38 @@ export async function runLauncherCli(argv) {
             lanePaths,
             wave,
           );
-          if (relaunchResolution.barrier) {
+          retryOverride = readWaveRetryOverride(lanePaths, wave.wave);
+          const overrideResolution = resolveRetryOverrideRuns(
+            agentRuns,
+            retryOverride,
+            lanePaths,
+            wave,
+          );
+          if (overrideResolution.unknownAgentIds.length > 0) {
+            appendCoordination({
+              event: "retry_override_invalid",
+              waves: [wave.wave],
+              status: "warn",
+              details: `unknown_agents=${overrideResolution.unknownAgentIds.join(",")}`,
+              actionRequested:
+                "Retry override references agent ids that do not exist in the current wave definition.",
+            });
+            clearWaveRetryOverride(lanePaths, wave.wave);
+            retryOverride = null;
+          } else if (overrideResolution.runs.length > 0) {
+            runsToLaunch = overrideResolution.runs;
+            appendCoordination({
+              event: "retry_override_applied",
+              waves: [wave.wave],
+              status: "running",
+              details: `agents=${overrideResolution.selectedAgentIds.join(",")}; requested_by=${retryOverride?.requestedBy || "human-operator"}`,
+              actionRequested: "None",
+            });
+            if (retryOverride?.applyOnce !== false) {
+              clearWaveRetryOverride(lanePaths, wave.wave);
+              retryOverride = null;
+            }
+          } else if (relaunchResolution.barrier) {
             clearWaveRelaunchPlan(lanePaths, wave.wave);
             for (const failure of relaunchResolution.barrier.failures) {
               recordCombinedEvent({
@@ -4320,8 +4764,9 @@ export async function runLauncherCli(argv) {
             );
             error.exitCode = 43;
             throw error;
+          } else {
+            runsToLaunch = relaunchResolution.runs;
           }
-          runsToLaunch = relaunchResolution.runs;
           if (runsToLaunch.length === 0) {
             clearWaveRelaunchPlan(lanePaths, wave.wave);
             const error = new Error(
@@ -4383,6 +4828,9 @@ export async function runLauncherCli(argv) {
           details: `attempts_used=${dashboardState?.attempt ?? "n/a"}; completed_waves=${runState.completedWaves.join(", ") || "none"}`,
         });
       } finally {
+        if (residentOrchestratorRun) {
+          killTmuxSessionIfExists(lanePaths.tmuxSocketName, residentOrchestratorRun.sessionName);
+        }
         if (terminalsAppended && !options.keepTerminals) {
           removeTerminalEntries(lanePaths.terminalsPath, terminalEntries);
         }

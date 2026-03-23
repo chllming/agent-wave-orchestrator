@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
+  DEFAULT_COORDINATION_RESOLUTION_STALE_MS,
   REPO_ROOT,
   compactSingleLine,
   ensureDirectory,
@@ -311,11 +313,137 @@ export function serializeCoordinationState(state) {
   };
 }
 
-function renderOpenRecord(record) {
+function parseRecordStartMs(record) {
+  const createdAtMs = Date.parse(record?.createdAt || "");
+  if (Number.isFinite(createdAtMs)) {
+    return createdAtMs;
+  }
+  const updatedAtMs = Date.parse(record?.updatedAt || "");
+  return Number.isFinite(updatedAtMs) ? updatedAtMs : null;
+}
+
+function formatAgeMs(ageMs) {
+  if (!Number.isFinite(ageMs)) {
+    return "n/a";
+  }
+  const totalSeconds = Math.max(0, Math.floor(ageMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function isAckTrackedRecord(record) {
+  if (!record || typeof record !== "object") {
+    return false;
+  }
+  if (["clarification-request", "human-feedback", "human-escalation"].includes(record.kind)) {
+    return true;
+  }
+  if (record.kind !== "request") {
+    return false;
+  }
+  return record.source !== "launcher" || isClarificationLinkedRequest(record);
+}
+
+export function buildCoordinationResponseMetrics(state, options = {}) {
+  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+  const ackTimeoutMs = Number.isFinite(options.ackTimeoutMs)
+    ? options.ackTimeoutMs
+    : DEFAULT_COORDINATION_ACK_TIMEOUT_MS;
+  const resolutionStaleMs = Number.isFinite(options.resolutionStaleMs)
+    ? options.resolutionStaleMs
+    : DEFAULT_COORDINATION_RESOLUTION_STALE_MS;
+  const recordMetricsById = new Map();
+  const overdueAckRecordIds = [];
+  const overdueClarificationIds = new Set();
+  let oldestOpenCoordinationAgeMs = null;
+  let oldestUnackedRequestAgeMs = null;
+
+  for (const record of state?.openRecords || []) {
+    const startMs = parseRecordStartMs(record);
+    const ageMs = Number.isFinite(startMs) ? Math.max(0, nowMs - startMs) : null;
+    const ackTracked = isAckTrackedRecord(record);
+    const ackPending = ackTracked && record.status === "open";
+    const clarificationLinked =
+      record.kind === "clarification-request" || isClarificationLinkedRequest(record);
+    const overdueAck = ackPending && Number.isFinite(ageMs) && ageMs >= ackTimeoutMs;
+    const staleClarification =
+      clarificationLinked && Number.isFinite(ageMs) && ageMs >= resolutionStaleMs;
+
+    if (Number.isFinite(ageMs)) {
+      oldestOpenCoordinationAgeMs =
+        oldestOpenCoordinationAgeMs === null
+          ? ageMs
+          : Math.max(oldestOpenCoordinationAgeMs, ageMs);
+      if (ackPending) {
+        oldestUnackedRequestAgeMs =
+          oldestUnackedRequestAgeMs === null
+            ? ageMs
+            : Math.max(oldestUnackedRequestAgeMs, ageMs);
+      }
+    }
+    if (overdueAck) {
+      overdueAckRecordIds.push(record.id);
+    }
+    if (staleClarification) {
+      overdueClarificationIds.add(
+        record.kind === "clarification-request"
+          ? record.id
+          : clarificationIdFromClosureCondition(record.closureCondition) || record.id,
+      );
+    }
+    recordMetricsById.set(record.id, {
+      ageMs,
+      ageLabel: formatAgeMs(ageMs),
+      ackTracked,
+      ackPending,
+      overdueAck,
+      clarificationLinked,
+      staleClarification,
+    });
+  }
+
+  return {
+    ackTimeoutMs,
+    resolutionStaleMs,
+    oldestOpenCoordinationAgeMs,
+    oldestUnackedRequestAgeMs,
+    overdueAckCount: overdueAckRecordIds.length,
+    overdueClarificationCount: overdueClarificationIds.size,
+    overdueAckRecordIds: overdueAckRecordIds.toSorted((a, b) => a.localeCompare(b)),
+    overdueClarificationIds: Array.from(overdueClarificationIds).toSorted((a, b) =>
+      a.localeCompare(b),
+    ),
+    openHumanEscalationCount: (state?.humanEscalations || []).filter((record) =>
+      isOpenCoordinationStatus(record.status),
+    ).length,
+    recordMetricsById,
+  };
+}
+
+function renderOpenRecord(record, responseMetrics = null) {
   const targets = record.targets.length > 0 ? ` -> ${record.targets.join(", ")}` : "";
   const artifacts =
     record.artifactRefs.length > 0 ? ` [artifacts: ${record.artifactRefs.join(", ")}]` : "";
-  return `- [${record.priority}] ${record.kind}/${record.status} ${record.agentId}${targets}: ${compactSingleLine(record.summary || record.detail || "no summary", 160)}${artifacts}`;
+  const recordMetrics = responseMetrics?.recordMetricsById?.get?.(record.id) || null;
+  const tags = [];
+  if (recordMetrics?.ageLabel && recordMetrics.ageLabel !== "n/a") {
+    tags.push(`age=${recordMetrics.ageLabel}`);
+  }
+  if (recordMetrics?.overdueAck) {
+    tags.push("overdue-ack");
+  }
+  if (recordMetrics?.staleClarification) {
+    tags.push("stale-clarification");
+  }
+  const timing = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
+  return `- [${record.priority}] ${record.kind}/${record.status} ${record.agentId}${targets}${timing}: ${compactSingleLine(record.summary || record.detail || "no summary", 160)}${artifacts}`;
 }
 
 function renderActivityRecord(record) {
@@ -345,6 +473,7 @@ export function renderCoordinationBoardProjection({
   state,
   capabilityAssignments = [],
   dependencySnapshot = null,
+  timingOptions = null,
 }) {
   const latestRecords = Array.isArray(state?.latestRecords) ? state.latestRecords : [];
   const openRecords = latestRecords.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
@@ -352,16 +481,29 @@ export function renderCoordinationBoardProjection({
   const openAssignments = (capabilityAssignments || []).filter((assignment) => assignment.blocking);
   const openInboundDependencies = dependencySnapshot?.openInbound || [];
   const openOutboundDependencies = dependencySnapshot?.openOutbound || [];
+  const responseMetrics = buildCoordinationResponseMetrics(state, timingOptions || {});
+  const oldestOpenAge =
+    responseMetrics.oldestOpenCoordinationAgeMs === null
+      ? "none"
+      : formatAgeMs(responseMetrics.oldestOpenCoordinationAgeMs);
+  const oldestUnackedAge =
+    responseMetrics.oldestUnackedRequestAgeMs === null
+      ? "none"
+      : formatAgeMs(responseMetrics.oldestUnackedRequestAgeMs);
   return [
     `# Wave ${wave} Message Board`,
     "",
     `- Wave file: \`${waveFile}\``,
     `- Agents: ${(agents || []).map((agent) => agent.agentId).join(", ")}`,
     `- Generated: ${toIsoTimestamp()}`,
+    `- Oldest open coordination age: ${oldestOpenAge}`,
+    `- Oldest unacknowledged request age: ${oldestUnackedAge}`,
+    `- Overdue acknowledgements: ${responseMetrics.overdueAckCount}`,
+    `- Overdue clarification chains: ${responseMetrics.overdueClarificationCount}`,
     "",
     "## Open Coordination State",
     ...(openRecords.length > 0
-      ? openRecords.map((record) => renderOpenRecord(record))
+      ? openRecords.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Helper Assignments",
@@ -457,6 +599,7 @@ export function compileSharedSummary({
   capabilityAssignments = [],
   dependencySnapshot = null,
   maxChars = 4000,
+  timingOptions = null,
 }) {
   const openBlockers = state.blockers.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
   const openRequests = state.requests.filter((record) => OPEN_COORDINATION_STATUSES.has(record.status));
@@ -469,6 +612,7 @@ export function compileSharedSummary({
   const openHelperAssignments = (capabilityAssignments || []).filter((assignment) => assignment.blocking);
   const openInboundDependencies = dependencySnapshot?.openInbound || [];
   const openOutboundDependencies = dependencySnapshot?.openOutbound || [];
+  const responseMetrics = buildCoordinationResponseMetrics(state, timingOptions || {});
   const summary = [
     `# Wave ${wave.wave} Shared Summary`,
     "",
@@ -480,6 +624,10 @@ export function compileSharedSummary({
     `- Open helper assignments: ${openHelperAssignments.length}`,
     `- Open inbound dependencies: ${openInboundDependencies.length}`,
     `- Open outbound dependencies: ${openOutboundDependencies.length}`,
+    `- Oldest open coordination age: ${responseMetrics.oldestOpenCoordinationAgeMs === null ? "none" : formatAgeMs(responseMetrics.oldestOpenCoordinationAgeMs)}`,
+    `- Oldest unacknowledged request age: ${responseMetrics.oldestUnackedRequestAgeMs === null ? "none" : formatAgeMs(responseMetrics.oldestUnackedRequestAgeMs)}`,
+    `- Overdue acknowledgements: ${responseMetrics.overdueAckCount}`,
+    `- Overdue clarification chains: ${responseMetrics.overdueClarificationCount}`,
     ...(integrationSummary
       ? [`- Integration recommendation: ${integrationSummary.recommendation || "n/a"}`]
       : []),
@@ -498,12 +646,12 @@ export function compileSharedSummary({
     "",
     "## Current blockers",
     ...(openBlockers.length > 0
-      ? openBlockers.map((record) => renderOpenRecord(record))
+      ? openBlockers.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Current clarifications",
     ...(openClarifications.length > 0
-      ? openClarifications.map((record) => renderOpenRecord(record))
+      ? openClarifications.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Helper assignments",
@@ -588,6 +736,7 @@ export function compileAgentInbox({
   capabilityAssignments = [],
   dependencySnapshot = null,
   maxChars = 8000,
+  timingOptions = null,
 }) {
   const targetedRecords = state.openRecords.filter((record) => isTargetedToAgent(record, agent));
   const ownedRecords = (state.recordsByAgentId.get(agent.agentId) || []).filter((record) =>
@@ -624,6 +773,7 @@ export function compileAgentInbox({
   const helperAssignments = (capabilityAssignments || []).filter(
     (assignment) => assignment.blocking && assignment.assignedAgentId === agent.agentId,
   );
+  const responseMetrics = buildCoordinationResponseMetrics(state, timingOptions || {});
   const dependencyItems = [
     ...((dependencySnapshot?.inbound || []).filter(
       (record) =>
@@ -641,24 +791,30 @@ export function compileAgentInbox({
   const text = [
     `# Wave ${wave.wave} Inbox for ${agent.agentId}`,
     "",
+    "## Response timing",
+    `- Oldest open coordination age: ${responseMetrics.oldestOpenCoordinationAgeMs === null ? "none" : formatAgeMs(responseMetrics.oldestOpenCoordinationAgeMs)}`,
+    `- Oldest unacknowledged request age: ${responseMetrics.oldestUnackedRequestAgeMs === null ? "none" : formatAgeMs(responseMetrics.oldestUnackedRequestAgeMs)}`,
+    `- Overdue acknowledgements: ${responseMetrics.overdueAckCount}`,
+    `- Overdue clarification chains: ${responseMetrics.overdueClarificationCount}`,
+    "",
     "## Targeted open coordination",
     ...(targetedRecords.length > 0
-      ? targetedRecords.map((record) => renderOpenRecord(record))
+      ? targetedRecords.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Your open coordination items",
     ...(ownedRecords.length > 0
-      ? ownedRecords.map((record) => renderOpenRecord(record))
+      ? ownedRecords.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Clarifications",
     ...(clarificationRecords.length > 0
-      ? clarificationRecords.map((record) => renderOpenRecord(record))
+      ? clarificationRecords.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Relevant open coordination",
     ...(relevantRecords.length > 0
-      ? relevantRecords.map((record) => renderOpenRecord(record))
+      ? relevantRecords.map((record) => renderOpenRecord(record, responseMetrics))
       : ["- None."]),
     "",
     "## Helper assignments",

@@ -44,13 +44,20 @@ This runbook is the operational view of the architecture:
 - `pnpm exec wave doctor`
 - `pnpm exec wave launch --lane main --dry-run --no-dashboard`
 - `pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access`
+- `pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex --codex-sandbox danger-full-access --resident-orchestrator`
 - `pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor claude`
 - `pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor opencode`
 - `pnpm exec wave autonomous --lane main --executor codex --codex-sandbox danger-full-access`
 - `pnpm exec wave feedback list --lane main --pending`
 - `pnpm exec wave coord show --lane main --wave 0 --dry-run`
+- `pnpm exec wave coord explain --lane main --wave 0 --agent A1 --json`
 - `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`
 - `pnpm exec wave coord post --lane main --wave 0 --agent A1 --kind blocker --summary "Need repository decision"`
+- `pnpm exec wave coord act reroute --lane main --wave 0 --id <coordination-id> --to A2`
+- `pnpm exec wave retry show --lane main --wave 0 --json`
+- `pnpm exec wave retry apply --lane main --wave 0 --agent A2 --agent A7 --clear-reuse A2 --reason "resume sibling-owned shared component closure"`
+- `pnpm exec wave proof register --lane main --wave 9 --agent A7 --artifact .tmp/wave-9-proof/live-status.json --authoritative --completion live --durability durable --proof-level live`
+- `pnpm exec wave local --prompt .tmp/main-wave-launcher/prompts/wave-0-A1.md --log .tmp/main-wave-launcher/logs/wave-0-A1.log --status .tmp/main-wave-launcher/status/wave-0-A1.json`
 - `pnpm exec wave dep show --lane main --wave 0 --json`
 - `pnpm exec wave dep post --owner-lane main --requester-lane release --owner-wave 0 --requester-wave 2 --agent launcher --summary "Need shared-plan reconciliation" --target capability:docs-shared-plan --required`
 - `pnpm exec wave upgrade`
@@ -65,7 +72,7 @@ This runbook is the operational view of the architecture:
 - `docs/reference/sample-waves.md` points to showcase-first sample waves that combine the modern authored wave surface in concrete examples.
 - `docs/plans/component-cutover-matrix.json` is the canonical machine-readable source for component maturity and per-wave promotion targets.
 - `.wave/install-state.json` records how the workspace was initialized and which package version is installed.
-- `.wave/project-profile.json` records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
+- `.wave/project-profile.json` (created by `wave project setup`) records planner defaults such as oversight mode, terminal surface, and deploy-environment memory.
 - `.wave/adhoc/runs/<run-id>/` stores transient ad-hoc request, spec, rendered markdown, and result artifacts.
 - ad-hoc documentation closure always writes `.wave/adhoc/runs/<run-id>/reports/`, but shared-plan deltas still queue the canonical lane shared-plan docs.
 - ad-hoc task ownership inference only accepts repo-local paths; URLs and other external references are ignored.
@@ -76,12 +83,12 @@ This runbook is the operational view of the architecture:
 - Wave skill bundles live under `skills/<skill-id>/`.
 - Each bundle requires `skill.json` and `SKILL.md`.
 - Bundles can also include runtime adapters at `adapters/<runtime>.md` for `codex`, `claude`, `opencode`, or `local`.
-- The starter config resolves skills in this order: global base, lane base, global role map, lane role map, global runtime map, lane runtime map, global deploy-kind map, lane deploy-kind map, then explicit per-agent `### Skills`.
+- The starter config merges global and lane skill configs, then resolves in order: base, role, runtime, deploy-kind, and finally explicit per-agent `### Skills`.
 - The effective skill set is recomputed after final executor resolution, including retry-time runtime fallback, so a fallback from one runtime to another also swaps runtime-specific skill overlays.
 - Starter bundles in this repo cover:
   - core Wave coordination and repo coding rules
   - runtime packs for Codex, Claude, OpenCode, and local execution
-  - role packs for implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, deploy, and research work
+  - role packs for implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, deploy, research, and planner work
   - deploy and environment packs for Railway, Docker Compose, Kubernetes, SSH/manual rollout, and generic custom deploys
   - explicit provider packs for GitHub release flow and AWS norms when a wave or lane wants to attach them
 
@@ -125,9 +132,13 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 ## Coordination Surfaces
 
 - `wave coord show` is a read-only view of the materialized coordination state for a wave.
+- `wave coord explain` renders a machine-readable "why blocked / why retrying" view for the wave or a single agent, including open coordination, helper assignments, dependencies, retry overrides, relaunch plans, and registered proof bundles.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
 - `wave coord post` appends a structured record to the coordination log. This is the machine-readable path for blockers, handoffs, evidence, targeted requests, and clarification requests.
+- `wave coord act` is the operator intervention surface for clarifications and escalations. It can resolve, dismiss, reroute, reassign, escalate, and answer human-feedback requests without editing launcher state by hand.
+- `wave retry show|apply|clear` manages targeted retry overrides under `.tmp/<lane>-wave-launcher/control/`. Use it when you need to resume with specific agents, clear reuse for selected owners only, or keep a live wave moving without archiving runtime state by hand.
+- `wave proof show|register` manages authoritative proof bundles under `.tmp/<lane>-wave-launcher/proof/`. Use it to register operator-captured live evidence and make that evidence visible to integration, cont-QA, and retry decisions.
 
 The canonical state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not the scheduler's source of truth.
 
@@ -140,6 +151,16 @@ Clarification flow is orchestrator-first:
 3. Only unresolved items become human feedback tickets.
 4. Routed clarification follow-up requests remain blocking until they resolve.
 5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
+
+During live runs, the launcher now keeps an active orchestration loop while agents are still running. It refreshes the derived coordination surfaces on cadence, surfaces overdue acknowledgements and stale clarification chains in dashboards and traces, and can reroute clarification follow-up requests inside the same attempt when the routed owner never acknowledges them.
+
+If you opt into `--resident-orchestrator`, the launcher also starts a long-running non-owning orchestrator session for the wave. That session can inspect the same coordination artifacts and intervene through coordination records, but the launcher remains the scheduler truth and closure authority.
+
+Retry intent and proof injection are now first-class control-plane artifacts rather than manual file surgery:
+
+- targeted retry overrides live under `.tmp/<lane>-wave-launcher/control/`
+- authoritative proof bundles live under `.tmp/<lane>-wave-launcher/proof/`
+- live traces copy the proof registry so replay stays hermetic when external proof satisfied a wave
 
 For a full end-to-end explainer of helper assignments, deliverables, integration, and why an agent can be locally done while the wave stays blocked, see [docs/reference/coordination-and-closure.md](../reference/coordination-and-closure.md).
 
@@ -183,8 +204,10 @@ pnpm exec wave changelog --since-installed
 
 - prompts: `.tmp/<lane>-wave-launcher/prompts/`
 - logs: `.tmp/<lane>-wave-launcher/logs/`
+- run-state: `.tmp/<lane>-wave-launcher/run-state.json`
+  Keeps compatibility `completedWaves`, but now also stores per-wave current state plus append-only transition history and completion or blocker evidence.
 - status summaries: `.tmp/<lane>-wave-launcher/status/`
-  `run-state.json` keeps compatibility `completedWaves`, but now also stores per-wave current state plus append-only transition history and completion or blocker evidence. Relaunch plans in this directory are schema-versioned.
+  Relaunch plans in this directory are schema-versioned.
 - coordination logs: `.tmp/<lane>-wave-launcher/coordination/`
 - helper-assignment snapshots: `.tmp/<lane>-wave-launcher/assignments/`
 - message boards: `.tmp/<lane>-wave-launcher/messageboards/`
@@ -197,6 +220,10 @@ pnpm exec wave changelog --since-installed
 - dependency snapshots: `.tmp/<lane>-wave-launcher/dependencies/`
 - docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
+- proof registries: `.tmp/<lane>-wave-launcher/proof/`
+  Operator-registered authoritative proof bundles. Entries feed integration, cont-QA, and replay.
+- retry overrides: `.tmp/<lane>-wave-launcher/control/`
+  Operator-applied targeted retry overrides. Applied once per attempt, then cleared by the launcher.
 - clarification triage: `.tmp/<lane>-wave-launcher/feedback/triage/`
 - dashboards: `.tmp/<lane>-wave-launcher/dashboards/`
   Dashboard JSON is a versioned contract. `global.json` and `wave-<n>.json` now carry explicit `schemaVersion` and `kind` fields.
@@ -222,6 +249,8 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
   - `ledger.json`
   - `docs-queue.json`
   - `security.json`
+  - `capability-assignments.json`
+  - `dependency-snapshot.json`
   - `integration.json`
   - `outcome.json`
   - `shared-summary.md`
@@ -234,7 +263,7 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
 - For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
 - `security.json` stores the derived per-wave security state that feeds integration summaries, gate snapshots, and replay.
 - `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
-- `quality.json` also reports capability-assignment and dependency-resolution metrics in addition to the Phase 2/3 communication, fallback, and closure metrics.
+- `quality.json` also reports capability-assignment and dependency-resolution metrics, plus coordination response metrics (overdue acknowledgements, clarification timing, human escalation counts), in addition to the Phase 2/3 communication, fallback, and closure metrics.
 - Replay support is internal. The source tree contains helpers to load, validate, and replay trace bundles against the same gate logic the launcher uses, but there is no public replay CLI yet.
 - Replay is read-only and hash-validating for `traceVersion: 2` bundles. It ignores inline summary duplicates in `run-metadata.json` and returns a stored-vs-recomputed comparison report for gate and quality state. Legacy `traceVersion: 1` bundles remain best-effort and emit warnings instead of claiming full hermetic replay.
 
@@ -259,7 +288,7 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
 - Optional standing roles available in this repo include `docs/agents/wave-infra-role.md` for infra proof and `docs/agents/wave-deploy-verifier-role.md` for rollout verification.
 - Keep file ownership explicit inside each `### Prompt`.
 - From the configured thresholds onward, declare `## Context7 defaults`, per-agent `### Context7`, and per-agent `### Exit contract`.
-- For benchmark-family guidance and delegated-versus-pinned eval examples, see [docs/evals/README.md](../evals/README.md).
+- For benchmark-family guidance and delegated-versus-pinned eval examples, see [docs/evals/README.md](../evals/README.md). External benchmark failure reviews classify outcomes into categories (`verifier-image`, `setup-harness`, `timeout`, `blocked-proof`, `missing-context`, `partial-fix`, `wrong-fix`, `unknown`) which feed the failure-review tooling available through `wave benchmark external-show`.
 - For proof-first live-wave patterns, sticky retry guidance, and `### Proof artifacts` examples, see [docs/reference/live-proof-waves.md](../reference/live-proof-waves.md).
 - Agents should use `wave coord post` for durable blockers, handoffs, evidence, and requests instead of relying on ad hoc board edits.
 - Keep shared plan docs and the component cutover matrix owned by the configured documentation steward once that rule becomes active.
@@ -268,6 +297,14 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegate
   [codex.md](../reference/runtime-config/codex.md),
   [claude.md](../reference/runtime-config/claude.md),
   [opencode.md](../reference/runtime-config/opencode.md).
+
+## Benchmark CLI
+
+- `wave benchmark list` lists local benchmark cases from the catalog.
+- `wave benchmark show --case <id>` shows a single case definition.
+- `wave benchmark run --case <id>` executes a local deterministic case.
+- `wave benchmark adapters` lists available external benchmark adapters.
+- `wave benchmark external-list|external-show|external-run|external-pilots` manage external benchmark targets (e.g., SWE-bench Pro).
 
 ## Executor Modes
 

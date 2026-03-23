@@ -19,6 +19,9 @@ export const DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS = 20;
 export const DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS = 180;
 export const DEFAULT_AGENT_LAUNCH_STAGGER_MS = 1200;
 export const DEFAULT_WAIT_PROGRESS_INTERVAL_MS = 3000;
+export const DEFAULT_LIVE_COORDINATION_REFRESH_MS = 15000;
+export const DEFAULT_COORDINATION_ACK_TIMEOUT_MS = 5 * 60 * 1000;
+export const DEFAULT_COORDINATION_RESOLUTION_STALE_MS = 30 * 60 * 1000;
 export const DEFAULT_REFRESH_MS = 2000;
 export const DEFAULT_WATCH_REFRESH_MS = 2000;
 export const DEFAULT_WAIT_TIMEOUT_SECONDS = 1800;
@@ -176,10 +179,12 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     messageboardsDir: path.join(stateDir, "messageboards"),
     dashboardsDir: path.join(stateDir, "dashboards"),
     coordinationDir: path.join(stateDir, "coordination"),
+    controlDir: path.join(stateDir, "control"),
     assignmentsDir: path.join(stateDir, "assignments"),
     inboxesDir: path.join(stateDir, "inboxes"),
     ledgerDir: path.join(stateDir, "ledger"),
     integrationDir: path.join(stateDir, "integration"),
+    proofDir: path.join(stateDir, "proof"),
     securityDir: path.join(stateDir, "security"),
     dependencySnapshotsDir: path.join(stateDir, "dependencies"),
     docsQueueDir: path.join(stateDir, "docs-queue"),

@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
-import { openClarificationLinkedRequests, readCoordinationLog, serializeCoordinationState } from "./coordination-store.mjs";
+import {
+  buildCoordinationResponseMetrics,
+  openClarificationLinkedRequests,
+  readCoordinationLog,
+  serializeCoordinationState,
+} from "./coordination-store.mjs";
 import {
   isContEvalReportOnlyAgent,
   isSecurityReviewAgent,
@@ -287,6 +292,7 @@ function computeAckAndBlockerTimings(coordinationRecords) {
   const resolvedStatuses = new Set(["resolved", "closed", "superseded", "cancelled"]);
   const ackDurations = [];
   const blockerDurations = [];
+  const resolutionDurations = [];
   for (const history of grouped.values()) {
     const first = history[0];
     const startMs = Date.parse(first.createdAt || first.updatedAt || "");
@@ -300,6 +306,13 @@ function computeAckAndBlockerTimings(coordinationRecords) {
         ackDurations.push(ackMs - startMs);
       }
     }
+    if (["request", "clarification-request", "human-feedback", "human-escalation"].includes(first.kind)) {
+      const resolved = history.find((record) => resolvedStatuses.has(record.status));
+      const resolvedMs = Date.parse(resolved?.updatedAt || "");
+      if (Number.isFinite(resolvedMs) && resolvedMs >= startMs) {
+        resolutionDurations.push(resolvedMs - startMs);
+      }
+    }
     if (first.kind === "blocker") {
       const resolved = history.find((record) => resolvedStatuses.has(record.status));
       const resolvedMs = Date.parse(resolved?.updatedAt || "");
@@ -310,8 +323,37 @@ function computeAckAndBlockerTimings(coordinationRecords) {
   }
   return {
     meanTimeToFirstAckMs: averageOrNull(ackDurations),
+    meanTimeToResolutionMs: averageOrNull(resolutionDurations),
     meanTimeToBlockerResolutionMs: averageOrNull(blockerDurations),
   };
+}
+
+function latestRecordTimestampMs(record) {
+  const updatedAtMs = Date.parse(record?.updatedAt || "");
+  if (Number.isFinite(updatedAtMs)) {
+    return updatedAtMs;
+  }
+  const createdAtMs = Date.parse(record?.createdAt || "");
+  return Number.isFinite(createdAtMs) ? createdAtMs : null;
+}
+
+function resolveCoordinationSnapshotNowMs(coordinationRecords, coordinationState) {
+  const records = Array.isArray(coordinationRecords) && coordinationRecords.length > 0
+    ? coordinationRecords
+    : Array.isArray(coordinationState?.records) && coordinationState.records.length > 0
+      ? coordinationState.records
+      : Array.isArray(coordinationState?.latestRecords)
+        ? coordinationState.latestRecords
+        : [];
+  let latestMs = null;
+  for (const record of records) {
+    const recordMs = latestRecordTimestampMs(record);
+    if (!Number.isFinite(recordMs)) {
+      continue;
+    }
+    latestMs = latestMs === null ? recordMs : Math.max(latestMs, recordMs);
+  }
+  return latestMs;
 }
 
 function computeAssignmentAndDependencyTimings(coordinationRecords, dependencySnapshot = null) {
@@ -455,6 +497,15 @@ export function buildQualityMetrics({
     coordinationRecords,
     dependencySnapshot,
   );
+  const coordinationSnapshotNowMs = resolveCoordinationSnapshotNowMs(
+    coordinationRecords,
+    coordinationState,
+  );
+  const responseMetrics = buildCoordinationResponseMetrics(coordinationState, {
+    ...(Number.isFinite(coordinationSnapshotNowMs)
+      ? { nowMs: coordinationSnapshotNowMs }
+      : {}),
+  });
   const documentationItems = Array.isArray(docsQueue?.items) ? docsQueue.items : [];
   const unresolvedClarificationCount = (coordinationState?.clarifications || []).filter((record) =>
     ["open", "acknowledged", "in_progress"].includes(record.status),
@@ -494,7 +545,13 @@ export function buildQualityMetrics({
     meanTimeToCapabilityAssignmentMs: assignmentTimings.meanTimeToCapabilityAssignmentMs,
     meanTimeToDependencyResolutionMs: assignmentTimings.meanTimeToDependencyResolutionMs,
     helperTaskAssignmentCount: (capabilityAssignments || []).filter((assignment) => assignment.assignedAgentId).length,
+    oldestOpenCoordinationAgeMs: responseMetrics.oldestOpenCoordinationAgeMs,
+    oldestUnackedRequestAgeMs: responseMetrics.oldestUnackedRequestAgeMs,
+    overdueAckCount: responseMetrics.overdueAckCount,
+    overdueClarificationCount: responseMetrics.overdueClarificationCount,
+    openHumanEscalationCount: responseMetrics.openHumanEscalationCount,
     meanTimeToFirstAckMs: timings.meanTimeToFirstAckMs,
+    meanTimeToResolutionMs: timings.meanTimeToResolutionMs,
     meanTimeToBlockerResolutionMs: timings.meanTimeToBlockerResolutionMs,
     contQaReversal: contQaReversalFromHistory(effectiveHistory, gateSnapshot),
     finalRecommendation: integrationSummary?.recommendation || "unknown",
@@ -722,6 +779,7 @@ export function writeTraceBundle({
   securitySummary = null,
   integrationSummary,
   integrationMarkdownPath,
+  proofRegistryPath = null,
   clarificationTriage,
   agentRuns,
   quality,
@@ -791,6 +849,12 @@ export function writeTraceBundle({
     dir,
     integrationMarkdownPath,
     path.join(dir, "integration.md"),
+    false,
+  );
+  const proofRegistryArtifact = copyArtifactDescriptor(
+    dir,
+    proofRegistryPath,
+    path.join(dir, "proof-registry.json"),
     false,
   );
   const qualityArtifact = writeArtifactDescriptor(
@@ -933,6 +997,7 @@ export function writeTraceBundle({
       security: securityArtifact,
       integration: integrationArtifact,
       integrationMarkdown: integrationMarkdownArtifact,
+      proofRegistry: proofRegistryArtifact,
       componentMatrix: componentMatrixArtifact,
       componentMatrixMarkdown: componentMatrixMarkdownArtifact,
       outcome: outcomeArtifact,
@@ -973,6 +1038,7 @@ export function loadTraceBundle(dir) {
     dependencySnapshot: readJsonOrNull(path.join(dir, "dependency-snapshot.json")),
     securitySummary: readJsonOrNull(path.join(dir, "security.json")),
     integrationSummary: readJsonOrNull(path.join(dir, "integration.json")),
+    proofRegistry: readJsonOrNull(path.join(dir, "proof-registry.json")),
     quality: readJsonOrNull(path.join(dir, "quality.json")),
     storedOutcome: readJsonOrNull(path.join(dir, "outcome.json")),
     structuredSignals: readJsonOrNull(path.join(dir, "structured-signals.json")),

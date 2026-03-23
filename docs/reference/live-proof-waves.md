@@ -150,9 +150,29 @@ When new proof artifacts arrive after an earlier failed attempt, the right respo
 Typical pattern:
 
 1. operator captures the missing proof bundle locally
-2. the proof owner reruns on the same executor
-3. any stale synthesis or integration owner reruns if needed
-4. already-valid implementation slices stay reused
+2. operator can register that bundle directly:
+
+```bash
+pnpm exec wave proof register \
+  --lane main \
+  --wave 8 \
+  --agent A6 \
+  --artifact .tmp/wave-8-learning-proof/learning-plane-before-restart.json \
+  --artifact .tmp/wave-8-learning-proof/learning-plane-after-restart.json \
+  --authoritative \
+  --satisfy-owned-components \
+  --completion live \
+  --durability durable \
+  --proof-level live \
+  --doc-delta owned \
+  --detail "Operator captured and verified restart evidence."
+```
+
+3. the proof owner reruns on the same executor only if additional synthesis is still needed
+4. any stale integration or closure owner reruns if needed
+5. already-valid implementation slices stay reused
+
+Authoritative proof registration is the supported way to make operator-produced evidence visible to A8, A0, retry control, and hermetic traces without forcing an implementation agent to rediscover the same local artifacts in a fresh session.
 
 ## Suggested Eval Targets For Live-Proof Waves
 

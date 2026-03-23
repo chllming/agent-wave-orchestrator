@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
 import { readWaveLedger, writeWaveLedger } from "./ledger.mjs";
@@ -8,8 +9,11 @@ import {
 } from "./routing-state.mjs";
 import {
   appendCoordinationRecord,
+  clarificationClosureCondition,
+  clarificationLinkedRequests,
   compileAgentInbox,
   compileSharedSummary,
+  isOpenCoordinationStatus,
   readJsonArtifact,
   readMaterializedCoordinationState,
   serializeCoordinationState,
@@ -18,6 +22,14 @@ import {
   writeCoordinationBoardProjection,
   writeJsonArtifact,
 } from "./coordination-store.mjs";
+import { answerFeedbackRequest } from "./feedback.mjs";
+import { readWaveHumanFeedbackRequests } from "./coordination.mjs";
+import { readWaveProofRegistry } from "./proof-registry.mjs";
+import {
+  readWaveRelaunchPlanSnapshot,
+  readWaveRetryOverride,
+  resolveRetryOverrideAgentIds,
+} from "./retry-control.mjs";
 import { writeAssignmentSnapshot, writeDependencySnapshot } from "./artifact-schemas.mjs";
 import {
   buildLanePaths,
@@ -35,6 +47,8 @@ function printUsage() {
   wave coord show --lane <lane> --wave <n> [--dry-run] [--json]
   wave coord render --lane <lane> --wave <n> [--dry-run]
   wave coord inbox --lane <lane> --wave <n> --agent <id> [--dry-run]
+  wave coord explain --lane <lane> --wave <n> [--agent <id>] [--json]
+  wave coord act <resolve|dismiss|reroute|reassign|escalate|answer-human> --lane <lane> --wave <n> [options]
   wave coord <subcommand> --run <id> [--wave 0] ...
 `);
 }
@@ -56,9 +70,19 @@ function parseArgs(argv) {
     dependsOn: [],
     artifactRefs: [],
     status: "open",
+    id: "",
+    to: "",
+    response: "",
+    operator: "human-operator",
+    operation: "",
     json: false,
   };
-  for (let i = 1; i < args.length; i += 1) {
+  let startIndex = 1;
+  if (subcommand === "act") {
+    options.operation = String(args[1] || "").trim().toLowerCase();
+    startIndex = 2;
+  }
+  for (let i = startIndex; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--lane") {
       options.lane = String(args[++i] || "").trim();
@@ -84,6 +108,14 @@ function parseArgs(argv) {
       options.artifactRefs.push(String(args[++i] || "").trim());
     } else if (arg === "--status") {
       options.status = String(args[++i] || "").trim();
+    } else if (arg === "--id") {
+      options.id = String(args[++i] || "").trim();
+    } else if (arg === "--to") {
+      options.to = String(args[++i] || "").trim();
+    } else if (arg === "--response") {
+      options.response = String(args[++i] || "").trim();
+    } else if (arg === "--operator") {
+      options.operator = String(args[++i] || "").trim() || "human-operator";
     } else if (arg === "--json") {
       options.json = true;
     } else if (arg === "--dry-run") {
@@ -144,6 +176,130 @@ function integrationPath(lanePaths, waveNumber) {
   return path.join(lanePaths.integrationDir, `wave-${waveNumber}.json`);
 }
 
+function coordinationTriagePath(lanePaths, waveNumber) {
+  return path.join(lanePaths.feedbackTriageDir, `wave-${waveNumber}.jsonl`);
+}
+
+function targetAgentId(target) {
+  const value = String(target || "").trim();
+  if (!value) {
+    return "";
+  }
+  return value.startsWith("agent:") ? value.slice("agent:".length) : value;
+}
+
+function recordTargetsAgent(record, agentId) {
+  return (
+    String(record?.agentId || "").trim() === agentId ||
+    (Array.isArray(record?.targets) &&
+      record.targets.some((target) => targetAgentId(target) === agentId))
+  );
+}
+
+function summarizeExplainPayload({
+  lanePaths,
+  wave,
+  agentId = "",
+  state,
+  ledger,
+  capabilityAssignments,
+  dependencySnapshot,
+  feedbackRequests,
+  relaunchPlan,
+  retryOverride,
+  proofRegistry,
+}) {
+  const scopedOpenRecords = (state?.openRecords || []).filter((record) =>
+    agentId ? recordTargetsAgent(record, agentId) : true,
+  );
+  const scopedAssignments = (capabilityAssignments || []).filter((assignment) =>
+    agentId ? assignment.assignedAgentId === agentId : assignment.blocking,
+  );
+  const scopedDependencies = [
+    ...((dependencySnapshot?.openInbound || []).filter((record) =>
+      agentId ? record.assignedAgentId === agentId : true,
+    )),
+    ...((dependencySnapshot?.openOutbound || []).filter((record) =>
+      agentId ? record.agentId === agentId : true,
+    )),
+  ];
+  const scopedFeedback = (feedbackRequests || []).filter((request) =>
+    agentId ? request.agentId === agentId : true,
+  );
+  const scopedProofEntries = (proofRegistry?.entries || []).filter((entry) =>
+    agentId ? entry.agentId === agentId : true,
+  );
+  const blockedBy = [];
+  if ((state?.clarifications || []).some((record) => isOpenCoordinationStatus(record.status))) {
+    blockedBy.push("open clarification chain");
+  }
+  if (scopedAssignments.some((assignment) => assignment.blocking)) {
+    blockedBy.push("blocking helper assignment");
+  }
+  if (scopedDependencies.length > 0) {
+    blockedBy.push("open dependency");
+  }
+  if (scopedFeedback.some((request) => request.status === "pending")) {
+    blockedBy.push("pending human feedback");
+  }
+  if (
+    (state?.humanEscalations || []).some(
+      (record) => isOpenCoordinationStatus(record.status) && (!agentId || recordTargetsAgent(record, agentId)),
+    )
+  ) {
+    blockedBy.push("open human escalation");
+  }
+  if (
+    scopedOpenRecords.some(
+      (record) => record.kind === "request" && isOpenCoordinationStatus(record.status),
+    )
+  ) {
+    blockedBy.push("targeted open request");
+  }
+  return {
+    lane: lanePaths.lane,
+    wave: wave.wave,
+    phase: ledger?.phase || "unknown",
+    agentId: agentId || null,
+    blockedBy,
+    openCoordination: scopedOpenRecords.map((record) => ({
+      id: record.id,
+      kind: record.kind,
+      status: record.status,
+      agentId: record.agentId,
+      targets: record.targets || [],
+      summary: record.summary || record.detail || "",
+    })),
+    helperAssignments: scopedAssignments,
+    dependencies: scopedDependencies,
+    humanFeedback: scopedFeedback,
+    relaunchPlan,
+    retryOverride,
+    effectiveRetryTargets: resolveRetryOverrideAgentIds(wave, lanePaths, retryOverride).length > 0
+      ? resolveRetryOverrideAgentIds(wave, lanePaths, retryOverride)
+      : relaunchPlan?.selectedAgentIds || [],
+    proofEntries: scopedProofEntries,
+  };
+}
+
+function appendCoordinationStatusUpdate(logPath, record, status, options = {}) {
+  return appendCoordinationRecord(logPath, {
+    ...record,
+    status,
+    summary: options.summary || record.summary,
+    detail: options.detail || record.detail,
+    source: options.source || "operator",
+  });
+}
+
+function appendTriageEscalationUpdateIfPresent(lanePaths, waveNumber, record) {
+  const triagePath = coordinationTriagePath(lanePaths, waveNumber);
+  if (!fs.existsSync(triagePath) || record?.kind !== "human-escalation") {
+    return;
+  }
+  appendCoordinationRecord(triagePath, record);
+}
+
 export async function runCoordinationCli(argv) {
   if (argv.includes("--help") || argv.includes("-h")) {
     printUsage();
@@ -176,13 +332,59 @@ export async function runCoordinationCli(argv) {
     }
     return;
   }
+  if (subcommand === "explain") {
+    const state = readMaterializedCoordinationState(logPath);
+    const ledger = readWaveLedger(ledgerPath(lanePaths, wave.wave)) || { phase: "planned" };
+    const capabilityAssignments = buildRequestAssignments({
+      coordinationState: state,
+      agents: wave.agents,
+      ledger,
+      capabilityRouting: lanePaths.capabilityRouting,
+    });
+    const dependencySnapshot = buildDependencySnapshot({
+      dirPath: lanePaths.crossLaneDependenciesDir,
+      lane: lanePaths.lane,
+      waveNumber: wave.wave,
+      agents: wave.agents,
+      ledger,
+      capabilityRouting: lanePaths.capabilityRouting,
+    });
+    const feedbackRequests = readWaveHumanFeedbackRequests({
+      feedbackRequestsDir: lanePaths.feedbackRequestsDir,
+      lane: lanePaths.lane,
+      waveNumber: wave.wave,
+      agentIds: wave.agents.map((agent) => agent.agentId),
+      orchestratorId: "",
+    });
+    const payload = summarizeExplainPayload({
+      lanePaths,
+      wave,
+      agentId: options.agent || "",
+      state,
+      ledger,
+      capabilityAssignments,
+      dependencySnapshot,
+      feedbackRequests: [],
+      relaunchPlan: readWaveRelaunchPlanSnapshot(lanePaths, wave.wave),
+      retryOverride: readWaveRetryOverride(lanePaths, wave.wave),
+      proofRegistry: readWaveProofRegistry(lanePaths, wave.wave),
+    });
+    if (options.json) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      console.log(JSON.stringify(payload, null, 2));
+    }
+    return;
+  }
   ensureDirectory(lanePaths.coordinationDir);
+  ensureDirectory(lanePaths.controlDir);
   ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.docsQueueDir);
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
+  ensureDirectory(lanePaths.proofDir);
   ensureDirectory(lanePaths.dependencySnapshotsDir);
   updateSeedRecords(logPath, {
     lane: lanePaths.lane,
@@ -216,6 +418,138 @@ export async function runCoordinationCli(argv) {
     });
     console.log(JSON.stringify(record, null, 2));
     return;
+  }
+  if (subcommand === "act") {
+    if (!options.operation) {
+      throw new Error("act requires an operation");
+    }
+    if (options.operation === "answer-human") {
+      if (!options.id || !options.response) {
+        throw new Error("answer-human requires --id and --response");
+      }
+      const answered = answerFeedbackRequest({
+        feedbackStateDir: lanePaths.feedbackStateDir,
+        feedbackRequestsDir: lanePaths.feedbackRequestsDir,
+        requestId: options.id,
+        response: options.response,
+        operator: options.operator,
+        force: true,
+      });
+      console.log(JSON.stringify(answered, null, 2));
+      return;
+    }
+    if (!options.id) {
+      throw new Error("act requires --id");
+    }
+    const state = readMaterializedCoordinationState(logPath);
+    const record = state.byId.get(options.id);
+    if (!record) {
+      throw new Error(`Coordination record not found: ${options.id}`);
+    }
+    if (options.operation === "resolve" || options.operation === "dismiss") {
+      const nextStatus = options.operation === "resolve" ? "resolved" : "cancelled";
+      const updated = appendCoordinationStatusUpdate(logPath, record, nextStatus, {
+        detail: options.detail || record.detail,
+        summary: options.summary || record.summary,
+      });
+      if (record.kind === "clarification-request") {
+        const linkedRequests = clarificationLinkedRequests(state, record.id).filter((entry) =>
+          isOpenCoordinationStatus(entry.status),
+        );
+        for (const linked of linkedRequests) {
+          appendCoordinationStatusUpdate(logPath, linked, nextStatus, {
+            detail:
+              options.detail ||
+              `${options.operation === "resolve" ? "Resolved" : "Cancelled"} via clarification ${record.id}.`,
+            summary: linked.summary,
+          });
+        }
+        for (const escalation of (state.humanEscalations || []).filter(
+          (entry) =>
+            isOpenCoordinationStatus(entry.status) &&
+            entry.closureCondition === clarificationClosureCondition(record.id),
+        )) {
+          const updatedEscalation = appendCoordinationStatusUpdate(logPath, escalation, nextStatus, {
+            detail:
+              options.detail ||
+              `${options.operation === "resolve" ? "Resolved" : "Cancelled"} via clarification ${record.id}.`,
+            summary: escalation.summary,
+          });
+          appendTriageEscalationUpdateIfPresent(lanePaths, wave.wave, updatedEscalation);
+        }
+      }
+      appendTriageEscalationUpdateIfPresent(lanePaths, wave.wave, updated);
+      console.log(JSON.stringify(updated, null, 2));
+      return;
+    }
+    if (options.operation === "reroute" || options.operation === "reassign") {
+      if (!options.to) {
+        throw new Error(`${options.operation} requires --to`);
+      }
+      const closureCondition =
+        record.kind === "clarification-request"
+          ? clarificationClosureCondition(record.id)
+          : record.closureCondition || "";
+      appendCoordinationStatusUpdate(logPath, record, "superseded", {
+        detail:
+          options.detail ||
+          `${record.id} superseded by operator ${options.operation} to ${options.to}.`,
+        summary: record.summary,
+      });
+      const rerouted = appendCoordinationRecord(logPath, {
+        lane: lanePaths.lane,
+        wave: wave.wave,
+        agentId: options.agent || "operator",
+        kind: "request",
+        targets: [`agent:${options.to}`],
+        priority: record.priority,
+        artifactRefs: record.artifactRefs,
+        dependsOn:
+          record.kind === "clarification-request"
+            ? [record.id]
+            : Array.from(new Set([record.id, ...(record.dependsOn || [])])),
+        closureCondition,
+        summary: record.summary,
+        detail:
+          options.detail ||
+          `${record.kind === "clarification-request" ? "Clarification" : "Request"} rerouted to ${options.to}.`,
+        status: "open",
+        source: "operator",
+      });
+      if (record.kind === "clarification-request") {
+        appendCoordinationStatusUpdate(logPath, record, "in_progress", {
+          detail: `Awaiting routed follow-up from ${options.to}.`,
+          summary: record.summary,
+        });
+      }
+      console.log(JSON.stringify(rerouted, null, 2));
+      return;
+    }
+    if (options.operation === "escalate") {
+      const escalation = appendCoordinationRecord(logPath, {
+        id: `escalation-${record.id}`,
+        lane: lanePaths.lane,
+        wave: wave.wave,
+        agentId: options.agent || "operator",
+        kind: "human-escalation",
+        targets: record.targets,
+        priority: "high",
+        artifactRefs: record.artifactRefs,
+        dependsOn: [record.id],
+        closureCondition:
+          record.kind === "clarification-request"
+            ? clarificationClosureCondition(record.id)
+            : record.closureCondition || "",
+        summary: record.summary,
+        detail: options.detail || record.detail,
+        status: "open",
+        source: "operator",
+      });
+      appendTriageEscalationUpdateIfPresent(lanePaths, wave.wave, escalation);
+      console.log(JSON.stringify(escalation, null, 2));
+      return;
+    }
+    throw new Error(`Unknown coord action: ${options.operation}`);
   }
   const state = readMaterializedCoordinationState(logPath);
   const queue =

@@ -182,6 +182,22 @@ function paintWaveAgentSummary(summary, wave, colorize = false) {
   return paint(summary, color, colorize);
 }
 
+function formatDurationMs(value) {
+  if (!Number.isFinite(value)) {
+    return "n/a";
+  }
+  const totalSeconds = Math.max(0, Math.floor(value / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
 function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane, colorize = false }) {
   if (!state) {
     return `Dashboard file not found or invalid: ${dashboardPath}`;
@@ -200,15 +216,21 @@ function renderWaveDashboard({ state, dashboardPath, messageBoardPath, lane, col
   );
   lines.push(`Run tag: ${state.runTag || "n/a"} | Wave file: ${state.waveFile || "n/a"}`);
   lines.push(`Counts: ${renderColoredCountsByState(state.agents || [], colorize) || "none"}`);
+  lines.push(
+    `Coordination: open=${state.coordinationOpen ?? 0} clarifications=${state.openClarifications ?? 0} human=${state.openHumanEscalations ?? 0} overdue-ack=${state.overdueAckCount ?? 0} overdue-clarification=${state.overdueClarificationCount ?? 0}`,
+  );
+  lines.push(
+    `Coordination age: oldest-open=${formatDurationMs(state.oldestOpenCoordinationAgeMs)} oldest-unack=${formatDurationMs(state.oldestUnackedRequestAgeMs)}`,
+  );
   const comms = analyzeMessageBoardCommunication(messageBoardPath);
   if (!comms.available) {
-    lines.push(`Comms: unavailable ${comms.reason || ""}`.trim());
+    lines.push(`Board comms: unavailable ${comms.reason || ""}`.trim());
   } else {
     lines.push(
-      `Comms: requests=${comms.actionableRequests} unresolved=${comms.unresolvedRequests} unacknowledged=${comms.unacknowledgedRequests} malformed=${comms.malformedEntries} placeholder-ts=${comms.placeholderTimestampEntries}`,
+      `Board comms: requests=${comms.actionableRequests} unresolved=${comms.unresolvedRequests} unacknowledged=${comms.unacknowledgedRequests} malformed=${comms.malformedEntries} placeholder-ts=${comms.placeholderTimestampEntries}`,
     );
     lines.push(
-      `Comms age: last-ack=${commsAgeSummary(comms.lastAcknowledgementTimestamp)} oldest-unack=${commsAgeSummary(comms.oldestUnacknowledgedTimestamp)}`,
+      `Board comms age: last-ack=${commsAgeSummary(comms.lastAcknowledgementTimestamp)} oldest-unack=${commsAgeSummary(comms.oldestUnacknowledgedTimestamp)}`,
     );
   }
   lines.push("");
@@ -306,6 +328,19 @@ function renderGlobalDashboard({ state, dashboardPath, lane, colorize = false })
         12,
       )} ${truncate(wave.lastMessage || "", 70)}`,
     );
+    if (
+      Number(wave?.coordinationOpen ?? 0) > 0 ||
+      Number(wave?.overdueAckCount ?? 0) > 0 ||
+      Number(wave?.overdueClarificationCount ?? 0) > 0 ||
+      Number(wave?.openHumanEscalations ?? 0) > 0
+    ) {
+      lines.push(
+        `      Coord: open ${wave.coordinationOpen ?? 0} clarifications ${wave.openClarifications ?? 0} human ${wave.openHumanEscalations ?? 0} overdue-ack ${wave.overdueAckCount ?? 0} overdue-clarification ${wave.overdueClarificationCount ?? 0}`,
+      );
+      lines.push(
+        `      Ages: oldest-open ${formatDurationMs(wave.oldestOpenCoordinationAgeMs)} oldest-unack ${formatDurationMs(wave.oldestUnackedRequestAgeMs)}`,
+      );
+    }
     const deployments = Array.isArray(wave.deployments) ? wave.deployments : [];
     if (deployments.length > 0) {
       const deployLine = deployments

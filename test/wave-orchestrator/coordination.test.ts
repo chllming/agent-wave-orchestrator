@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   analyzeMessageBoardCommunication,
   buildExecutionPrompt,
+  buildResidentOrchestratorPrompt,
   parseMessageBoardEntries,
   withFileLock,
 } from "../../scripts/wave-orchestrator/coordination.mjs";
@@ -70,6 +71,7 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("docs/plans/current-state.md");
     expect(prompt).toContain("docs/plans/migration.md");
     expect(prompt).toContain("deliver the assigned outcome end-to-end");
+    expect(prompt).toContain("your first durable action is to acknowledge it");
     expect(prompt).toContain("post the exact doc paths and exact delta");
     expect(prompt).toContain("stay engaged until they confirm `closed` or `no-change`");
     expect(prompt).toContain("[wave-proof]");
@@ -216,6 +218,28 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("Allowed external libraries: temporal");
     expect(prompt).toContain("External reference only (Context7, non-canonical)");
     expect(prompt).toContain("Temporal docs snippet");
+  });
+
+  it("builds a long-running resident orchestrator prompt with explicit non-owning limits", () => {
+    const prompt = buildResidentOrchestratorPrompt({
+      lane: "main",
+      wave: 5,
+      waveFile: "docs/plans/waves/wave-5.md",
+      orchestratorId: "main-orch",
+      coordinationLogPath: "/repo/.tmp/main-wave-launcher/coordination/wave-5.jsonl",
+      messageBoardPath: "/repo/.tmp/main-wave-launcher/messageboards/wave-5.md",
+      sharedSummaryPath: "/repo/.tmp/main-wave-launcher/inboxes/wave-5/shared-summary.md",
+      dashboardPath: "/repo/.tmp/main-wave-launcher/dashboards/wave-5.json",
+      triagePath: "/repo/.tmp/main-wave-launcher/feedback/triage/wave-5.jsonl",
+      rolePrompt: "Watch coordination timing and reroute stale clarification chains.",
+    });
+
+    expect(prompt).toContain("stay alive for the duration of the wave");
+    expect(prompt).toContain("Do not edit product code");
+    expect(prompt).toContain("Coordination log:");
+    expect(prompt).toContain("Human feedback command:");
+    expect(prompt).toContain("keep monitoring instead of exiting early");
+    expect(prompt).toContain("Watch coordination timing and reroute stale clarification chains.");
   });
 });
 

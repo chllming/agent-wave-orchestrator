@@ -781,7 +781,13 @@ describe("trace bundles", () => {
     });
     expect(replay.quality.runtimeFallbackCount).toBe(1);
     expect(replay.quality.runtimeFallbackRate).toBeGreaterThan(0);
+    expect(replay.quality.oldestOpenCoordinationAgeMs).not.toBeNull();
+    expect(replay.quality.oldestUnackedRequestAgeMs).toBeNull();
+    expect(replay.quality.overdueAckCount).toBeGreaterThanOrEqual(0);
+    expect(replay.quality.overdueClarificationCount).toBeGreaterThanOrEqual(0);
+    expect(replay.quality.openHumanEscalationCount).toBeGreaterThanOrEqual(0);
     expect(replay.quality.meanTimeToFirstAckMs).not.toBeNull();
+    expect(replay.quality.meanTimeToResolutionMs).not.toBeNull();
     expect(replay.quality.meanTimeToBlockerResolutionMs).not.toBeNull();
     expect(replay.quality.contQaReversal).toBe(true);
 

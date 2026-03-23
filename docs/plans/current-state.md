@@ -28,6 +28,7 @@
   - a canonical coordination JSONL log
   - a generated markdown board projection
   - compiled shared summaries and per-agent inboxes
+  - active live-wave orchestration refresh that keeps summaries, inboxes, clarification triage, and dashboard coordination metrics current while agents are still running
   - a per-wave ledger
   - docs queues
   - explicit integration summaries with actionable claim, interface, proof, docs, and deploy-risk evidence
@@ -36,7 +37,10 @@
   - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
   - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
+  - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
+  - operator-applied retry overrides under `.tmp/<lane>-wave-launcher/control/` for selected reruns, reuse clearing, and explicit resume targets
+  - authoritative proof registries under `.tmp/<lane>-wave-launcher/proof/` so operator-captured live evidence can feed integration, cont-QA, and replay without manual state surgery
   - a thinner launcher entrypoint that now delegates session launch or wait and closure-sweep orchestration to dedicated modules while preserving the existing CLI surface
 - Runtime executor support now includes:
   - Codex `exec` profile, inline config, search, image, add-dir, JSON, and ephemeral flags
@@ -62,6 +66,7 @@
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.
 - Proof-centric waves can now declare `### Proof artifacts`, and implementation proof validation can require those machine-visible local artifacts in addition to deliverables and structured proof markers.
 - Routed clarifications remain blocking until the linked follow-up request or escalation is fully resolved.
+- Operators can now use `wave coord explain|act`, `wave retry show|apply|clear`, and `wave proof show|register` as supported control surfaces during a live wave instead of editing runtime files by hand.
 - Required inbound cross-lane dependency tickets under `.tmp/wave-orchestrator/dependencies/` block both autonomous wave launch and lane finalization while they remain unresolved.
 - Cross-lane dependency workflows now include:
   - `wave dep post|show|resolve|render`

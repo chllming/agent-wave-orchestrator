@@ -201,7 +201,7 @@ export async function runClosureSweepPhase({
           refreshWaveDashboardAgentStates(dashboardState, [runInfo], pendingAgentIds, (event) =>
             recordCombinedEvent(event),
           );
-          monitorWaveHumanFeedbackFn({
+          const feedbackChanged = monitorWaveHumanFeedbackFn({
             lanePaths,
             waveNumber: wave.wave,
             agentRuns: [runInfo],
@@ -211,6 +211,9 @@ export async function runClosureSweepPhase({
             recordCombinedEvent,
             appendCoordination,
           });
+          if (feedbackChanged) {
+            refreshDerivedState?.(dashboardState?.attempt || 0);
+          }
           updateWaveDashboardMessageBoard(dashboardState, runInfo.messageBoardPath);
           flushDashboards();
         },

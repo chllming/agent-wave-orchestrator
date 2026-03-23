@@ -375,4 +375,74 @@ describe("triageClarificationRequests", () => {
     });
     expect(fs.readFileSync(outcome.pendingHumanPath, "utf8")).toContain(requestPayload.id);
   });
+
+  it("reroutes a clarification follow-up inside the same attempt after the ack SLA expires", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = makeWave();
+    const coordinationLogPath = path.join(dir, "coordination", "wave-0.jsonl");
+
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "clarify-runtime-reroute",
+      lane: "main",
+      wave: 0,
+      agentId: "A9",
+      kind: "clarification-request",
+      targets: ["launcher"],
+      priority: "high",
+      summary: "Need runtime owner for src/runtime.ts rollback drill",
+      detail: "Waiting on the implementation owner to confirm rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      status: "in_progress",
+      source: "agent",
+      createdAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+    });
+    appendCoordinationRecord(coordinationLogPath, {
+      id: "route-clarify-runtime-reroute-1",
+      lane: "main",
+      wave: 0,
+      agentId: "launcher",
+      kind: "request",
+      targets: ["agent:A1"],
+      priority: "high",
+      summary: "Clarification follow-up for A9",
+      detail: "Please provide the approved rollback commands.",
+      artifactRefs: ["src/runtime.ts"],
+      dependsOn: ["clarify-runtime-reroute"],
+      closureCondition: "clarification:clarify-runtime-reroute",
+      status: "open",
+      source: "launcher",
+      attempt: 1,
+      createdAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+    });
+
+    const originalNow = Date.now;
+    Date.now = () => Date.parse("2026-03-22T00:10:00.000Z");
+    try {
+      const outcome = triageClarificationRequests({
+        lanePaths,
+        wave,
+        coordinationLogPath,
+        coordinationState: readMaterializedCoordinationState(coordinationLogPath),
+        orchestratorId: "orch-1",
+        attempt: 1,
+      });
+
+      expect(outcome.changed).toBe(true);
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const updatedState = readMaterializedCoordinationState(coordinationLogPath);
+    expect(updatedState.byId.get("route-clarify-runtime-reroute-1")).toMatchObject({
+      status: "superseded",
+    });
+    expect(updatedState.byId.get("route-clarify-runtime-reroute-2")).toMatchObject({
+      status: "open",
+      targets: ["agent:A1"],
+    });
+    expect(updatedState.humanEscalations).toHaveLength(0);
+  });
 });

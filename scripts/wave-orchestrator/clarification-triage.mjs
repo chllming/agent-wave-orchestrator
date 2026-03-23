@@ -8,7 +8,11 @@ import {
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
 import { createFeedbackRequest } from "./feedback.mjs";
-import { ensureDirectory, writeTextAtomic } from "./shared.mjs";
+import {
+  DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
+  ensureDirectory,
+  writeTextAtomic,
+} from "./shared.mjs";
 
 const MAX_ROUTED_CLARIFICATION_CYCLES = 2;
 
@@ -303,12 +307,12 @@ function openEscalationForClarification(coordinationState, clarificationId) {
   );
 }
 
-function latestRouteAttempt(requests) {
-  return requests.reduce(
-    (maxAttempt, record) =>
-      Math.max(maxAttempt, Number.parseInt(String(record.attempt || 0), 10) || 0),
-    0,
-  );
+function recordAgeMs(record, nowMs = Date.now()) {
+  const startedAtMs = Date.parse(record?.createdAt || record?.updatedAt || "");
+  if (!Number.isFinite(startedAtMs)) {
+    return null;
+  }
+  return Math.max(0, nowMs - startedAtMs);
 }
 
 function supersedeOpenRequests(coordinationLogPath, requests, attempt) {
@@ -457,6 +461,7 @@ export function triageClarificationRequests({
   orchestratorId,
   attempt = 0,
   resolutionContext = {},
+  ackTimeoutMs = DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
 }) {
   ensureDirectory(lanePaths.feedbackTriageDir);
   const triagePath = triageLogPath(lanePaths, wave.wave);
@@ -470,6 +475,10 @@ export function triageClarificationRequests({
     const openLinkedRequests = linkedRequests.filter((entry) =>
       isOpenCoordinationStatus(entry.status),
     );
+    const openAckPendingLinkedRequests = openLinkedRequests.filter(
+      (entry) => entry.status === "open",
+    );
+    const activeLinkedRequests = openLinkedRequests.filter((entry) => entry.status !== "open");
     const resolvedLinkedRequest = linkedRequests.find((entry) =>
       ["resolved", "closed"].includes(entry.status),
     );
@@ -563,7 +572,6 @@ export function triageClarificationRequests({
         changed = true;
       }
       const routeCycles = linkedRequests.length;
-      const lastRouteAttempt = latestRouteAttempt(linkedRequests);
       if (openLinkedRequests.length === 0) {
         createClarificationRoute({
           triagePath,
@@ -579,8 +587,15 @@ export function triageClarificationRequests({
         changed = true;
         continue;
       }
-      if (attempt > lastRouteAttempt && routeCycles < MAX_ROUTED_CLARIFICATION_CYCLES) {
-        supersedeOpenRequests(coordinationLogPath, openLinkedRequests, attempt);
+      if (activeLinkedRequests.length > 0) {
+        continue;
+      }
+      const timedOutLinkedRequests = openAckPendingLinkedRequests.filter((entry) => {
+        const ageMs = recordAgeMs(entry);
+        return Number.isFinite(ageMs) && ageMs >= ackTimeoutMs;
+      });
+      if (timedOutLinkedRequests.length > 0 && routeCycles < MAX_ROUTED_CLARIFICATION_CYCLES) {
+        supersedeOpenRequests(coordinationLogPath, timedOutLinkedRequests, attempt);
         createClarificationRoute({
           triagePath,
           coordinationLogPath,
@@ -595,7 +610,7 @@ export function triageClarificationRequests({
         changed = true;
         continue;
       }
-      if (attempt > lastRouteAttempt && routeCycles >= MAX_ROUTED_CLARIFICATION_CYCLES) {
+      if (timedOutLinkedRequests.length > 0 && routeCycles >= MAX_ROUTED_CLARIFICATION_CYCLES) {
         if (openEscalations.length > 0 || openEscalationForClarification(coordinationState, record.id)) {
           continue;
         }

@@ -48,6 +48,8 @@ The runtime writes several different artifacts, but they do different jobs:
 
 The important rule is that the JSONL coordination log is the scheduler truth. The markdown board is a projection for humans. See [wave-orchestrator.md](../plans/wave-orchestrator.md).
 
+Live waves now keep refreshing that derived state while agents are still running. Shared summaries, inboxes, dashboard coordination metrics, and clarification routing are not only recomputed at attempt boundaries; they are also refreshed during active wave execution so stale clarification and acknowledgement timing is machine-visible before the attempt ends.
+
 ## What Agents Should Use
 
 Use the coordination log for durable state:
@@ -64,6 +66,17 @@ Use the coordination log for durable state:
   Use this for assertions that integration should reconcile.
 - `clarification-request`
   Use this when an ambiguity must be triaged before work can safely continue.
+
+## What Stewards and Orchestrators May Also Use
+
+- `ack`
+  Acknowledge receipt of a request or clarification. Resets the acknowledgement timer.
+- `decision`
+  Record a binding decision that downstream agents should follow.
+- `orchestrator-guidance`
+  Non-binding guidance from the resident orchestrator.
+
+Implementation agents normally do not need these kinds.
 
 Practical rule:
 
@@ -220,6 +233,16 @@ What happens next:
 Important implication:
 
 - even if code is landed, an open clarification chain can still block the wave
+- a routed clarification that stays `open` past the acknowledgement policy can be rerouted during the same live attempt instead of waiting for a full retry cycle
+- operators can now inspect and intervene through one command surface:
+
+```bash
+pnpm exec wave coord explain --lane main --wave 10 --agent A7 --json
+pnpm exec wave coord act reroute --lane main --wave 10 --id clarify-a7-rollout --to A1
+pnpm exec wave coord act resolve --lane main --wave 10 --id escalation-clarify-a7-rollout --detail "Published command surface covers this question."
+```
+
+That keeps clarification routing, dismissal, escalation, and human-answer handling inside the canonical coordination state instead of forcing ad hoc file edits.
 
 ## End-To-End Example: Required Dependency
 
@@ -377,6 +400,19 @@ It tries to relaunch only the implicated owners:
 - the closure stewards needed after that state changes
 
 That is why the system can safely reuse already-valid implementation slices while still forcing the wave to stay blocked until the right follow-up work is done.
+
+Operators now have a first-class override path for that recovery flow:
+
+```bash
+pnpm exec wave retry show --lane main --wave 10 --json
+pnpm exec wave retry apply --lane main --wave 10 --agent A2 --agent A7 --clear-reuse A2 --reason "Resume sibling-owned component closure"
+```
+
+The override is written under `.tmp/<lane>-wave-launcher/control/`, consumed by the launcher on the next retry decision, and then cleared by default after one application. This is the supported path for:
+
+- rerunning only specific owners
+- clearing reuse for selected agents without wiping the whole wave state
+- resuming at the real remaining implementation owners instead of restarting or stopping at the wrong sibling
 
 ## Common Mistakes
 

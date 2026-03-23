@@ -30,6 +30,13 @@ describe("dashboard renderer", () => {
             agentsActive: 3,
             agentsPending: 4,
             agentsFailed: 0,
+            coordinationOpen: 2,
+            openClarifications: 1,
+            openHumanEscalations: 0,
+            oldestOpenCoordinationAgeMs: 600000,
+            oldestUnackedRequestAgeMs: 300000,
+            overdueAckCount: 1,
+            overdueClarificationCount: 0,
             lastMessage: "active",
             deployments: [],
           },
@@ -39,6 +46,7 @@ describe("dashboard renderer", () => {
     });
 
     expect(rendered).toContain("done 2/9 active 3 pending 4 fail 0");
+    expect(rendered).toContain("Coord: open 2 clarifications 1 human 0 overdue-ack 1 overdue-clarification 0");
     expect(rendered).not.toContain("2/9 ok, 0 fail");
   });
 

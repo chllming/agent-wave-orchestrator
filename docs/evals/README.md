@@ -116,9 +116,9 @@ These case runs are local benchmark artifacts, not committed run history.
 
 Native mode is deterministic on purpose. `wave benchmark run` is meant to prove the coordination substrate before we move to live external suites. Its logged outputs are:
 
-- per-case, per-arm `score`, `passed`, `direction`, `threshold`, `metrics`, `details`, and generated artifacts
-- family summaries with mean score and pass rate
-- arm comparisons with mean delta versus `single-agent` and bootstrap confidence intervals
+- per-case, per-arm `score`, `alignedScore`, `passed`, `direction`, `threshold`, `metrics`, `details`, and generated artifacts
+- family summaries with direction-aligned mean score and pass rate
+- arm comparisons with direction-aligned mean delta versus `single-agent` and bootstrap confidence intervals
 
 When `waveControl` reporting is enabled, native runs publish `benchmark_run` and `benchmark_item` events through the same telemetry spine as live waves. For the full native-mode contract and the rationale for each metric, see [wave-benchmark-program.md](./wave-benchmark-program.md) and [proof-metrics.md](../reference/proof-metrics.md).
 

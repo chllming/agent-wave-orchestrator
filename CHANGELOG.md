@@ -2,10 +2,59 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-03-23
+
+### Added
+
+- Added a unified `wave control` operator CLI that replaces `wave coord`, `wave retry`, and `wave proof` as the preferred command surface:
+  - `wave control status` materializes a single control-plane view with blocking edges, logical agent state, tasks, dependencies, rerun intent, active proof bundles, and next-timer projections.
+  - `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions.
+  - `wave control rerun request|get|clear` manages targeted rerun intent with selected agents, explicit reuse selectors, invalidated components, clear-or-preserve reuse lists, and resume cursors.
+  - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles with full lifecycle state (active, superseded, revoked).
+  - `wave control telemetry status|flush` inspects and delivers the local Wave Control event queue.
+- Added a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` as append-only JSONL with event-sourced materialization. Proof registries and retry overrides under `proof/` and `control/` are now projections from this log rather than independent state files.
+- Added Wave Control telemetry, a local-first event system that queues typed events under `control-plane/telemetry/` and delivers them in best-effort batches to a Railway-hosted analysis endpoint:
+  - Configurable report modes: `disabled`, `metadata-only`, `metadata-plus-selected`, `full-artifact-upload`.
+  - Selective artifact upload by kind via `uploadArtifactKinds`.
+  - New `waveControl` config section in `wave.config.json` with global and per-lane overrides for endpoint, workspace, auth, report mode, batch size, and per-category capture toggles.
+  - New `--no-telemetry` launcher flag to disable event publication for a single run.
+  - Telemetry capture across coordination records, control-plane events, trace bundles, feedback requests, and benchmark runs.
+- Added native benchmark telemetry publishing so `wave benchmark run` emits `benchmark_run`, `benchmark_item`, `verification`, and `review` events with deterministic run IDs and config attestation hashes.
+- Added external benchmark telemetry with failure-review validity classification (`comparison-valid`, `review-only`, `benchmark-invalid`, `harness-setup-failure`, `proof-blocked`, `trustworthy-model-failure`) and artifact descriptors for patches, summaries, and verification output.
+- Added `docs/reference/wave-control.md` documenting the Wave Control telemetry contract, entity types, artifact upload policies, and local-first delivery model.
+- Added `docs/reference/proof-metrics.md` mapping README failure cases to concrete telemetry signals and success criteria.
+- Added `docs/evals/wave-benchmark-program.md` enhancements for native benchmarking mode with deterministic coordination-substrate tests.
+- Added resident orchestrator support via `--resident-orchestrator`, with a standing role prompt at `docs/agents/wave-orchestrator-role.md` and explicit non-owning session boundaries.
+- Added live-wave orchestration refresh that keeps shared summaries, inboxes, clarification triage, and dashboard coordination metrics current while agents are still running, including overdue acknowledgement tracking and stale clarification rerouting.
+- Added `docs/reference/runtime-config/README.md` section for `waveControl` configuration with defaults and artifact-kind filtering.
+
+### Changed
+
+- `wave coord`, `wave retry`, and `wave proof` remain available as compatibility surfaces, but new operator docs and runbooks now prefer `wave control`.
+- Proof registries and retry overrides are now projections from the canonical control-plane event log rather than independently managed state files. Legacy file paths are maintained for compatibility.
+- Trace bundles now copy `control-plane.raw.jsonl`, `capability-assignments.json`, and `dependency-snapshot.json` alongside the existing coordination, ledger, and proof artifacts.
+- `wave control task` supports informational coordination kinds (handoff, evidence, claim, decision) without falsely treating them as blocking edges in status views.
+- Proof bundles now carry lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure gates.
+- Rerun requests now support explicit reuse selectors, component invalidation, resume cursors, and clear-or-preserve reuse lists alongside the existing agent selection.
+- Coordination store, feedback, clarification triage, traces, and benchmark modules now publish telemetry events when Wave Control capture is enabled.
+- Skill resolution description and documentation now accurately reflects the merge-then-resolve code path (base → role → runtime → deploy-kind → explicit).
+- Updated all documentation to reflect `0.7.0` release surface, including the operational runbook, coordination reference, sample waves, and live-proof examples.
+
+### Fixed And Hardened
+
 - Fixed executor-profile inheritance so a Claude profile that only overrides `claude.effort` or other scalar runtime fields now keeps the inherited global Claude command and runtime settings instead of nulling them out.
 - Fixed shared promoted-component retries so landed owners stay reusable, stale relaunch plans are invalidated against current sibling ownership, and continuation can advance to the remaining owners without burning another retry on the already-clean agent.
 - Fixed clarification triage so routed follow-up work supersedes stale human escalations, keeps the routed chain blocking through the linked request, and only opens human escalation after orchestrator-side routing is actually exhausted.
+- Hardened proof registry projections from the control-plane so revoked and superseded bundles are excluded from closure evaluation.
+- Hardened the "What The Launcher Writes" path reference to correctly place `run-state.json` at the state root (not under `status/`), and added `control-plane/`, `proof/`, and `control/` directories.
+- Closed 11 documentation-to-code gaps identified by end-to-end audit, including trace contract completeness, skill pack enumeration, benchmark CLI surface, and steward coordination kinds.
+
+### Testing And Validation
+
+- Added new test suites for `wave-control-schema`, `wave-control-client`, and `control-cli` covering event envelope normalization, telemetry queueing, delivery state tracking, and unified control-plane operations.
+- Expanded config tests for `waveControl` normalization and lane-level overrides.
 - Added regression coverage for Claude scalar inheritance, sibling-owner shared-component continuation, stale relaunch-plan invalidation, and launcher-generated routed-clarification trace replay.
+- Added regression coverage for proof-cli, proof-registry, retry-cli, and retry-control modules.
 
 ## 0.6.3 - 2026-03-22
 

@@ -74,6 +74,64 @@ describe("runBenchmarkSuite", () => {
       ),
     ).toBe(true);
   });
+
+  it("aligns lower-is-better metrics before family summaries and comparisons", () => {
+    const result = runBenchmarkSuite({
+      caseIds: ["wave-premature-closure-guard"],
+      writeOutputs: false,
+    });
+
+    expect(result.cases).toHaveLength(1);
+    expect(result.cases[0].arms["single-agent"]).toMatchObject({
+      score: 100,
+      alignedScore: 0,
+    });
+    expect(result.cases[0].arms["full-wave"]).toMatchObject({
+      score: 0,
+      alignedScore: 100,
+    });
+    expect(result.familySummary[0].arms["full-wave"].meanScore).toBe(100);
+    expect(
+      result.comparisons.find(
+        (comparison) =>
+          comparison.scope === "overall" && comparison.challengerArm === "full-wave",
+      ),
+    ).toMatchObject({
+      meanDelta: 100,
+      statisticallyConfident: true,
+    });
+  });
+
+  it("keeps the single-agent baseline confined to the primary owner's authored state", () => {
+    const result = runBenchmarkSuite({
+      caseIds: ["wave-silo-cross-agent-state"],
+      writeOutputs: false,
+    });
+
+    expect(result.cases).toHaveLength(1);
+    expect(result.cases[0].arms["single-agent"]).toMatchObject({
+      score: 50,
+      passed: false,
+    });
+    expect(result.cases[0].arms["full-wave"]).toMatchObject({
+      score: 100,
+      passed: true,
+    });
+  });
+
+  it("tracks clarification surfacing by record id when a case expects missing-evidence repair", () => {
+    const result = runBenchmarkSuite({
+      caseIds: ["wave-premature-closure-guard"],
+      writeOutputs: false,
+    });
+
+    expect(result.cases).toHaveLength(1);
+    expect(result.cases[0].arms["full-wave"].details.clarificationRecall).toMatchObject({
+      matched: 1,
+      total: 1,
+      percent: 100,
+    });
+  });
 });
 
 describe("runBenchmarkCli", () => {

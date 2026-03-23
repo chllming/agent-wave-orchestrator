@@ -88,10 +88,10 @@ Supported top-level fields:
 | `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
 | `authTokenEnvVar` | string | `WAVE_CONTROL_AUTH_TOKEN` | Environment variable name holding the bearer token |
 | `reportMode` | string | `metadata-plus-selected` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
-| `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload |
+| `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload when an artifact's upload policy requests a body |
 | `requestTimeoutMs` | integer | `5000` | Per-batch network timeout |
 | `flushBatchSize` | integer | `25` | Max queued telemetry events flushed per batch |
-| `maxPendingEvents` | integer | `1000` | Advisory cap for local queue growth |
+| `maxPendingEvents` | integer | `1000` | Cap for pending remote-delivery queue files; oldest pending uploads are dropped from the remote queue while the local `events.jsonl` stream remains authoritative |
 | `captureCoordinationRecords` | boolean | `true` | Emit `coordination_record` telemetry |
 | `captureControlPlaneEvents` | boolean | `true` | Emit `wave_run`, `attempt`, `proof_bundle`, and related control-plane events |
 | `captureTraceBundles` | boolean | `true` | Emit finalized trace-bundle artifacts and gate snapshots |

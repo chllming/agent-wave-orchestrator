@@ -79,16 +79,18 @@ Wave is built to mitigate those failures with canonical shared state, generated 
 
 Current release:
 
-- `@chllming/wave-orchestration@0.6.3`
-- Release tag: [`v0.6.3`](https://github.com/chllming/wave-orchestration/releases/tag/v0.6.3)
+- `@chllming/wave-orchestration@0.7.0`
+- Release tag: [`v0.7.0`](https://github.com/chllming/wave-orchestration/releases/tag/v0.7.0)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.6.3`:
+Highlights in `0.7.0`:
 
-- Runtime launch entrypoints now check npmjs for a newer published package in the background, cache the result under `.wave/package-update-check.json`, and warn on stderr when the workspace is behind.
-- `wave self-update` now gives downstream repos a one-command update path that detects the workspace package manager, updates the dependency, shows the changelog delta, and records the workspace upgrade report.
-- Autonomous and ad-hoc flows suppress nested notices so operators see at most one update banner per top-level run, and structured stdout remains clean for JSON consumers.
+- Unified `wave control` operator CLI with `status`, `task`, `rerun`, `proof`, and `telemetry` surfaces, replacing the separate `wave coord`/`wave retry`/`wave proof` commands (which remain as compatibility surfaces).
+- Canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` with event-sourced materialization for proof bundles, rerun requests, operator tasks, and attempt lifecycle.
+- Wave Control telemetry: local-first event queueing with best-effort batch delivery to a Railway-hosted analysis endpoint, configurable report modes, and selective artifact upload.
+- Live-wave orchestration refresh that keeps coordination surfaces current during execution, including overdue acknowledgement tracking and stale clarification rerouting.
+- Resident orchestrator support via `--resident-orchestrator` for long-running non-owning monitoring sessions.
 
 Requirements:
 

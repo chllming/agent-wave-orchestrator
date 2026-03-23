@@ -1,18 +1,18 @@
 ---
 title: "Sample Waves"
-summary: "A showcase-first sample wave that demonstrates the current 0.6.1 Wave surface."
+summary: "A showcase-first sample wave that demonstrates the current 0.7.0 Wave surface."
 ---
 
 # Sample Waves
 
-This guide points to one showcase-first sample wave that demonstrates the current `0.6.1` authored Wave surface.
+This guide points to one showcase-first sample wave that demonstrates the current `0.7.0` authored Wave surface.
 
 The example is intentionally denser than a typical production wave. Its job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready file.
 
 ## Canonical Example
 
 - [Full modern sample wave](../plans/examples/wave-example-live-proof.md)
-  Shows the combined `0.6.1` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
+  Shows the combined `0.7.0` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
 
 ## What This Example Teaches
 
@@ -32,7 +32,7 @@ The example is intentionally denser than a typical production wave. Its job is t
 
 ## Feature Coverage Map
 
-This sample covers the main surfaces added or hardened for `0.6.1`:
+This sample covers the main surfaces added or hardened for `0.7.0`:
 
 - planner-era authored wave structure
 - cross-runtime `### Skills`

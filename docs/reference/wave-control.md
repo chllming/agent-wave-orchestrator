@@ -82,7 +82,8 @@ Upload policy meanings:
 - `local-only`: keep only the descriptor remotely
 - `metadata-only`: report path, hash, size, and presence only
 - `selected`: upload metadata plus the artifact body when the runtime is in `metadata-plus-selected`
-- `full`: upload the artifact body even in full-capture flows
+- `selected`: upload metadata plus the artifact body when the runtime is in `metadata-plus-selected` or `full-artifact-upload` **and** the artifact kind is allowed by `waveControl.uploadArtifactKinds`
+- `full`: upload the artifact body in `full-artifact-upload` flows; if `uploadArtifactKinds` is set, keep the kind allowlist aligned with that policy
 
 ## Runtime Config
 
@@ -120,6 +121,8 @@ Wave Control reporting should:
 
 - append local telemetry first
 - queue pending uploads under `.tmp/<lane>-wave-launcher/control-plane/telemetry/`
+- respect `waveControl.uploadArtifactKinds` before uploading any selected artifact body
+- cap pending remote uploads with `waveControl.maxPendingEvents` by dropping the oldest queued remote-delivery files, while keeping the local `events.jsonl` stream intact
 - retry delivery with idempotency keys
 - never fail a live run, proof registration, or benchmark because the network is unavailable
 

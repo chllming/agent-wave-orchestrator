@@ -44,6 +44,10 @@ function listCodeFiles(currentPath: string, files: string[] = []) {
       continue;
     }
 
+    if (!entry.isFile()) {
+      continue;
+    }
+
     if (!codeExtensions.has(path.extname(entry.name))) {
       continue;
     }

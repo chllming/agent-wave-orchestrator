@@ -163,4 +163,88 @@ describe("wave-control client", () => {
     expect(receivedBody.events[0].artifactUploads[0].content).toContain('"finalRecommendation": "pass"');
     expect(readWaveControlQueueState(lanePaths).pendingCount).toBe(0);
   });
+
+  it("respects the configured artifact-kind allowlist for body uploads", async () => {
+    const dir = makeTempDir();
+    const allowedArtifactPath = path.join(dir, "quality.json");
+    const blockedArtifactPath = path.join(dir, "results.json");
+    fs.writeFileSync(allowedArtifactPath, JSON.stringify({ finalRecommendation: "pass" }, null, 2), "utf8");
+    fs.writeFileSync(blockedArtifactPath, JSON.stringify({ score: 100 }, null, 2), "utf8");
+
+    let receivedBody = null;
+    const endpoint = await startJsonServer(async (_req, body) => {
+      receivedBody = JSON.parse(body);
+    });
+    const lanePaths = makeLanePaths(dir, {
+      endpoint,
+      authTokenEnvVar: "TEST_WAVE_CONTROL_TOKEN",
+      uploadArtifactKinds: ["trace-quality"],
+    });
+    process.env.TEST_WAVE_CONTROL_TOKEN = "secret-token";
+
+    queueWaveControlEvent(lanePaths, {
+      category: "trace",
+      entityType: "artifact",
+      entityId: "trace-allowlist",
+      action: "bundle-written",
+      artifacts: [
+        {
+          ...buildWaveControlArtifactFromPath(allowedArtifactPath, {
+            kind: "trace-quality",
+            uploadPolicy: "selected",
+          }),
+          sourcePath: allowedArtifactPath,
+        },
+        {
+          ...buildWaveControlArtifactFromPath(blockedArtifactPath, {
+            kind: "benchmark-results",
+            uploadPolicy: "selected",
+          }),
+          sourcePath: blockedArtifactPath,
+        },
+      ],
+    });
+
+    await flushWaveControlQueue(lanePaths);
+    expect(receivedBody.events).toHaveLength(1);
+    expect(receivedBody.events[0].artifactUploads).toHaveLength(1);
+    expect(receivedBody.events[0].artifactUploads[0].content).toContain('"finalRecommendation": "pass"');
+  });
+
+  it("caps the pending remote-delivery queue without dropping the local event stream", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir, {
+      maxPendingEvents: 2,
+    });
+
+    queueWaveControlEvent(lanePaths, {
+      category: "runtime",
+      entityType: "wave_run",
+      entityId: "wave-1",
+      action: "started",
+    });
+    queueWaveControlEvent(lanePaths, {
+      category: "runtime",
+      entityType: "wave_run",
+      entityId: "wave-2",
+      action: "started",
+    });
+    queueWaveControlEvent(lanePaths, {
+      category: "runtime",
+      entityType: "wave_run",
+      entityId: "wave-3",
+      action: "started",
+    });
+
+    const state = readWaveControlQueueState(lanePaths);
+    expect(state.pendingCount).toBe(2);
+    expect(state.failedCount).toBe(1);
+    expect(String(state.lastError?.message || "")).toContain("maxPendingEvents");
+    expect(fs.readFileSync(path.join(lanePaths.telemetryDir, "events.jsonl"), "utf8").trim().split("\n")).toHaveLength(3);
+    expect(
+      fs.readdirSync(path.join(lanePaths.telemetryDir, "failed")).some((fileName) =>
+        fileName.startsWith("overflow-"),
+      ),
+    ).toBe(true);
+  });
 });

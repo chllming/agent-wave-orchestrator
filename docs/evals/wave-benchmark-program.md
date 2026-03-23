@@ -27,7 +27,7 @@ This is intentionally narrower than "Wave is better than all coding agents."
 The benchmark runner supports these arms:
 
 - `single-agent`
-  One primary owner operates from a local view. No compiled shared summary, no targeted inboxes, no capability routing, and no explicit closure guard simulation.
+  One primary owner operates from a local view of records they authored. No inbound targeted coordination is compiled into that arm, and there is no compiled shared summary, no targeted inboxes, no capability routing, and no explicit closure guard simulation.
 - `multi-agent-minimal`
   Multiple agents exist, but they only share a minimal global summary. There is no targeted inbox routing and no benchmark-aware closure discipline.
 - `full-wave`
@@ -69,6 +69,19 @@ The runner computes case-level metrics from deterministic coordination fixtures 
 - `openClarificationLinkedRequests()`
 
 The primary metric determines case pass/fail. Directionality comes from the benchmark catalog, not from the case file.
+
+For reporting above the case level, the runner also computes a direction-aligned score:
+
+- `higher-is-better` metrics keep their raw score
+- `lower-is-better` metrics are flipped to `100 - rawScore`
+
+That rule applies to:
+
+- family `meanScore`
+- overall and family `meanDelta`
+- the `statisticallyConfident` comparison flag
+
+This keeps a positive delta semantically stable: positive always means "better than baseline" even when a case's raw primary metric is lower-is-better.
 
 ## Significance And Comparative Reporting
 
@@ -125,6 +138,8 @@ For each case and arm, the native runner records:
 
 - `score`
   The case's primary metric value.
+- `alignedScore`
+  The direction-aligned case score used for family summaries and deltas.
 - `passed`
   Whether the primary metric satisfied the case threshold.
 - `direction`
@@ -141,16 +156,16 @@ For each case and arm, the native runner records:
 The runner also records:
 
 - `familySummary`
-  Mean score and pass rate per family and arm.
+  Direction-aligned mean score and pass rate per family and arm.
 - `comparisons`
-  Mean delta versus `single-agent`, bootstrap confidence intervals, and a conservative `statisticallyConfident` flag.
+  Direction-aligned mean delta versus `single-agent`, bootstrap confidence intervals, and a conservative `statisticallyConfident` flag.
 
 When `waveControl` reporting is enabled, native runs also publish:
 
 - `benchmark_run`
   Suite-level metadata, selected arms, family summary, and comparison summary.
 - `benchmark_item`
-  Full per-case arm payloads including `score`, `passed`, `metrics`, `details`, and generated artifacts.
+  Full per-case, per-arm payloads including `score`, `alignedScore`, `passed`, `metrics`, `details`, and generated artifacts.
 
 Native mode does **not** emit `verification` or `review` events, because there is no external verifier and no benchmark-validity split to interpret. Those are reserved for `wave benchmark external-run`.
 
@@ -160,10 +175,10 @@ The current deterministic runner logs the following metrics:
 
 | Metric | Native signal used today | Why it matters for the MAS claim |
 | --- | --- | --- |
-| `distributed-info-accuracy` | Percent of expected global facts visible in the scored artifacts | Proves the team pooled distributed evidence rather than leaving it siloed |
-| `latent-asymmetry-surfacing-rate` | Clarification recall when a case expects missing-fact surfacing, otherwise targeted inbox recall | Proves the system notices that important evidence is still missing before closure |
+| `distributed-info-accuracy` | Percent of expected global facts visible in the integration-visible state: shared summary, integration-owner view when present, and structured assignment artifacts | Proves the team pooled distributed evidence rather than leaving it siloed |
+| `latent-asymmetry-surfacing-rate` | Clarification recall by explicit record id when a case expects missing-fact surfacing, otherwise targeted inbox recall | Proves the system notices that important evidence is still missing before closure |
 | `premature-convergence-rate` | `100` when a case required a blocking guard and the arm failed to keep it active, else `0` | Proves whether closure discipline resists converging on incomplete state |
-| `global-state-reconstruction-rate` | Percent of required cross-agent facts reconstructed in the visible state | Proves communication turned into a correct shared picture, not only message traffic |
+| `global-state-reconstruction-rate` | Percent of required cross-agent facts reconstructed in the integration-visible state rather than only in owner-private inboxes | Proves communication turned into a correct shared picture, not only message traffic |
 | `summary-fact-retention-rate` | Percent of required summary facts preserved in the shared summary | Proves summary compression is trustworthy enough to support downstream synthesis |
 | `communication-reasoning-gap` | `100 - global-state-reconstruction-rate` | Makes failure explicit when agents talk but still fail to integrate correctly |
 | `projection-consistency-rate` | Same summary-fidelity signal, framed for projection integrity | Proves the blackboard projections remain semantically aligned with canonical state |
@@ -185,6 +200,8 @@ Several of these metrics intentionally reuse the same deterministic signals unde
 - did the right owners receive the right context
 - did conflicts become explicit repair work
 - did closure wait for integrated proof
+
+The important constraint is that "shared state" here does **not** mean "the union of every owner inbox." The native runner scores global reconstruction from the integration-visible artifacts, so facts that remain split across private owner views do not count as reconstructed.
 
 ## Why These Metrics Matter
 

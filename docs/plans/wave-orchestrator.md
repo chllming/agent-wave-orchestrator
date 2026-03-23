@@ -136,6 +136,7 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 - `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions. `wave control status` only treats requests, blockers, clarifications, human-input, escalations, helper assignments, and required dependencies as blocking edges.
 - `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists.
 - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles in the same control-plane log and projects compatible proof registries under `.tmp/<lane>-wave-launcher/proof/`.
+- `wave control telemetry status|flush` inspects and delivers the local Wave Control event queue. Pass `--no-telemetry` on `wave launch` to disable event publication for a single run.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
 

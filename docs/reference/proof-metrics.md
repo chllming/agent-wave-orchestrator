@@ -34,7 +34,7 @@ For the event and artifact contract, see [wave-control.md](./wave-control.md).
 The native metric groups line up with the README claims:
 
 - evidence pooling:
-  `distributed-info-accuracy`, `global-state-reconstruction-rate`, and `communication-reasoning-gap` tell us whether distributed facts became one correct shared state
+  `distributed-info-accuracy`, `global-state-reconstruction-rate`, and `communication-reasoning-gap` tell us whether distributed facts became one correct integration-visible state instead of remaining split across private owner views
 - projection fidelity:
   `summary-fact-retention-rate`, `projection-consistency-rate`, `targeted-inbox-recall`, and `integration-coherence-rate` tell us whether the blackboard projections stayed faithful enough to be useful
 - routing quality:
@@ -47,6 +47,12 @@ The native metric groups line up with the README claims:
   `deadlock-rate`, `contention-resolution-rate`, and `symmetry-breaking-rate` tell us whether the team can coordinate under concurrent blockers rather than collapsing into lockstep failure
 
 These metrics matter because Wave's core promise is not just "many agents talked." The promise is that the system reconstructs shared state, routes work intelligently, preserves important evidence through projections, and refuses to close while critical uncertainty remains.
+
+The deterministic runner is strict about that distinction:
+
+- global reconstruction is scored from integration-visible artifacts, not the union of every inbox
+- clarification surfacing is scored from explicit record ids, so a metric only moves when the missing-evidence record is actually preserved in the generated artifacts
+- family summaries and deltas are direction-aligned, so lower-is-better guard metrics do not invert the headline comparison
 
 ## Native Views To Build Around
 

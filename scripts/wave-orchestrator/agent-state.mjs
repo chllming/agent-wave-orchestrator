@@ -53,14 +53,98 @@ const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
 const WAVE_COMPONENT_REGEX =
   /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
-const STRUCTURED_SIGNAL_LINE_REGEX = /^\[wave-[^\]]+\].*$/;
+const STRUCTURED_SIGNAL_LINE_REGEX = /^\[wave-[a-z0-9-]+(?:\]|\s|=|$).*$/i;
 const WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX = /^`\[wave-[^`]+`$/;
+const STRUCTURED_SIGNAL_LIST_PREFIX_REGEX = /^(?:[-*+]|\d+\.)\s+/;
 
-function normalizeStructuredSignalText(text) {
-  if (!text) {
-    return "";
+const STRUCTURED_SIGNAL_KIND_BY_TAG = {
+  proof: "proof",
+  "doc-delta": "docDelta",
+  "doc-closure": "docClosure",
+  integration: "integration",
+  eval: "eval",
+  security: "security",
+  gate: "gate",
+  gap: "gap",
+  component: "component",
+};
+
+const STRUCTURED_SIGNAL_LINE_REGEX_BY_KIND = {
+  proof: new RegExp(WAVE_PROOF_REGEX.source, "i"),
+  docDelta: new RegExp(WAVE_DOC_DELTA_REGEX.source, "i"),
+  docClosure: new RegExp(WAVE_DOC_CLOSURE_REGEX.source, "i"),
+  integration: new RegExp(WAVE_INTEGRATION_REGEX.source, "i"),
+  eval: new RegExp(WAVE_EVAL_REGEX.source, "i"),
+  security: new RegExp(WAVE_SECURITY_REGEX.source, "i"),
+  gate: new RegExp(WAVE_GATE_REGEX.source, "i"),
+  gap: new RegExp(WAVE_GAP_REGEX.source, "i"),
+  component: new RegExp(WAVE_COMPONENT_REGEX.source, "i"),
+};
+
+function buildEmptyStructuredSignalDiagnostics() {
+  return {
+    proof: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    docDelta: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    docClosure: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    integration: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    eval: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    security: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    gate: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    gap: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    component: { rawCount: 0, acceptedCount: 0, rejectedSamples: [], seenComponentIds: [] },
+  };
+}
+
+function pushRejectedStructuredSignalSample(bucket, sample) {
+  if (!bucket || !sample || bucket.rejectedSamples.length >= 3) {
+    return;
   }
-  const normalizedLines = [];
+  bucket.rejectedSamples.push(sample);
+}
+
+function normalizeStructuredSignalLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const withoutListPrefix = trimmed.replace(STRUCTURED_SIGNAL_LIST_PREFIX_REGEX, "").trim();
+  if (STRUCTURED_SIGNAL_LINE_REGEX.test(withoutListPrefix)) {
+    return withoutListPrefix;
+  }
+  if (WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX.test(withoutListPrefix)) {
+    return withoutListPrefix.slice(1, -1).trim();
+  }
+  return null;
+}
+
+function parseStructuredSignalCandidate(line) {
+  const rawLine = String(line || "").trim();
+  if (!rawLine) {
+    return null;
+  }
+  const canonicalLine = normalizeStructuredSignalLine(rawLine);
+  if (!canonicalLine) {
+    return null;
+  }
+  const tagMatch = canonicalLine.match(/^\[wave-([a-z0-9-]+)(?:\]|\s|=|$)/i);
+  if (!tagMatch) {
+    return null;
+  }
+  const kind = STRUCTURED_SIGNAL_KIND_BY_TAG[String(tagMatch[1] || "").toLowerCase()] || null;
+  const componentIdMatch = canonicalLine.match(/\bcomponent=([a-z0-9._-]+)/i);
+  return {
+    rawLine,
+    canonicalLine,
+    kind,
+    componentId: componentIdMatch ? String(componentIdMatch[1] || "").trim() : null,
+  };
+}
+
+function collectStructuredSignalCandidates(text) {
+  if (!text) {
+    return [];
+  }
+  const candidates = [];
   let fenceLines = null;
   for (const rawLine of String(text || "").split(/\r?\n/)) {
     const trimmed = rawLine.trim();
@@ -69,11 +153,11 @@ function normalizeStructuredSignalText(text) {
         fenceLines = [];
         continue;
       }
-      const normalizedFenceLines = fenceLines
-        .map((line) => normalizeStructuredSignalLine(line))
+      const fenceCandidates = fenceLines
+        .map((line) => parseStructuredSignalCandidate(line))
         .filter(Boolean);
-      if (normalizedFenceLines.length > 0 && normalizedFenceLines.length === fenceLines.length) {
-        normalizedLines.push(...normalizedFenceLines);
+      if (fenceCandidates.length > 0 && fenceCandidates.length === fenceLines.length) {
+        candidates.push(...fenceCandidates);
       }
       fenceLines = null;
       continue;
@@ -82,29 +166,48 @@ function normalizeStructuredSignalText(text) {
       if (!trimmed) {
         continue;
       }
-      fenceLines.push(trimmed);
+      fenceLines.push(rawLine);
       continue;
     }
-    const normalized = normalizeStructuredSignalLine(trimmed);
-    if (normalized) {
-      normalizedLines.push(normalized);
+    const candidate = parseStructuredSignalCandidate(rawLine);
+    if (candidate) {
+      candidates.push(candidate);
     }
   }
-  return normalizedLines.join("\n");
+  return candidates;
 }
 
-function normalizeStructuredSignalLine(line) {
-  const trimmed = String(line || "").trim();
-  if (!trimmed) {
-    return null;
+function buildStructuredSignalDiagnostics(candidates) {
+  const diagnostics = buildEmptyStructuredSignalDiagnostics();
+  for (const candidate of candidates || []) {
+    if (!candidate?.kind || !diagnostics[candidate.kind]) {
+      continue;
+    }
+    const bucket = diagnostics[candidate.kind];
+    bucket.rawCount += 1;
+    if (candidate.kind === "component" && candidate.componentId) {
+      bucket.seenComponentIds.push(candidate.componentId);
+    }
+    const strictRegex = STRUCTURED_SIGNAL_LINE_REGEX_BY_KIND[candidate.kind];
+    if (strictRegex.test(candidate.canonicalLine)) {
+      bucket.acceptedCount += 1;
+      continue;
+    }
+    pushRejectedStructuredSignalSample(bucket, {
+      line: candidate.rawLine,
+      ...(candidate.kind === "component" && candidate.componentId ? { componentId: candidate.componentId } : {}),
+    });
   }
-  if (STRUCTURED_SIGNAL_LINE_REGEX.test(trimmed)) {
-    return trimmed;
-  }
-  if (WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX.test(trimmed)) {
-    return trimmed.slice(1, -1);
-  }
-  return null;
+  diagnostics.component.seenComponentIds = Array.from(new Set(diagnostics.component.seenComponentIds)).sort();
+  return diagnostics;
+}
+
+function extractStructuredSignalPayload(text) {
+  const candidates = collectStructuredSignalCandidates(text);
+  return {
+    signalText: candidates.map((candidate) => candidate.canonicalLine).join("\n"),
+    diagnostics: buildStructuredSignalDiagnostics(candidates),
+  };
 }
 
 function cleanText(value) {
@@ -335,17 +438,10 @@ export function agentSummaryPathFromStatusPath(statusPath) {
     : `${statusPath}.summary.json`;
 }
 
-export function readAgentExecutionSummary(summaryPathOrStatusPath) {
-  const summaryPath = summaryPathOrStatusPath.endsWith(".summary.json")
-    ? summaryPathOrStatusPath
-    : agentSummaryPathFromStatusPath(summaryPathOrStatusPath);
-  const payload = readJsonOrNull(summaryPath);
-  return payload && typeof payload === "object" ? payload : null;
-}
-
 export function buildAgentExecutionSummary({ agent, statusRecord, logPath, reportPath = null }) {
   const logText = readFileTail(logPath, 60000);
-  const signalText = normalizeStructuredSignalText(logText);
+  const structuredSignals = extractStructuredSignalPayload(logText);
+  const signalText = structuredSignals.signalText;
   const reportText =
     reportPath && readJsonOrNull(reportPath) === null
       ? readFileTail(reportPath, 60000)
@@ -442,6 +538,7 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
           detail: cleanText(verdict.detail),
         }
       : null,
+    structuredSignalDiagnostics: structuredSignals.diagnostics,
     terminationReason: termination.reason,
     terminationHint: termination.hint,
     terminationObservedTurnLimit:
@@ -459,6 +556,113 @@ export function writeAgentExecutionSummary(summaryPathOrStatusPath, summary) {
   return summaryPath;
 }
 
+function resolveStatusRecordForSummaryRead(summaryPathOrStatusPath, options = {}) {
+  if (options.statusRecord && typeof options.statusRecord === "object") {
+    return options.statusRecord;
+  }
+  const explicitStatusPath =
+    typeof options.statusPath === "string" && options.statusPath.trim() ? options.statusPath : null;
+  const derivedStatusPath =
+    !summaryPathOrStatusPath.endsWith(".summary.json") ? summaryPathOrStatusPath : null;
+  const statusPath = explicitStatusPath || derivedStatusPath;
+  if (!statusPath) {
+    return null;
+  }
+  const payload = readJsonOrNull(statusPath);
+  return payload && typeof payload === "object" ? payload : null;
+}
+
+function summaryNeedsStructuredSignalRefresh(payload, options = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  if (payload.structuredSignalDiagnostics && typeof payload.structuredSignalDiagnostics === "object") {
+    return false;
+  }
+  const agent = options.agent;
+  const contract = normalizeExitContract(agent?.exitContract);
+  if (!contract) {
+    return false;
+  }
+  if (!payload.proof || !payload.docDelta) {
+    return true;
+  }
+  const ownedComponents = Array.isArray(agent?.components) ? agent.components : [];
+  if (ownedComponents.length === 0) {
+    return false;
+  }
+  const componentMarkers = new Map(
+    Array.isArray(payload.components)
+      ? payload.components.map((component) => [component.componentId, component])
+      : [],
+  );
+  return ownedComponents.some((componentId) => !componentMarkers.has(componentId));
+}
+
+function refreshExecutionSummaryIfStale(summaryPathOrStatusPath, payload, options = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+  if (!summaryNeedsStructuredSignalRefresh(payload, options)) {
+    return payload;
+  }
+  if (!options.agent || !options.logPath || !fs.existsSync(options.logPath)) {
+    return payload;
+  }
+  const refreshed = buildAgentExecutionSummary({
+    agent: options.agent,
+    statusRecord: resolveStatusRecordForSummaryRead(summaryPathOrStatusPath, options),
+    logPath: options.logPath,
+    reportPath: options.reportPath || null,
+  });
+  writeAgentExecutionSummary(summaryPathOrStatusPath, refreshed);
+  return refreshed;
+}
+
+export function readAgentExecutionSummary(summaryPathOrStatusPath, options = {}) {
+  const summaryPath = summaryPathOrStatusPath.endsWith(".summary.json")
+    ? summaryPathOrStatusPath
+    : agentSummaryPathFromStatusPath(summaryPathOrStatusPath);
+  const payload = readJsonOrNull(summaryPath);
+  const summary = payload && typeof payload === "object" ? payload : null;
+  return refreshExecutionSummaryIfStale(summaryPathOrStatusPath, summary, options);
+}
+
+function structuredSignalBucket(summary, key) {
+  const diagnostics = summary?.structuredSignalDiagnostics;
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return null;
+  }
+  const bucket = diagnostics[key];
+  return bucket && typeof bucket === "object" ? bucket : null;
+}
+
+function rejectedStructuredSignalLine(summary, key, predicate = null) {
+  const bucket = structuredSignalBucket(summary, key);
+  const rejected = Array.isArray(bucket?.rejectedSamples) ? bucket.rejectedSamples : [];
+  const match = typeof predicate === "function" ? rejected.find(predicate) : rejected[0];
+  return cleanText(match?.line || "");
+}
+
+function hasRejectedStructuredSignal(summary, key) {
+  const bucket = structuredSignalBucket(summary, key);
+  return Number(bucket?.rawCount || 0) > 0 && Number(bucket?.acceptedCount || 0) === 0;
+}
+
+function invalidStructuredSignalDetail(agentId, markerName, summary, key, extraDetail = "", predicate = null) {
+  const sample = rejectedStructuredSignalLine(summary, key, predicate);
+  const detailParts = [
+    `Saw raw ${markerName} marker text for ${agentId}, but none of it was accepted into the structured summary.`,
+  ];
+  if (extraDetail) {
+    detailParts.push(extraDetail);
+  }
+  if (sample) {
+    detailParts.push(`Rejected sample: ${sample}`);
+  }
+  return appendTerminationHint(detailParts.join(" "), summary);
+}
+
 export function validateImplementationSummary(agent, summary) {
   const contract = normalizeExitContract(agent?.exitContract);
   if (!contract) {
@@ -472,6 +676,13 @@ export function validateImplementationSummary(agent, summary) {
     };
   }
   if (!summary.proof) {
+    if (hasRejectedStructuredSignal(summary, "proof")) {
+      return {
+        ok: false,
+        statusCode: "invalid-wave-proof-format",
+        detail: invalidStructuredSignalDetail(agent.agentId, "[wave-proof]", summary, "proof"),
+      };
+    }
     return {
       ok: false,
       statusCode: "missing-wave-proof",
@@ -507,6 +718,13 @@ export function validateImplementationSummary(agent, summary) {
     };
   }
   if (!summary.docDelta) {
+    if (hasRejectedStructuredSignal(summary, "docDelta")) {
+      return {
+        ok: false,
+        statusCode: "invalid-doc-delta-format",
+        detail: invalidStructuredSignalDetail(agent.agentId, "[wave-doc-delta]", summary, "docDelta"),
+      };
+    }
     return {
       ok: false,
       statusCode: "missing-doc-delta",
@@ -522,6 +740,10 @@ export function validateImplementationSummary(agent, summary) {
   }
   const ownedComponents = Array.isArray(agent?.components) ? agent.components : [];
   if (ownedComponents.length > 0) {
+    const componentDiagnostics = structuredSignalBucket(summary, "component");
+    const seenComponentIds = new Set(
+      Array.isArray(componentDiagnostics?.seenComponentIds) ? componentDiagnostics.seenComponentIds : [],
+    );
     const componentMarkers = new Map(
       Array.isArray(summary.components)
         ? summary.components.map((component) => [component.componentId, component])
@@ -530,6 +752,23 @@ export function validateImplementationSummary(agent, summary) {
     for (const componentId of ownedComponents) {
       const marker = componentMarkers.get(componentId);
       if (!marker) {
+        if (
+          Number(componentDiagnostics?.rawCount || 0) > 0 &&
+          (seenComponentIds.has(componentId) || Number(componentDiagnostics?.acceptedCount || 0) === 0)
+        ) {
+          return {
+            ok: false,
+            statusCode: "invalid-wave-component-format",
+            detail: invalidStructuredSignalDetail(
+              agent.agentId,
+              "[wave-component]",
+              summary,
+              "component",
+              `Expected a valid component marker for ${componentId}.`,
+              (sample) => cleanText(sample?.componentId) === componentId,
+            ),
+          };
+        }
         return {
           ok: false,
           statusCode: "missing-wave-component",
@@ -927,4 +1166,179 @@ export function validateContQaSummary(agent, summary, options = {}) {
     statusCode: "pass",
     detail: summary.verdict.detail || summary.gate.detail || "cont-QA gate passed.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Agent Result Envelope — Wave 3
+// ---------------------------------------------------------------------------
+
+import { toIsoTimestamp } from "./shared.mjs";
+
+/**
+ * Path to the envelope file derived from the status path.
+ *
+ * @param {string} statusPath - Path to the .status or .summary file
+ * @returns {string} The envelope file path
+ */
+export function agentEnvelopePathFromStatusPath(statusPath) {
+  if (statusPath.endsWith(".summary.json")) {
+    return statusPath.replace(/\.summary\.json$/i, ".envelope.json");
+  }
+  if (statusPath.endsWith(".status")) {
+    return statusPath.replace(/\.status$/i, ".envelope.json");
+  }
+  return `${statusPath}.envelope.json`;
+}
+
+/**
+ * Build a structured result envelope from an already-parsed execution summary.
+ * Pure function — the envelope is a normalized projection of the summary.
+ *
+ * @param {object} agent - Agent definition from wave
+ * @param {object} summary - Execution summary from buildAgentExecutionSummary
+ * @returns {object} AgentResultEnvelope
+ */
+export function buildAgentResultEnvelope(agent, summary) {
+  const safeAgent = agent || {};
+  const safeSummary = summary || {};
+
+  // Exit contract from proof dimensions + doc delta
+  const proof = safeSummary.proof || {};
+  const docDelta = safeSummary.docDelta || {};
+  const exitContract = {
+    completion: proof.completion || null,
+    durability: proof.durability || null,
+    proof: proof.proof || null,
+    docImpact: docDelta.state || null,
+  };
+
+  // Proof artifacts
+  const proofArtifacts = Array.isArray(safeSummary.proofArtifacts)
+    ? safeSummary.proofArtifacts.map((artifact) => ({
+        path: artifact.path || null,
+        kind: artifact.kind || null,
+        sha256: artifact.sha256 || null,
+        exists: artifact.exists === true,
+      }))
+    : [];
+
+  // Deliverables
+  const deliverables = Array.isArray(safeSummary.deliverables)
+    ? safeSummary.deliverables.map((d) => ({
+        path: d.path || null,
+        exists: d.exists === true,
+      }))
+    : [];
+
+  // Components
+  const components = Array.isArray(safeSummary.components)
+    ? safeSummary.components.map((c) => ({
+        componentId: c.componentId || null,
+        level: c.level || null,
+        state: c.state || null,
+      }))
+    : [];
+
+  // Gate claims from the gate marker
+  const gateClaims = [];
+  if (safeSummary.gate) {
+    const gateKeys = ["architecture", "integration", "durability", "live", "docs"];
+    for (const key of gateKeys) {
+      if (safeSummary.gate[key]) {
+        gateClaims.push({
+          gateId: key,
+          claim: safeSummary.gate[key],
+          detail: safeSummary.gate.detail || null,
+        });
+      }
+    }
+  }
+
+  // Validation outputs from proof state
+  const validationOutputs = {
+    testsPassed: proof.state === "met" && proof.proof != null,
+    buildPassed: proof.state === "met",
+  };
+
+  // Risk notes
+  const riskNotes = Array.isArray(safeSummary.riskNotes) ? safeSummary.riskNotes : [];
+
+  // Unresolved blockers
+  const unresolvedBlockers = Array.isArray(safeSummary.unresolvedBlockers)
+    ? safeSummary.unresolvedBlockers
+    : [];
+
+  // Docs deltas
+  const docsDeltas = [];
+  if (docDelta.state) {
+    docsDeltas.push({
+      state: docDelta.state,
+      paths: Array.isArray(docDelta.paths) ? docDelta.paths : [],
+      detail: docDelta.detail || null,
+    });
+  }
+
+  // Security findings
+  const securityFindings = [];
+  if (safeSummary.security) {
+    securityFindings.push({
+      state: safeSummary.security.state || null,
+      findings: safeSummary.security.findings || 0,
+      approvals: safeSummary.security.approvals || 0,
+      detail: safeSummary.security.detail || null,
+    });
+  }
+
+  // Integration claims
+  const integrationClaims = [];
+  if (safeSummary.integration) {
+    integrationClaims.push({
+      state: safeSummary.integration.state || null,
+      claims: safeSummary.integration.claims || 0,
+      conflicts: safeSummary.integration.conflicts || 0,
+      blockers: safeSummary.integration.blockers || 0,
+      detail: safeSummary.integration.detail || null,
+    });
+  }
+
+  return {
+    envelopeVersion: 1,
+    agentId: safeAgent.agentId || safeSummary.agentId || null,
+    exitContract,
+    proofArtifacts,
+    deliverables,
+    components,
+    gateClaims,
+    validationOutputs,
+    riskNotes,
+    unresolvedBlockers,
+    docsDeltas,
+    securityFindings,
+    integrationClaims,
+    createdAt: toIsoTimestamp(),
+  };
+}
+
+/**
+ * Write an agent result envelope alongside the summary file.
+ *
+ * @param {string} statusPath - Path to the .status file
+ * @param {object} envelope - Result from buildAgentResultEnvelope
+ */
+export function writeAgentResultEnvelope(statusPath, envelope) {
+  const envelopePath = agentEnvelopePathFromStatusPath(statusPath);
+  writeJsonAtomic(envelopePath, envelope);
+  return envelopePath;
+}
+
+/**
+ * Read an agent result envelope if it exists.
+ *
+ * @param {string} statusPath - Path to the .status file
+ * @returns {object|null} The envelope or null
+ */
+export function readAgentResultEnvelope(statusPath) {
+  const envelopePath = agentEnvelopePathFromStatusPath(statusPath);
+  const payload = readJsonOrNull(envelopePath);
+  return payload && typeof payload === "object" ? payload : null;
 }

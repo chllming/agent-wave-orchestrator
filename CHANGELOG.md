@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.7.2 - 2026-03-23
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, sample-wave docs, and npm publishing runbook to advertise `0.7.2` as the current release surface.
+- Implementation prompts now require incomplete work to stay inside the final proof, doc-delta, and component markers with `state=gap`, and route unresolved issues through `wave coord post` instead of trailing `[wave-gap]` markers.
+
+### Fixed And Hardened
+
+- Implementation summary parsing now accepts final `[wave-proof]`, `[wave-doc-delta]`, and `[wave-component]` markers when the final structured block is emitted as Markdown list items.
+- Validation now distinguishes missing markers from rejected marker syntax with `invalid-wave-proof-format`, `invalid-doc-delta-format`, and `invalid-wave-component-format`.
+- Proof-centric summary repair now refreshes legacy `.summary.json` files from source logs only when the stored summary is actually missing required proof/doc/component data, preserving valid historical summaries.
+- `reconcile-status` now backfills missing `deliverables` and `proofArtifacts` arrays in older agent summaries before validation, so previously authoritative completed waves can survive summary-schema drift without weakening live closure.
+- Codex launch previews now expose `effectiveTurnLimit` and `effectiveTurnLimitSource`, making unresolved external turn ceilings machine-readable before the runtime later reports an observed limit.
+
 ## 0.7.1 - 2026-03-23
 
 ### Changed

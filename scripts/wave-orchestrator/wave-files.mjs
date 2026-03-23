@@ -1202,11 +1202,20 @@ function materializeLiveExecutionSummaryIfMissing({
   contQaAgentId,
   contEvalAgentId,
 }) {
-  const existing = readAgentExecutionSummary(statusPath);
+  const logPath = logsDir ? path.join(logsDir, `wave-${wave.wave}-${agent.slug}.log`) : null;
+  const existing = readAgentExecutionSummary(statusPath, {
+    agent,
+    statusPath,
+    statusRecord,
+    logPath,
+    reportPath: resolveAgentSummaryReportPath(wave, agent.agentId, {
+      contQaAgentId,
+      contEvalAgentId,
+    }),
+  });
   if (existing) {
     return existing;
   }
-  const logPath = logsDir ? path.join(logsDir, `wave-${wave.wave}-${agent.slug}.log`) : null;
   if (!statusRecord || !logPath || !fs.existsSync(logPath)) {
     return null;
   }

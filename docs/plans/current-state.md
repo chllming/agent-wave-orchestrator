@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.7.1` package release surface.
+- The starter workspace in this source repo reflects the `0.7.2` package release surface.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - Runtime launch entrypoints now perform a best-effort npmjs version check, cache the result under `.wave/package-update-check.json`, and point operators at `pnpm exec wave self-update` when a newer published package exists.

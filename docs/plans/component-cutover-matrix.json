@@ -23,6 +23,14 @@
         {
           "wave": 0,
           "target": "repo-landed"
+        },
+        {
+          "wave": 1,
+          "target": "baseline-proved"
+        },
+        {
+          "wave": 6,
+          "target": "pilot-live"
         }
       ],
       "proofSurfaces": [
@@ -38,7 +46,16 @@
         "docs/plans/context7-wave-orchestrator.md"
       ],
       "currentLevel": "repo-landed",
-      "promotions": [],
+      "promotions": [
+        {
+          "wave": 3,
+          "target": "baseline-proved"
+        },
+        {
+          "wave": 6,
+          "target": "pilot-live"
+        }
+      ],
       "proofSurfaces": [
         "executor launch specs",
         "runtime overlays",
@@ -53,7 +70,20 @@
         "docs/agents/wave-documentation-role.md"
       ],
       "currentLevel": "repo-landed",
-      "promotions": [],
+      "promotions": [
+        {
+          "wave": 1,
+          "target": "baseline-proved"
+        },
+        {
+          "wave": 3,
+          "target": "baseline-proved"
+        },
+        {
+          "wave": 6,
+          "target": "pilot-live"
+        }
+      ],
       "proofSurfaces": [
         "structured gate markers",
         "closure sweep",
@@ -81,7 +111,24 @@
         "docs/plans/current-state.md"
       ],
       "currentLevel": "repo-landed",
-      "promotions": [],
+      "promotions": [
+        {
+          "wave": 1,
+          "target": "repo-landed"
+        },
+        {
+          "wave": 2,
+          "target": "baseline-proved"
+        },
+        {
+          "wave": 4,
+          "target": "pilot-live"
+        },
+        {
+          "wave": 5,
+          "target": "qa-proved"
+        }
+      ],
       "proofSurfaces": [
         "status summaries",
         "dashboards",

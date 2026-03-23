@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildAgentExecutionSummary,
+  readAgentExecutionSummary,
   validateContEvalSummary,
   validateDocumentationClosureSummary,
   validateContQaSummary,
@@ -216,6 +217,209 @@ describe("buildAgentExecutionSummary", () => {
       approvals: 1,
       detail: "needs-human-review",
     });
+  });
+
+  it("parses bullet-prefixed final marker blocks and records diagnostics", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "Final structured block:",
+        "```markdown",
+        "- [wave-proof] completion=contract durability=none proof=unit state=met detail=bullet-proof",
+        "- [wave-doc-delta] state=owned paths=docs/example.md detail=bullet-doc-delta",
+        "- [wave-component] component=wave-parser-and-launcher level=repo-landed state=met detail=bullet-component",
+        "```",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A1" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary.proof).toMatchObject({
+      completion: "contract",
+      durability: "none",
+      proof: "unit",
+      state: "met",
+      detail: "bullet-proof",
+    });
+    expect(summary.docDelta).toMatchObject({
+      state: "owned",
+      paths: ["docs/example.md"],
+      detail: "bullet-doc-delta",
+    });
+    expect(summary.components).toEqual([
+      {
+        componentId: "wave-parser-and-launcher",
+        level: "repo-landed",
+        state: "met",
+        detail: "bullet-component",
+      },
+    ]);
+    expect(summary.structuredSignalDiagnostics).toMatchObject({
+      proof: { rawCount: 1, acceptedCount: 1 },
+      docDelta: { rawCount: 1, acceptedCount: 1 },
+      component: {
+        rawCount: 1,
+        acceptedCount: 1,
+        seenComponentIds: ["wave-parser-and-launcher"],
+      },
+    });
+  });
+
+  it("refreshes stale execution summaries from the source log when diagnostics are missing", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-10-10-a1.status");
+    const summaryPath = statusPath.replace(/\.status$/i, ".summary.json");
+    const logPath = path.join(dir, "wave-10-10-a1.log");
+
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=contract durability=none proof=unit state=met detail=repo-landed",
+        "- [wave-doc-delta] state=owned paths=README.md detail=owned-docs",
+        "- [wave-component] component=wave-parser-and-launcher level=repo-landed state=met detail=landed",
+      ].join("\n"),
+      "utf8",
+    );
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: null,
+          docDelta: null,
+          components: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const summary = readAgentExecutionSummary(statusPath, {
+      agent: {
+        agentId: "A1",
+        exitContract: {
+          completion: "contract",
+          durability: "none",
+          proof: "unit",
+          docImpact: "owned",
+        },
+        components: ["wave-parser-and-launcher"],
+      },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary).toMatchObject({
+      proof: {
+        completion: "contract",
+        durability: "none",
+        proof: "unit",
+        state: "met",
+      },
+      docDelta: {
+        state: "owned",
+        paths: ["README.md"],
+      },
+      components: [
+        {
+          componentId: "wave-parser-and-launcher",
+          level: "repo-landed",
+          state: "met",
+        },
+      ],
+      structuredSignalDiagnostics: {
+        proof: { rawCount: 1, acceptedCount: 1 },
+      },
+    });
+
+    const rewritten = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+    expect(rewritten.structuredSignalDiagnostics).toBeTruthy();
+    expect(rewritten.proof).toMatchObject({ state: "met" });
+  });
+
+  it("preserves valid legacy summaries when diagnostics are missing but proof markers already exist", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-10-10-a1.status");
+    const summaryPath = statusPath.replace(/\.status$/i, ".summary.json");
+    const logPath = path.join(dir, "wave-10-10-a1.log");
+
+    fs.writeFileSync(logPath, "", "utf8");
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["README.md"],
+          },
+          components: [
+            {
+              componentId: "wave-parser-and-launcher",
+              level: "repo-landed",
+              state: "met",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const summary = readAgentExecutionSummary(statusPath, {
+      agent: {
+        agentId: "A1",
+        exitContract: {
+          completion: "contract",
+          durability: "none",
+          proof: "unit",
+          docImpact: "owned",
+        },
+        components: ["wave-parser-and-launcher"],
+      },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary).toMatchObject({
+      proof: {
+        completion: "contract",
+        durability: "none",
+        proof: "unit",
+        state: "met",
+      },
+      docDelta: {
+        state: "owned",
+        paths: ["README.md"],
+      },
+      components: [
+        {
+          componentId: "wave-parser-and-launcher",
+          level: "repo-landed",
+          state: "met",
+        },
+      ],
+    });
+    expect(summary?.structuredSignalDiagnostics).toBeUndefined();
+
+    const persisted = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+    expect(persisted.structuredSignalDiagnostics).toBeUndefined();
+    expect(persisted.proof).toMatchObject({ state: "met" });
   });
 });
 
@@ -496,6 +700,130 @@ describe("validateImplementationSummary", () => {
       ok: false,
       statusCode: "missing-wave-proof",
       detail: expect.stringContaining("Wave does not set a Codex turn-limit flag"),
+    });
+  });
+
+  it("returns a parse-specific proof error when raw proof markers were seen but rejected", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1-invalid-proof.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=contract detail=missing-required-fields",
+        "- [wave-doc-delta] state=owned paths=docs/example.md detail=owned-docs",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A1" },
+      statusRecord: { code: 1 },
+      logPath,
+    });
+
+    expect(summary.structuredSignalDiagnostics.proof).toMatchObject({
+      rawCount: 1,
+      acceptedCount: 0,
+    });
+
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        summary,
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "invalid-wave-proof-format",
+      detail: expect.stringContaining("Rejected sample: - [wave-proof] completion=contract detail=missing-required-fields"),
+    });
+  });
+
+  it("returns a parse-specific doc-delta error when raw doc markers were seen but rejected", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1-invalid-doc.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=contract durability=none proof=unit state=met detail=proof-met",
+        "- [wave-doc-delta] detail=missing-state",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A1" },
+      statusRecord: { code: 1 },
+      logPath,
+    });
+
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+        summary,
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "invalid-doc-delta-format",
+      detail: expect.stringContaining("Rejected sample: - [wave-doc-delta] detail=missing-state"),
+    });
+  });
+
+  it("returns a parse-specific component error when a raw component marker was seen but rejected", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a1-invalid-component.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=contract durability=none proof=unit state=met detail=proof-met",
+        "- [wave-doc-delta] state=owned paths=docs/example.md detail=owned-docs",
+        "- [wave-component] component=wave-parser-and-launcher level=repo-landed detail=missing-state",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A1" },
+      statusRecord: { code: 1 },
+      logPath,
+    });
+
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+          components: ["wave-parser-and-launcher"],
+          componentTargets: {
+            "wave-parser-and-launcher": "repo-landed",
+          },
+        },
+        summary,
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "invalid-wave-component-format",
+      detail: expect.stringContaining("Expected a valid component marker for wave-parser-and-launcher."),
     });
   });
 });

@@ -79,18 +79,18 @@ Wave is built to mitigate those failures with canonical shared state, generated 
 
 Current release:
 
-- `@chllming/wave-orchestration@0.7.1`
-- Release tag: [`v0.7.1`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.1)
+- `@chllming/wave-orchestration@0.7.2`
+- Release tag: [`v0.7.2`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.2)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.7.1`:
+Highlights in `0.7.2`:
 
-- Fresh live launches now clear stale auto-generated relaunch plans by default, so explicit wave restarts seed a clean implementation fan-out unless `--resume-control-state` is passed.
-- `wave control status` now treats the active attempt as the authoritative live fan-out instead of replaying stale rerun intent or unrelated closure blockers.
-- `reconcile-status` now preserves previously authoritative completed waves as `completed_with_drift` when the only mismatch is historical prompt-hash drift.
-- Live `launch-preview.json` artifacts now exist for real runs as well as dry-runs, and Codex summaries record observed turn ceilings when the runtime reveals them.
-- Upgrade and operator docs now cover stable dashboard attach, adopted-repo planner corpus migration, and the full `0.7.1` package surface end to end.
+- Final implementation markers now parse correctly when agents emit the structured proof/doc/component block as Markdown list items.
+- Runtime validation now distinguishes truly missing markers from malformed marker syntax, so proof-centric failures surface actionable parse errors.
+- Legacy proof-centric summaries repair themselves from source logs only when the stored summary is actually missing required closure markers.
+- Implementation prompts now keep incomplete work inside the required final markers with `state=gap` and route unresolved issues through `wave coord post`.
+- Upgrade and operator docs now cover the full `0.7.2` package surface end to end.
 
 Requirements:
 

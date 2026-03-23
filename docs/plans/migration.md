@@ -22,13 +22,13 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
-## Upgrading From 0.6.x To 0.7.1
+## Upgrading From 0.6.x To 0.7.2
 
 Read `CHANGELOG.md` first, then treat this section as the repo-owned migration checklist for adopted `0.6.x` workspaces.
 
 `wave upgrade` updates the installed runtime only. It does not copy planner starter files into a repo that already owns its docs, skills, and Context7 bundles.
 
-`0.7.1` also hardens run-control behavior for manual relaunches: fresh live starts clear stale auto-generated relaunch plans by default unless `--resume-control-state` is passed, and `wave control status` now treats the active attempt as the authoritative live fan-out while that attempt is running.
+`0.7.2` also hardens proof-centric closure handling: final implementation markers now parse when emitted as Markdown list items, malformed marker syntax now surfaces explicit parse errors instead of generic missing-marker failures, and incomplete implementation work should stay inside the required final markers with `state=gap` instead of trailing `[wave-gap]` lines.
 
 ### Required Repo Changes
 

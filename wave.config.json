@@ -194,7 +194,7 @@
     "main": {
       "runtimePolicy": {
         "runtimeMixTargets": {
-          "codex": 3,
+          "codex": 7,
           "claude": 4,
           "opencode": 2
         },

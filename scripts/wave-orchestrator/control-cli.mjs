@@ -315,9 +315,15 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
   return wave.agents.map((agent) => {
     const statusPath = statusPathForAgent(lanePaths, wave, agent);
     const statusRecord = readStatusRecordIfPresent(statusPath);
+    const logPath = path.join(lanePaths.logsDir, `wave-${wave.wave}-${agent.slug}.log`);
     const summary = augmentSummaryWithProofRegistry(
       agent,
-      readAgentExecutionSummary(statusPath),
+      readAgentExecutionSummary(statusPath, {
+        agent,
+        statusPath,
+        statusRecord,
+        logPath: fs.existsSync(logPath) ? logPath : null,
+      }),
       proofRegistry || { entries: [] },
     );
     const proofValidation =

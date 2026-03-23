@@ -269,6 +269,15 @@ export function buildExecutionPrompt({
         "- Use `clear` only when no unresolved findings or approvals remain. Use `blocked` only when the wave must stop before integration.",
       ]
     : [];
+  const coordinationCommand = [
+    "pnpm exec wave coord post",
+    `--lane ${lane}`,
+    `--wave ${wave}`,
+    `--agent ${agent.agentId}`,
+    '--kind "<request|ack|claim|evidence|decision|blocker|handoff|clarification-request|orchestrator-guidance|resolved-by-policy|human-escalation|human-feedback|integration-summary>"',
+    '--summary "<one-line summary>"',
+    '--detail "<short detail>"',
+  ].join(" ");
   const implementationRequirements =
     ![contQaAgentId, documentationAgentId].includes(agent.agentId) &&
     !isSecurityReviewAgent(agent) &&
@@ -281,7 +290,8 @@ export function buildExecutionPrompt({
                 "- Emit one final structured component marker per owned component: `[wave-component] component=<id> level=<level> state=<met|gap> detail=<short-note>`.",
               ]
             : []),
-          "- If you leave any material architecture, integration, durability, ops, or docs gap, emit `[wave-gap] kind=<architecture|integration|durability|ops|docs> detail=<short-note>` and make the gap explicit instead of implying completion.",
+          "- If the work is incomplete, keep the required proof/doc/component markers and set `state=gap` on the relevant final marker instead of narrating completion.",
+          `- Route unresolved architecture, integration, durability, ops, or docs issues through \`${coordinationCommand}\`. Do not append \`[wave-gap]\` lines after the final implementation markers.`,
         ]
       : [];
   const exitContractLines = agent.exitContract
@@ -304,15 +314,6 @@ export function buildExecutionPrompt({
     '--question "<specific clarification needed>"',
     '--context "<what you tried, options, and impact>"',
     "--timeout-seconds 30",
-  ].join(" ");
-  const coordinationCommand = [
-    "pnpm exec wave coord post",
-    `--lane ${lane}`,
-    `--wave ${wave}`,
-    `--agent ${agent.agentId}`,
-    '--kind "<request|ack|claim|evidence|decision|blocker|handoff|clarification-request|orchestrator-guidance|resolved-by-policy|human-escalation|human-feedback|integration-summary>"',
-    '--summary "<one-line summary>"',
-    '--detail "<short detail>"',
   ].join(" ");
   const context7Selection = context7?.selection || agent?.context7Resolved || null;
   const executorId = agent?.executorResolved?.id || "default";

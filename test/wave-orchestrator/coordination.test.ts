@@ -76,10 +76,13 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("stay engaged until they confirm `closed` or `no-change`");
     expect(prompt).toContain("[wave-proof]");
     expect(prompt).toContain("[wave-component]");
+    expect(prompt).toContain("pnpm exec wave coord post");
+    expect(prompt).toContain("set `state=gap` on the relevant final marker");
     expect(prompt).toContain("Exit contract for this run:");
     expect(prompt).toContain("completion: integrated");
     expect(prompt).toContain("Component promotions for this wave:");
     expect(prompt).toContain("Components you own in this wave:");
+    expect(prompt).not.toContain("emit `[wave-gap]`");
     expect(prompt).not.toContain("# Wave 2 Message Board");
     expect(prompt).not.toContain("docs/leap-claw/plans");
   });

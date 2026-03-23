@@ -198,6 +198,28 @@ function copyTemplateFile(relPath) {
     throw new Error(`Missing packaged template: ${relPath}`);
   }
   ensureDirectory(path.dirname(targetPath));
+  if (relPath === "docs/plans/component-cutover-matrix.json") {
+    const payload = readJsonOrNull(sourcePath);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error(`Invalid packaged template JSON: ${relPath}`);
+    }
+    const components = Object.fromEntries(
+      Object.entries(payload.components || {}).map(([componentId, component]) => [
+        componentId,
+        {
+          ...component,
+          promotions: Array.isArray(component?.promotions)
+            ? component.promotions.filter((entry) => Number(entry?.wave) === 0)
+            : [],
+        },
+      ]),
+    );
+    writeJsonAtomic(targetPath, {
+      ...payload,
+      components,
+    });
+    return targetPath;
+  }
   fs.copyFileSync(sourcePath, targetPath);
   return targetPath;
 }

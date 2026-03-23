@@ -2345,6 +2345,93 @@ describe("hasReusableSuccessStatus", () => {
       }),
     ).toBe(false);
   });
+
+  it("refreshes stale proof-centric summaries from the agent log before reuse validation", () => {
+    const dir = makeTempDir();
+    const statusPath = path.join(dir, "wave-8-a6.status");
+    const summaryPath = statusPath.replace(/\.status$/, ".summary.json");
+    const logPath = path.join(dir, "wave-8-a6.log");
+    const agent = {
+      agentId: "A6",
+      prompt: "Validate live proof.",
+      components: ["learning-memory-action-plane"],
+      componentTargets: {
+        "learning-memory-action-plane": "pilot-live",
+      },
+      exitContract: {
+        completion: "live",
+        durability: "durable",
+        proof: "live",
+        docImpact: "none",
+      },
+    };
+
+    fs.writeFileSync(
+      statusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(agent),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      summaryPath,
+      JSON.stringify(
+        {
+          proof: null,
+          docDelta: null,
+          components: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      logPath,
+      [
+        "- [wave-proof] completion=live durability=durable proof=live state=met detail=live-proof",
+        "- [wave-doc-delta] state=none detail=no-docs",
+        "- [wave-component] component=learning-memory-action-plane level=pilot-live state=met detail=component-met",
+      ].join("\n"),
+      "utf8",
+    );
+
+    expect(
+      hasReusableSuccessStatus(agent, statusPath, {
+        wave: {
+          componentPromotions: [
+            {
+              componentId: "learning-memory-action-plane",
+              targetLevel: "pilot-live",
+            },
+          ],
+        },
+        derivedState: {
+          coordinationState: {
+            clarifications: [],
+            humanEscalations: [],
+            humanFeedback: [],
+          },
+          capabilityAssignments: [],
+          dependencySnapshot: {
+            requiredInbound: [],
+            requiredOutbound: [],
+            unresolvedInboundAssignments: [],
+          },
+        },
+        logPath,
+      }),
+    ).toBe(true);
+
+    const refreshed = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+    expect(refreshed.proof).toMatchObject({ state: "met", proof: "live" });
+    expect(refreshed.structuredSignalDiagnostics).toBeTruthy();
+  });
 });
 
 describe("selectReusablePreCompletedAgentIds", () => {

@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.7.2",
+      "date": "2026-03-23",
+      "summary": "Implementation marker parsing repair, proof-centric summary refresh, and 0.7.2 release-surface alignment.",
+      "features": [
+        "Implementation summaries now accept final `[wave-proof]`, `[wave-doc-delta]`, and `[wave-component]` markers when agents emit them as bullet-prefixed structured blocks.",
+        "Validation now surfaces parse-specific proof, doc-delta, and component errors when raw structured marker text was seen in the log but rejected by the strict parser.",
+        "Legacy proof-centric summaries are refreshed from source logs only when the stored summary is actually missing required proof, doc-delta, or owned-component markers, preserving valid historical summaries.",
+        "Implementation prompts now keep incomplete work inside the required final markers with `state=gap` and route unresolved issues through `wave coord post` instead of trailing `[wave-gap]` lines.",
+        "Shipped package metadata, README, migration guidance, sample-wave docs, and npm publishing instructions now point at the `0.7.2` release surface."
+      ],
+      "manualSteps": [
+        "If an older lane still contains proof-centric `.summary.json` files missing parsed markers, rerun the relevant launcher or status surfaces once so they can self-refresh from the source logs.",
+        "If implementation agents still carry custom prompt guidance about trailing `[wave-gap]` markers in repo-owned docs, update that guidance so final output ends with only the required implementation markers.",
+        "If an adopted `0.6.x` repo fails `wave doctor` after the `0.7.x` upgrade, sync the repo-owned planner starter surface (`docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry) before relying on planner-aware validation.",
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading once your repo-owned wave files satisfy the current validation contract."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.7.1",
       "date": "2026-03-23",
       "summary": "Run-control hardening, completed-with-drift reconcile preservation, live Codex ceiling visibility, and 0.7.1 release-surface alignment.",

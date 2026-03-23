@@ -79,18 +79,18 @@ Wave is built to mitigate those failures with canonical shared state, generated 
 
 Current release:
 
-- `@chllming/wave-orchestration@0.7.2`
-- Release tag: [`v0.7.2`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.2)
+- `@chllming/wave-orchestration@0.7.3`
+- Release tag: [`v0.7.3`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.3)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.7.2`:
+Highlights in `0.7.3`:
 
-- Final implementation markers now parse correctly when agents emit the structured proof/doc/component block as Markdown list items.
-- Runtime validation now distinguishes truly missing markers from malformed marker syntax, so proof-centric failures surface actionable parse errors.
-- Legacy proof-centric summaries repair themselves from source logs only when the stored summary is actually missing required closure markers.
+- Malformed end-of-tail fenced blocks no longer hide later final `[wave-proof]`, `[wave-doc-delta]`, and `[wave-component]` markers from the structured-signal collector.
+- Legacy proof-centric summaries now rebuild from source logs when required proof/doc/component fields are missing, even if a stale `structuredSignalDiagnostics` object already exists.
+- Final implementation marker diagnostics still distinguish truly missing markers from malformed marker syntax, so proof-centric failures stay actionable instead of collapsing into generic missing-marker noise.
 - Implementation prompts now keep incomplete work inside the required final markers with `state=gap` and route unresolved issues through `wave coord post`.
-- Upgrade and operator docs now cover the full `0.7.2` package surface end to end.
+- Upgrade and operator docs now cover the full `0.7.3` package surface end to end.
 
 Requirements:
 

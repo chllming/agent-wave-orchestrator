@@ -3,6 +3,23 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.7.3",
+      "date": "2026-03-23",
+      "summary": "Unmatched-fence structured-signal recovery, stale-summary rebuild hardening, and 0.7.3 release-surface alignment.",
+      "features": [
+        "Implementation summaries now recover final `[wave-proof]`, `[wave-doc-delta]`, and `[wave-component]` markers even when the log tail ends inside a malformed unmatched fenced block.",
+        "Legacy proof-centric summaries now refresh from source logs when required proof, doc-delta, or owned-component fields are still missing, even if stale `structuredSignalDiagnostics` data already exists.",
+        "Regression coverage now exercises unmatched end-of-tail fence handling and stale diagnostics-backed summary refresh directly.",
+        "Shipped package metadata, README, migration guidance, sample-wave docs, and npm publishing instructions now point at the `0.7.3` release surface."
+      ],
+      "manualSteps": [
+        "If an older lane still contains proof-centric `.summary.json` files with missing proof/doc/component fields, rerun the relevant launcher or status surface once after upgrading so the summaries can self-refresh from the source logs.",
+        "If an adopted `0.6.x` repo fails `wave doctor` after the `0.7.x` upgrade, sync the repo-owned planner starter surface (`docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry) before relying on planner-aware validation.",
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading once your repo-owned wave files satisfy the current validation contract."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.7.2",
       "date": "2026-03-23",
       "summary": "Implementation marker parsing repair, proof-centric summary refresh, and 0.7.2 release-surface alignment.",

@@ -270,6 +270,10 @@ function assignmentRelevantToAgent(assignment, agentId = "") {
   );
 }
 
+function isCompletedPhase(phase) {
+  return String(phase || "").trim().toLowerCase() === "completed";
+}
+
 function buildEffectiveSelection(lanePaths, wave, { activeAttempt = null, rerunRequest = null, relaunchPlan = null } = {}) {
   const activeAttemptSelected = Array.isArray(activeAttempt?.selectedAgentIds)
     ? Array.from(new Set(activeAttempt.selectedAgentIds.filter(Boolean)))
@@ -308,10 +312,20 @@ function buildEffectiveSelection(lanePaths, wave, { activeAttempt = null, rerunR
   };
 }
 
-function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabilityAssignments, selection, proofRegistry }) {
+function buildLogicalAgents({
+  lanePaths,
+  wave,
+  tasks,
+  dependencySnapshot,
+  capabilityAssignments,
+  selection,
+  proofRegistry,
+  phase,
+}) {
   const selectedAgentIds = new Set(selection?.selectedAgentIds || []);
   const helperAssignments = Array.isArray(capabilityAssignments) ? capabilityAssignments : [];
   const openInbound = dependencySnapshot?.openInbound || [];
+  const completedPhase = isCompletedPhase(phase);
   return wave.agents.map((agent) => {
     const statusPath = statusPathForAgent(lanePaths, wave, agent);
     const statusRecord = readStatusRecordIfPresent(statusPath);
@@ -343,6 +357,11 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
       (assignment) => assignment.blocking && assignment.assignedAgentId === agent.agentId,
     );
     const dependency = openInbound.find((record) => record.assignedAgentId === agent.agentId);
+    const satisfiedByStatus =
+      statusRecord?.code === 0 &&
+      (proofValidation.ok ||
+        isSecurityReviewAgent(agent) ||
+        isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId }));
     let state = "planned";
     let reason = "";
     if (selection?.source === "active-attempt" && selectedAgentIds.has(agent.agentId)) {
@@ -354,6 +373,16 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
         selection?.source === "relaunch-plan"
           ? "Selected by the persisted relaunch plan."
           : "Selected by active rerun request.";
+    } else if (completedPhase && satisfiedByStatus) {
+      state = [
+        lanePaths.contEvalAgentId || "E0",
+        lanePaths.integrationAgentId || "A8",
+        lanePaths.documentationAgentId || "A9",
+        lanePaths.contQaAgentId || "A0",
+      ].includes(agent.agentId) || isSecurityReviewAgent(agent)
+        ? "closed"
+        : "satisfied";
+      reason = "Completed wave preserves the latest satisfied agent state.";
     } else if (targetedBlockingTasks.some((task) => task.state === "working")) {
       state = "working";
       reason = targetedBlockingTasks.find((task) => task.state === "working")?.title || "";
@@ -365,7 +394,7 @@ function buildLogicalAgents({ lanePaths, wave, tasks, dependencySnapshot, capabi
         helperAssignment?.summary ||
         dependency?.summary ||
         "";
-    } else if (statusRecord?.code === 0 && (proofValidation.ok || isSecurityReviewAgent(agent) || isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId }))) {
+    } else if (satisfiedByStatus) {
       state = [
         lanePaths.contEvalAgentId || "E0",
         lanePaths.integrationAgentId || "A8",
@@ -401,7 +430,19 @@ function selectionTargetsAgent(agentId, selectionSet) {
   return Boolean(agentId) && selectionSet.has(agentId);
 }
 
-function buildBlockingEdge({ tasks, capabilityAssignments, dependencySnapshot, activeAttempt, rerunRequest, relaunchPlan, agentId = "" }) {
+function buildBlockingEdge({
+  tasks,
+  capabilityAssignments,
+  dependencySnapshot,
+  activeAttempt,
+  rerunRequest,
+  relaunchPlan,
+  agentId = "",
+  phase,
+}) {
+  if (isCompletedPhase(phase)) {
+    return null;
+  }
   const attemptSelection = new Set(activeAttempt?.selectedAgentIds || []);
   const scopeToActiveAttempt = !agentId && attemptSelection.size > 0;
   const scopedTasks = (agentId
@@ -546,6 +587,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
   const logPath = coordinationLogPath(lanePaths, wave.wave);
   const coordinationState = readMaterializedCoordinationState(logPath);
   const ledger = readWaveLedger(ledgerPath(lanePaths, wave.wave)) || { phase: "planned" };
+  const phase = ledger.phase || "unknown";
   const capabilityAssignments = buildRequestAssignments({
     coordinationState,
     agents: wave.agents,
@@ -596,7 +638,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
   return {
     lane: lanePaths.lane,
     wave: wave.wave,
-    phase: ledger.phase || "unknown",
+    phase,
     agentId: agentId || null,
     blockingEdge: buildBlockingEdge({
       tasks,
@@ -606,6 +648,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
       rerunRequest,
       relaunchPlan,
       agentId,
+      phase,
     }),
     logicalAgents: buildLogicalAgents({
       lanePaths,
@@ -615,6 +658,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
       capabilityAssignments,
       selection,
       proofRegistry,
+      phase,
     }).filter((agent) => !agentId || agent.agentId === agentId),
     tasks,
     helperAssignments: (capabilityAssignments || []).filter(
@@ -634,7 +678,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
     selectionSource: selection.source,
     rerunRequest,
     relaunchPlan,
-    nextTimer: nextTaskDeadline(tasks),
+    nextTimer: isCompletedPhase(phase) ? null : nextTaskDeadline(tasks),
     activeAttempt: controlState.activeAttempt,
   };
 }

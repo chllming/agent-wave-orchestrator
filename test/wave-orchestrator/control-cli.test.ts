@@ -431,6 +431,70 @@ describe("wave control CLI", () => {
     });
   });
 
+  it("suppresses stale blocking projections after the wave is already completed", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+    expect(
+      runWaveCli(
+        [
+          "control",
+          "task",
+          "create",
+          "--lane",
+          "main",
+          "--wave",
+          "0",
+          "--agent",
+          "A9",
+          "--kind",
+          "request",
+          "--summary",
+          "Reconcile shared-plan documentation",
+          "--detail",
+          "Historical request record should stay visible without blocking a completed wave.",
+        ],
+        repoDir,
+      ).status,
+    ).toBe(0);
+
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "ledger", "wave-0.json"), {
+      phase: "completed",
+    });
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "status", "wave-0-0-a9.status"), {
+      code: 0,
+      promptHash: "completed-wave-a9",
+      completedAt: "2026-03-24T00:00:00.000Z",
+    });
+
+    const statusResult = runWaveCli(
+      ["control", "status", "--lane", "main", "--wave", "0", "--json"],
+      repoDir,
+    );
+
+    expect(statusResult.status).toBe(0);
+    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+      phase: "completed",
+      blockingEdge: null,
+      nextTimer: null,
+      logicalAgents: expect.arrayContaining([
+        expect.objectContaining({
+          agentId: "A9",
+          state: "closed",
+          reason: "Completed wave preserves the latest satisfied agent state.",
+        }),
+      ]),
+      tasks: expect.arrayContaining([
+        expect.objectContaining({
+          taskType: "request",
+          assigneeAgentId: "A9",
+          state: "open",
+        }),
+      ]),
+    });
+  });
+
   it("preserves revoked proof state in control reads and excludes revoked bundles from active proof ids", () => {
     const repoDir = makeTempDir();
     writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });

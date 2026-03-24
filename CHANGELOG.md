@@ -10,12 +10,14 @@
 
 ### Fixed And Hardened
 
-- `wave control status` now stops surfacing stale blocking edges after a wave has already reached `phase=completed`.
-- Completed waves now suppress stale `nextTimer` deadlines and preserve successful logical-agent states instead of re-blocking agents from historical open request records.
+- `wave control status` now treats `phase=completed` as terminal in the control-status projection layer instead of replaying stale blocking edges from historical open coordination records.
+- Completed waves now return `blockingEdge: null` and `nextTimer: null`, so stale overdue timers or request blockers stop leaking into an already-closed wave view.
+- Successful logical-agent state is now preserved for completed waves, so agents that already finished cleanly stay `closed` or `satisfied` even when old request records remain visible in coordination history.
 
 ### Testing And Validation
 
 - Added regression coverage for completed-wave control-status projections so historical request records stay visible without reopening blocking state after closure.
+- Revalidated the shipped release surface with the full Vitest suite, `wave doctor --json`, and `wave launch --lane main --dry-run --no-dashboard`.
 
 ## 0.8.1 - 2026-03-24
 

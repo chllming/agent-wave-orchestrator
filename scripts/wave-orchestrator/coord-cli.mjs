@@ -23,6 +23,7 @@ import {
   writeJsonArtifact,
 } from "./coordination-store.mjs";
 import { answerFeedbackRequest } from "./feedback.mjs";
+import { answerHumanInputAndReconcile } from "./human-input-resolution.mjs";
 import { readWaveHumanFeedbackRequests } from "./coordination.mjs";
 import { readWaveProofRegistry } from "./proof-registry.mjs";
 import {
@@ -462,6 +463,13 @@ export async function runCoordinationCli(argv) {
         operator: options.operator,
         force: true,
         recordTelemetry: true,
+      });
+      answerHumanInputAndReconcile({
+        lanePaths,
+        wave,
+        requestId: options.id,
+        answeredPayload: answered,
+        operator: options.operator,
       });
       console.log(JSON.stringify(answered, null, 2));
       return;

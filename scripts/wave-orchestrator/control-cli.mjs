@@ -6,6 +6,7 @@ import { readWaveHumanFeedbackRequests } from "./coordination.mjs";
 import { readWaveLedger } from "./ledger.mjs";
 import { buildDependencySnapshot, buildRequestAssignments } from "./routing-state.mjs";
 import { parseWaveFiles } from "./wave-files.mjs";
+import { answerHumanInputAndReconcile } from "./human-input-resolution.mjs";
 import {
   buildLanePaths,
   DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
@@ -1016,6 +1017,13 @@ export async function runControlCli(argv) {
           response: options.response,
           operator: options.operator,
           force: true,
+        });
+        answerHumanInputAndReconcile({
+          lanePaths,
+          wave,
+          requestId: options.id,
+          answeredPayload: answered,
+          operator: options.operator,
         });
         appendWaveControlEvent(lanePaths, wave.wave, {
           entityType: "human_input",

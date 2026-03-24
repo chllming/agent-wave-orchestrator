@@ -79,18 +79,18 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.2`
-- Release tag: [`v0.8.2`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.2)
+- `@chllming/wave-orchestration@0.8.3`
+- Release tag: [`v0.8.3`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.3)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.2`:
+Highlights in `0.8.3`:
 
-- `wave control status` now clears stale blocking edges once a wave is already completed instead of replaying historical open request records as live blockers.
-- Completed waves now suppress stale `nextTimer` deadlines and preserve successful logical-agent states in the control-status projection.
-- The helper-assignment policy-closure fixes from `0.8.1` remain intact.
-- The architecture-hardening migration plan, reducer or envelope wiring, and aligned docs or skills from the prior releases remain intact.
-- Upgrade and operator docs now cover the full `0.8.2` package surface end to end.
+- Answering a human-feedback request now reconciles linked clarification, escalation, and helper-assignment state back into the canonical coordination log instead of only updating the feedback JSON.
+- `wave feedback respond --run <id>` now applies that same reconciliation and safe continuation flow to ad-hoc runs instead of writing into the roadmap lane state root.
+- When a stranded wave can safely continue after the answer arrives and no attempt is still running, Wave writes a one-shot continuation request automatically.
+- The completed-wave control-status hardening from `0.8.2` remains intact.
+- Upgrade and operator docs now cover the full `0.8.3` package surface end to end.
 
 Requirements:
 

@@ -250,6 +250,17 @@ pnpm exec wave control task act resolve --lane main --wave 10 --id escalation-cl
 
 That keeps clarification routing, dismissal, escalation, and human-answer handling inside the canonical coordination state instead of forcing ad hoc file edits.
 
+When the operator answers through the feedback queue directly, the answer path now repairs the same canonical state:
+
+```bash
+pnpm exec wave feedback respond \
+  --id 202603240000-main-w6-A3-abc123 \
+  --response "Use the 90-day compatibility window documented in docs/plans/migration.md." \
+  --operator ops-lead
+```
+
+For ad-hoc runs, include `--run <id>` on that command. The response path will reconcile the linked clarification or escalation chain, re-sync helper-assignment projections, and write a safe one-shot continuation request when the reducer can resume but no active attempt is still running.
+
 ## End-To-End Example: Required Dependency
 
 Assume the wave needs another lane to land a required API first.

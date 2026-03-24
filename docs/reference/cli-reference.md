@@ -297,11 +297,13 @@ wave feedback ask \
 
 ```
 wave feedback respond \
-  --id <request-id> --response "<text>" \
+  [--run <id>] --id <request-id> --response "<text>" \
   [--operator <name>] [--force]
 ```
 
 `--force` overrides a previously answered request.
+
+When the answered request belongs to a live wave or ad-hoc run, `wave feedback respond` also reconciles the linked clarification, escalation, and helper-assignment state in canonical coordination. If no attempt is still running and the reducer can safely continue, it writes a one-shot continuation request instead of relaunching directly. Use `--run <id>` when answering an ad-hoc request so reconciliation targets the isolated ad-hoc state root.
 
 **List feedback requests:**
 
@@ -320,6 +322,8 @@ wave feedback watch [--lane <lane>] [--wave <n>] [--agent <id>] [--pending] [--r
 ```
 wave feedback show --id <request-id>
 ```
+
+All `wave feedback` subcommands accept `--run <id>` for ad-hoc runs.
 
 ## wave dep
 

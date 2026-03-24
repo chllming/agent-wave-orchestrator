@@ -24,13 +24,13 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
-## Upgrading From 0.6.x To 0.8.2
+## Upgrading From 0.6.x To 0.8.3
 
 Read `CHANGELOG.md` first, then treat this section as the repo-owned migration checklist for adopted `0.6.x` workspaces.
 
 `wave upgrade` updates the installed runtime only. It does not copy planner starter files into a repo that already owns its docs, skills, and Context7 bundles.
 
-`0.8.2` carries forward the `0.8.1` helper-assignment fixes and hardens the control-status projection layer: completed waves no longer replay stale blocking edges or overdue timers from historical coordination records, and successful logical-agent state stays preserved once the wave is terminal.
+`0.8.3` carries forward the `0.8.2` completed-wave control-status hardening and fixes the human-answer reconciliation path: answered feedback now closes the linked clarification or escalation chain in canonical coordination, re-syncs helper-assignment projections, and preserves ad-hoc `--run <id>` context when writing safe continuation intent.
 
 ### Required Repo Changes
 
@@ -42,7 +42,7 @@ If the repo adopted Wave before the planner corpus became a tracked required sur
 - `docs/reference/wave-planning-lessons.md`
 - the `planner-agentic` bundle entry in `docs/context7/bundles.json`
 
-If the repo copied the shipped starter architecture docs or skills and wants the `0.8.2` authority-model language, also sync:
+If the repo copied the shipped starter architecture docs or skills and wants the `0.8.3` authority-model language, also sync:
 
 - `docs/agents/wave-launcher-role.md`
 - `docs/agents/wave-orchestrator-role.md`
@@ -57,6 +57,7 @@ After syncing those repo-owned files:
 1. Run `pnpm exec wave doctor`.
 2. Run `pnpm exec wave launch --lane main --dry-run --no-dashboard`.
 3. Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a live tmux-backed dashboard without reverse-engineering the socket or session name.
+4. If your operators answer human-input tickets through `wave feedback respond`, update any repo-local runbooks so ad-hoc runs always pass `--run <id>` when responding outside the main roadmap lane.
 
 ## Upgrading From 0.5.4 To 0.6.1
 

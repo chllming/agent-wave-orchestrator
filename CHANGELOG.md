@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.8.3 - 2026-03-24
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, sample-wave docs, current-state notes, and npm publishing runbook to advertise `0.8.3` as the current release surface.
+- Documented that `wave feedback respond` is a canonical-state repair path, not a feedback-JSON-only update, and that ad-hoc reconciliation must keep the `--run <id>` context.
+
+### Fixed And Hardened
+
+- Answered human-feedback requests now reconcile linked clarification, escalation, and helper-assignment state back into the canonical coordination log so reducer state, control surfaces, and launcher gates stop reading the wave as still `clarifying`.
+- `wave feedback respond --run <id>` now carries the ad-hoc run id through the reconciliation helper, so answered human input repairs the isolated ad-hoc lane state instead of the roadmap state root.
+- When a wave is stranded after a human answer arrives and no active attempt is still running, the human-input reconciliation path now writes a safe one-shot continuation request instead of leaving the wave waiting for manual relaunch bookkeeping.
+
+### Testing And Validation
+
+- Added regression coverage for direct `wave feedback respond` reconciliation and for the ad-hoc `--run <id>` answer path.
+
 ## 0.8.2 - 2026-03-24
 
 ### Changed

@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.8.2` package release surface.
+- The starter workspace in this source repo reflects the `0.8.3` package release surface.
 - The staged architecture cutover from launcher-centric decisions to reducer and phase-engine ownership is tracked in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
@@ -15,6 +15,7 @@
   - `wave adhoc plan|run|list|show|promote` manage transient operator-driven work
   - requests, generated specs, rendered markdown, and final results live under `.wave/adhoc/runs/<run-id>/`
   - runtime state stays isolated under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`
+  - `wave feedback respond --run <run-id>` now reconciles answered human-input state inside that isolated ad-hoc state root and can queue a safe one-shot continuation request without touching roadmap state
   - ad-hoc runs always keep integration, documentation, and cont-QA closure, while `cont-EVAL` and security review are synthesized only when the request needs them
   - documentation closure still queues canonical shared-plan docs when a run reports a shared-plan delta, alongside the ad-hoc closure report
   - `wave adhoc promote` copies the stored ad-hoc spec into numbered roadmap artifacts instead of re-deriving it from the current project profile
@@ -39,6 +40,7 @@
   - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
   - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
+  - answered human-feedback responses that reconcile canonical coordination state, helper assignments, and safe continuation intent even when the launcher is no longer active
   - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
   - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, attempt lifecycle, and human-input events as append-only JSONL; `wave control` materializes state from this log

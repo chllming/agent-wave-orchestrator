@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.3",
+      "date": "2026-03-24",
+      "summary": "Human-input reconciliation repair, ad-hoc feedback-run context hardening, and 0.8.3 release-surface alignment.",
+      "features": [
+        "Answered human-feedback requests now reconcile linked clarification, escalation, and helper-assignment state back into the canonical coordination log instead of only updating the feedback request JSON.",
+        "`wave feedback respond --run <id>` now preserves ad-hoc run context while writing reconciliation and safe continuation state, so ad-hoc answers stop mutating the roadmap lane state root.",
+        "When no attempt is still running and the reducer can safely continue, human-input reconciliation writes a one-shot continuation request instead of leaving the wave stranded after the operator answer arrives.",
+        "Regression coverage now exercises both direct feedback-response reconciliation and the ad-hoc `--run <id>` path.",
+        "Shipped package metadata, README, migration guidance, current-state notes, sample-wave docs, and npm publishing instructions now point at the `0.8.3` release surface."
+      ],
+      "manualSteps": [
+        "If your operators answer tickets through `wave feedback respond`, update any repo-local runbooks so ad-hoc runs always pass `--run <id>` when answering outside the main roadmap lane.",
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.3` runtime and human-input reconciliation contract.",
+        "If an adopted repo fails `wave doctor` after the upgrade, sync the repo-owned planner starter surface (`docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry) before relying on planner-aware validation.",
+        "If a repo copied the shipped starter architecture docs or skills and wants the `0.8.3` operator guidance, sync the updated launcher and orchestrator role prompts plus the relevant runtime and closure-role skill bundles."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.2",
       "date": "2026-03-24",
       "summary": "Completed-wave control-status projection hardening and 0.8.2 release-surface alignment.",

@@ -15,7 +15,7 @@
 Follow this sequence for each deliverable in your exit contract:
 
 1. **Claim ownership** -- confirm the files and deliverables assigned to you in the wave definition. If anything is ambiguous, post a coordination record before starting.
-2. **Read context** -- re-read the shared summary, your inbox, and the board projection. Check for coordination records from other agents that affect your scope.
+2. **Read context** -- re-read the shared summary, your inbox, and the board projection. Check for coordination records from other agents that affect your scope, but trust landed code and canonical state if a projection looks stale.
 3. **Implement** -- make the smallest change that satisfies the exit contract. Follow repo coding rules for style, tests, and change hygiene.
 4. **Proof** -- produce durable evidence that the deliverable works:
    - Tests that pass and cover the changed behavior.

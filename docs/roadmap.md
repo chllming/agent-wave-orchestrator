@@ -182,7 +182,7 @@ Opt-in:
 
 The runtime already has strong coordination primitives, but the roadmap should still push these areas:
 
-- keep the canonical coordination store as the source of truth and the markdown board as a rendered view
+- keep the canonical authority set explicit and the markdown board as a rendered view
 - keep compiled per-agent inboxes and shared summaries central to prompt construction
 - strengthen the integration steward output as the single closure-ready synthesis artifact
 - add `wave lint` for ownership, component promotion, runtime mix, deploy environment, and closure completeness

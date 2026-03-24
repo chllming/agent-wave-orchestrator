@@ -21,7 +21,7 @@ Before editing any file, confirm:
 5. If the file has a corresponding test file, you will update or extend tests to cover your change.
 6. You have checked for other files that import or depend on the symbols you are changing.
 7. If the file is a config file (JSON, YAML), you have validated the resulting structure is well-formed.
-8. You are not editing generated runtime state (coordination logs, control-plane events, proof registries, trace bundles, dashboards). These are managed by the launcher and operator tooling.
+8. You are not editing generated runtime state (coordination logs, control-plane events, result artifacts, proof registries, trace bundles, dashboards). These are canonical runtime artifacts or projections managed by the orchestration runtime.
 
 ## Change Hygiene
 

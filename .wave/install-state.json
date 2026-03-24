@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageName": "@chllming/wave-orchestration",
-  "installedVersion": "0.7.3",
+  "installedVersion": "0.8.0",
   "initializedAt": "2026-03-21T22:06:19.813Z",
-  "lastUpgradeAt": "2026-03-23T16:07:28.583Z",
+  "lastUpgradeAt": "2026-03-24T06:24:00.000Z",
   "initMode": "adopt-existing",
   "seededFiles": [],
   "adoptedFiles": [
@@ -84,7 +84,14 @@
       "fromVersion": "0.7.2",
       "toVersion": "0.7.3",
       "report": ".wave/upgrade-history/2026-03-23T16-07-28.583Z-0.7.2-to-0.7.3.md"
+    },
+    {
+      "at": "2026-03-24T06:24:00.000Z",
+      "action": "upgrade",
+      "fromVersion": "0.7.3",
+      "toVersion": "0.8.0",
+      "report": ".wave/upgrade-history/2026-03-24T06-24-00.000Z-0.7.3-to-0.8.0.md"
     }
   ],
-  "lastUpgradeReport": ".wave/upgrade-history/2026-03-23T16-07-28.583Z-0.7.2-to-0.7.3.md"
+  "lastUpgradeReport": ".wave/upgrade-history/2026-03-24T06-24-00.000Z-0.7.3-to-0.8.0.md"
 }

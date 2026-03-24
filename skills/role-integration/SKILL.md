@@ -14,7 +14,7 @@
 
 Execute these steps in order:
 
-1. **Collect evidence** -- re-read the compiled shared summary, your inbox, the board projection, and all coordination records posted by implementation agents and cont-EVAL (if present). Summaries refresh during execution, so use the latest version.
+1. **Collect evidence** -- re-read the compiled shared summary, your inbox, the board projection, all coordination records posted by implementation agents and cont-EVAL (if present), and the current control-plane or result-artifact state. Summaries refresh during execution, so use the latest version, but trust canonical state over stale projections.
 2. **Check contradictions** -- identify claims from different agents that conflict (e.g., two agents claiming the same file, incompatible interface assumptions, inconsistent status claims).
 3. **Verify proof gaps** -- walk each agent's exit contract and confirm proof artifacts exist. Flag any exit contract line that lacks durable evidence. When the wave declares `### Proof artifacts`, verify those artifacts are present. Check the proof registry for any revoked or superseded bundles that no longer satisfy closure.
 4. **Check helper assignments** -- verify that every helper assignment posted during the wave has a linked resolution or explicit follow-up.
@@ -37,7 +37,7 @@ Review each item. Any failure means the wave is `needs-more-work`:
 - [ ] All blockers posted during the wave have a resolution or an explicit follow-up.
 - [ ] Helper assignments are resolved or have linked follow-up work.
 - [ ] Clarification chains are closed.
-- [ ] cont-EVAL marker (if present) shows `satisfied` with matching ids.
+- [ ] cont-EVAL result state (if present) shows `satisfied` with matching ids.
 - [ ] Deploy-status markers (if present) show `healthy` or have explicit downgrade reasoning.
 - [ ] Cross-lane dependency tickets are resolved or explicitly deferred.
 - [ ] No active rerun request is pending (check via `wave control rerun get`).

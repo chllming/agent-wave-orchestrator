@@ -93,10 +93,11 @@ describe("reduceWaveState", () => {
   describe("empty inputs", () => {
     it("produces valid initial state with completely empty inputs", () => {
       const state = reduceWaveState({});
-      expect(state.reducerVersion).toBe(1);
+      expect(state.reducerVersion).toBe(2);
       expect(state.wave).toBe(0);
       expect(state.lane).toBe("main");
       expect(state.phase).toBe("running");
+      expect(state.waveState).toBe("running");
       expect(state.tasks).toEqual([]);
       expect(state.tasksByAgentId).toEqual({});
       expect(state.proofAvailability).toBeTruthy();
@@ -106,11 +107,26 @@ describe("reduceWaveState", () => {
       expect(Array.isArray(state.openBlockers)).toBe(true);
       expect(state.gateSnapshot).toBeTruthy();
       expect(state.gateSnapshot.overall).toBeTruthy();
+      // gateVerdicts is same reference as gateSnapshot
+      expect(state.gateVerdicts).toBe(state.gateSnapshot);
       expect(state.retryTargetSet).toBeTruthy();
-      expect(state.retryTargetSet.agentIds).toEqual([]);
+      // Gate-identified agents (e.g. A0 from cont-QA gate) may appear even with empty inputs
+      expect(Array.isArray(state.retryTargetSet.agentIds)).toBe(true);
       expect(state.closureEligibility).toBeTruthy();
       expect(state.coordinationMetrics).toBeTruthy();
       expect(state.controlPlaneState).toBeTruthy();
+      // New end-state fields
+      expect(state.contradictions).toBeInstanceOf(Map);
+      expect(state.contradictions.size).toBe(0);
+      expect(state.facts).toBeInstanceOf(Map);
+      expect(state.facts.size).toBe(0);
+      expect(state.humanInputs).toBeInstanceOf(Map);
+      expect(state.humanInputs.size).toBe(0);
+      expect(state.taskGraph).toBeTruthy();
+      expect(state.taskGraph.nodes).toEqual([]);
+      expect(state.taskGraph.edges).toEqual([]);
+      expect(state.assignments).toBeInstanceOf(Map);
+      expect(state.assignments.size).toBe(0);
     });
   });
 
@@ -227,6 +243,13 @@ describe("reduceWaveState", () => {
       expect(state.gateSnapshot.overall).toBeTruthy();
     });
 
+    it("gateVerdicts is the same object as gateSnapshot", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(state.gateVerdicts).toBe(state.gateSnapshot);
+    });
+
     it("implementation gate fails when agent missing proof", () => {
       const state = reduceWaveState({
         waveDefinition: makeWaveDefinition(),
@@ -247,6 +270,110 @@ describe("reduceWaveState", () => {
         },
       });
       expect(state.gateSnapshot.implementationGate.ok).toBe(true);
+    });
+
+    it("uses request assignments to block helper-assignment closure deterministically", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition({
+          agents: [
+            {
+              agentId: "A1",
+              title: "Core implementation",
+              ownedPaths: ["src/core.ts"],
+              capabilities: ["core"],
+              exitContract: {
+                completion: "contract",
+                durability: "durable",
+                proof: "unit",
+                docImpact: "none",
+              },
+            },
+            {
+              agentId: "A0",
+              title: "Cont-QA",
+              ownedPaths: [],
+            },
+          ],
+        }),
+        coordinationRecords: [
+          {
+            id: "req-helper-1",
+            kind: "request",
+            status: "open",
+            priority: "normal",
+            agentId: "A1",
+            targets: ["capability:missing-capability"],
+            summary: "Need another owner to take this slice",
+            detail: "No helper exists yet.",
+            source: "agent",
+            createdAt: "2026-03-23T00:00:00.000Z",
+            updatedAt: "2026-03-23T00:00:00.000Z",
+          },
+        ],
+      });
+
+      expect(state.gateSnapshot.helperAssignmentBarrier).toMatchObject({
+        ok: false,
+        statusCode: "helper-assignment-unresolved",
+      });
+      expect(state.phase).toBe("blocked");
+      expect(state.assignments.size).toBe(1);
+    });
+
+    it("blocks integration closure when unresolved contradictions remain", () => {
+      const state = reduceWaveState({
+        controlPlaneEvents: [
+          {
+            id: "evt-contra-1",
+            entityType: "contradiction",
+            entityId: "contra-1",
+            action: "create",
+            lane: "main",
+            wave: 3,
+            recordedAt: "2026-03-23T00:00:00.000Z",
+            data: {
+              kind: "integration_conflict",
+              status: "detected",
+              severity: "blocking",
+              impactedGates: ["integrationBarrier"],
+            },
+          },
+        ],
+        waveDefinition: {
+          wave: 3,
+          agents: [
+            {
+              agentId: "A8",
+              title: "Integration",
+              ownedPaths: [],
+            },
+            {
+              agentId: "A0",
+              title: "Cont-QA",
+              ownedPaths: [],
+            },
+          ],
+          componentPromotions: [],
+        },
+        agentResults: {
+          A8: {
+            agentId: "A8",
+            integration: {
+              state: "ready-for-doc-closure",
+              claims: 0,
+              conflicts: 0,
+              blockers: 0,
+              detail: "Ready on summary alone.",
+            },
+          },
+          A0: makeContQaPassingSummary(),
+        },
+      });
+
+      expect(state.gateSnapshot.integrationBarrier).toMatchObject({
+        ok: false,
+        statusCode: "integration-contradiction-open",
+      });
     });
   });
 
@@ -270,6 +397,13 @@ describe("reduceWaveState", () => {
       expect(state.closureEligibility.ownedSliceProvenAgentIds).toContain("A1");
       expect(state.closureEligibility.pendingAgentIds).toContain("A2");
     });
+
+    it("includes proofBundles for buildResumePlan", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(Array.isArray(state.closureEligibility.proofBundles)).toBe(true);
+    });
   });
 
   describe("phase derivation", () => {
@@ -278,6 +412,7 @@ describe("reduceWaveState", () => {
         waveDefinition: makeWaveDefinition(),
       });
       expect(state.phase).toBe("running");
+      expect(state.waveState).toBe("running");
     });
 
     it("returns clarifying when open clarifications exist", () => {
@@ -295,6 +430,7 @@ describe("reduceWaveState", () => {
         ],
       });
       expect(state.phase).toBe("clarifying");
+      expect(state.waveState).toBe("blocked");
     });
 
     it("returns blocked when high-priority blockers exist", () => {
@@ -313,6 +449,7 @@ describe("reduceWaveState", () => {
         ],
       });
       expect(state.phase).toBe("blocked");
+      expect(state.waveState).toBe("blocked");
     });
   });
 
@@ -372,6 +509,40 @@ describe("reduceWaveState", () => {
       expect(state.retryTargetSet.agentIds).not.toContain("A1");
       expect(state.retryTargetSet.agentIds).not.toContain("A2");
     });
+
+    it("includes agents identified by failed gates", () => {
+      // When a gate has an agentId and fails, that agent should appear in retry targets
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        agentResults: {
+          A1: makePassingSummary("A1"),
+          A2: makePassingSummary("A2"),
+          // A0 has no result -> cont-QA gate should fail and reference A0
+        },
+      });
+      // A0 should be in retry targets because it has unproven slice (no result)
+      expect(state.retryTargetSet.agentIds).toContain("A0");
+    });
+
+    it("keeps deterministic retry target metadata for reducer-driven resume planning", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        agentResults: {
+          A1: makePassingSummary("A1"),
+          A2: makeFailingSummary("A2"),
+          A0: makeContQaPassingSummary(),
+        },
+      });
+
+      expect(state.retryTargetSet.targets).toContainEqual(
+        expect.objectContaining({
+          agentId: "A2",
+          reason: "wave-proof-gap",
+          statusCode: "wave-proof-gap",
+          gate: "implementationGate",
+        }),
+      );
+    });
   });
 
   describe("control plane state", () => {
@@ -423,6 +594,270 @@ describe("reduceWaveState", () => {
       });
       expect(state.lane).toBe("beta");
       expect(state.wave).toBe(3);
+    });
+  });
+
+  describe("contradictions and facts", () => {
+    it("materializes contradictions from control-plane events", () => {
+      const events = [
+        {
+          id: "evt-c1",
+          entityType: "contradiction",
+          entityId: "contradiction-1",
+          action: "create",
+          data: {
+            kind: "proof_conflict",
+            status: "detected",
+            reportedBy: "A1",
+            parties: [{ agentId: "A1", claim: "tests pass" }],
+            affectedTasks: ["task-1"],
+          },
+          recordedAt: new Date().toISOString(),
+        },
+      ];
+      const state = reduceWaveState({
+        controlPlaneEvents: events,
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(state.contradictions.size).toBe(1);
+      expect(state.contradictions.has("contradiction-1")).toBe(true);
+      const c = state.contradictions.get("contradiction-1");
+      expect(c.kind).toBe("proof_conflict");
+      expect(c.status).toBe("detected");
+      expect(c.reportedBy).toBe("A1");
+    });
+
+    it("materializes facts from control-plane events", () => {
+      const events = [
+        {
+          id: "evt-f1",
+          entityType: "fact",
+          entityId: "fact-1",
+          action: "create",
+          data: {
+            kind: "claim",
+            content: "All unit tests pass",
+            introducedBy: "A1",
+            status: "active",
+          },
+          recordedAt: new Date().toISOString(),
+        },
+      ];
+      const state = reduceWaveState({
+        controlPlaneEvents: events,
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(state.facts.size).toBe(1);
+      expect(state.facts.has("fact-1")).toBe(true);
+      const f = state.facts.get("fact-1");
+      expect(f.kind).toBe("claim");
+      expect(f.content).toBe("All unit tests pass");
+      expect(f.introducedBy).toBe("A1");
+    });
+  });
+
+  describe("humanInputs", () => {
+    it("materializes human inputs from feedback requests", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        feedbackRequests: [
+          {
+            id: "fb-1",
+            status: "pending",
+            agentId: "A1",
+            question: "Need approval",
+            context: "Approval needed for deployment",
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+      expect(state.humanInputs).toBeInstanceOf(Map);
+      expect(state.humanInputs.size).toBeGreaterThanOrEqual(1);
+    });
+
+    it("materializes human inputs from clarification records", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "clar-1",
+            kind: "clarification-request",
+            status: "open",
+            agentId: "A1",
+            summary: "Need clarification on API design",
+            recordedAt: new Date().toISOString(),
+          },
+        ],
+      });
+      expect(state.humanInputs).toBeInstanceOf(Map);
+      expect(state.humanInputs.size).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("determinism", () => {
+    it("produces stable coordination-derived tasks across identical reducer calls", () => {
+      const input = {
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "clar-1",
+            kind: "clarification-request",
+            status: "open",
+            agentId: "A1",
+            summary: "Need clarification on API design",
+            detail: "Clarify API shape",
+            lane: "main",
+            wave: 3,
+            createdAt: "2026-03-23T00:00:00.000Z",
+            updatedAt: "2026-03-23T00:00:00.000Z",
+          },
+        ],
+      };
+
+      const first = reduceWaveState(input);
+      const second = reduceWaveState(input);
+
+      expect(first.tasks).toEqual(second.tasks);
+      expect(first.tasks.find((task) => task.sourceRecordId === "clar-1")?.taskId).toBe(
+        "wave-3:A1:clarification-clar-1",
+      );
+    });
+  });
+
+  describe("taskGraph", () => {
+    it("builds a DAG from task dependency edges", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(state.taskGraph).toBeTruthy();
+      expect(Array.isArray(state.taskGraph.nodes)).toBe(true);
+      expect(Array.isArray(state.taskGraph.edges)).toBe(true);
+      // Should have as many nodes as tasks
+      expect(state.taskGraph.nodes.length).toBe(state.tasks.length);
+    });
+  });
+
+  describe("integrationSummary ordering", () => {
+    it("computes integrationSummary BEFORE passing to gate snapshot", () => {
+      // If a passing integration summary is provided, the integration barrier
+      // in the gate snapshot should reflect it
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        agentResults: {
+          A1: makePassingSummary("A1"),
+          A2: makePassingSummary("A2"),
+          A0: makeContQaPassingSummary(),
+          A8: {
+            agentId: "A8",
+            proof: { completion: "contract", durability: "durable", proof: "unit", state: "met" },
+            docDelta: { state: "none" },
+            integration: { state: "ready-for-doc-closure", detail: "Clean integration" },
+          },
+        },
+        laneConfig: { integrationAgentId: "A8" },
+      });
+      // The integration barrier should pass because integrationSummary is computed first
+      expect(state.gateSnapshot.integrationBarrier.ok).toBe(true);
+    });
+  });
+
+  describe("bidirectional proof transitions", () => {
+    it("transitions open to owned_slice_proven when proof passes", () => {
+      const wave = {
+        wave: 1,
+        agents: [
+          {
+            agentId: "A1",
+            title: "Solo",
+            ownedPaths: ["src/a.ts"],
+            exitContract: { completion: "contract", durability: "durable", proof: "unit", docImpact: "none" },
+          },
+        ],
+        componentPromotions: [],
+      };
+      const state = reduceWaveState({
+        waveDefinition: wave,
+        agentResults: { A1: makePassingSummary("A1") },
+      });
+      const a1Task = state.tasks.find((t) => t.ownerAgentId === "A1");
+      expect(a1Task.closureState).toBe("owned_slice_proven");
+      expect(a1Task.status).toBe("proven");
+    });
+
+    it("transitions owned_slice_proven back to open when proof is invalidated", () => {
+      // This tests the bidirectional logic.
+      // When an agent previously had proof but now doesn't, the task should revert.
+      // We simulate by having an agent with no result after it was previously proven.
+      const wave = {
+        wave: 1,
+        agents: [
+          {
+            agentId: "A1",
+            title: "Solo",
+            ownedPaths: ["src/a.ts"],
+            exitContract: { completion: "contract", durability: "durable", proof: "unit", docImpact: "none" },
+          },
+        ],
+        componentPromotions: [],
+      };
+      // First reduce with passing results
+      const state1 = reduceWaveState({
+        waveDefinition: wave,
+        agentResults: { A1: makePassingSummary("A1") },
+      });
+      expect(state1.tasks[0].closureState).toBe("owned_slice_proven");
+
+      // Now reduce with failing results - proof invalidated
+      const state2 = reduceWaveState({
+        waveDefinition: wave,
+        agentResults: { A1: makeFailingSummary("A1") },
+      });
+      // Task should remain open since proof fails
+      expect(state2.tasks[0].closureState).toBe("open");
+    });
+  });
+
+  describe("waveState field", () => {
+    it("maps running phase to running waveState", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+      });
+      expect(state.waveState).toBe("running");
+    });
+
+    it("maps blocked phase to blocked waveState", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "blocker-1",
+            kind: "blocker",
+            status: "open",
+            priority: "high",
+            agentId: "A1",
+            summary: "Blocked",
+            recordedAt: new Date().toISOString(),
+          },
+        ],
+      });
+      expect(state.waveState).toBe("blocked");
+    });
+
+    it("maps clarifying phase to blocked waveState", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "clar-1",
+            kind: "clarification-request",
+            status: "open",
+            agentId: "A1",
+            summary: "Clarification",
+            recordedAt: new Date().toISOString(),
+          },
+        ],
+      });
+      expect(state.waveState).toBe("blocked");
     });
   });
 });

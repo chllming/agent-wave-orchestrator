@@ -5,6 +5,7 @@
 ## Core Rules
 
 - Re-read the compiled shared summary, inbox, and board projection before major decisions and before final output.
+- Treat those summaries and projections as convenience views over canonical state, not as the only closure authority.
 - Treat file ownership, exit contracts, and structured markers as hard requirements.
 - Post coordination records for meaningful progress, blockers, decisions, and handoffs.
 - Make gaps explicit with exact files, exact fields, and exact follow-up owners.
@@ -30,9 +31,16 @@
 
 ## Coordination State
 
-The canonical coordination state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for human reading, not the scheduler truth.
+The canonical authority set for a wave is:
 
-Operator tasks, rerun requests, proof bundles, and attempt lifecycle are tracked in a separate control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/`. Proof registries and retry overrides under `proof/` and `control/` are projections from this log.
+- wave definitions under `docs/plans/waves/`
+- the coordination JSONL log under `.tmp/<lane>-wave-launcher/coordination/`
+- the control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/`
+- immutable attempt-scoped result artifacts under `.tmp/<lane>-wave-launcher/results/`
+
+The markdown board, shared summary, inboxes, ledgers, proof registries, retry overrides, and dashboards are projections over that state.
+
+Operator tasks, rerun requests, proof bundles, attempt lifecycle, contradictions, facts, and human-input workflow state are tracked in the control-plane event log. Proof registries and retry overrides under `proof/` and `control/` are projections from this log.
 
 Operators interact through `wave control`:
 - `wave control status` — why the wave is blocked or retrying.
@@ -74,8 +82,8 @@ A wave is closable only when all nine conditions are satisfied:
 5. **Dependency tickets resolved** -- all inbound cross-lane dependency tickets are resolved or explicitly deferred.
 6. **Clarification follow-ups resolved** -- every routed clarification chain has a linked follow-up that is closed.
 7. **cont-EVAL satisfies targets** -- if the wave includes cont-EVAL, the eval marker shows `satisfied` with matching target and benchmark ids.
-8. **Integration recommends closure** -- the integration marker shows `ready-for-doc-closure` and is not contradicted by later evidence.
-9. **Documentation and cont-QA pass** -- doc closure marker is `closed` or `no-change`, and the cont-QA verdict is `PASS` with a matching gate marker.
+8. **Integration recommends closure** -- the integration result is `ready-for-doc-closure` and is not contradicted by later evidence.
+9. **Documentation and cont-QA pass** -- documentation closure is `closed` or `no-change`, and the cont-QA verdict is `PASS` with a matching gate result.
 
 If any condition is not met, the wave remains open. Do not approximate closure.
 
@@ -89,7 +97,7 @@ Closure runs in staged order:
 
 Do not skip stages. Each stage depends on the prior stage completing.
 
-An active rerun request blocks closure until consumed. If the operator has filed a rerun via `wave control rerun request`, the launcher applies it on the next retry and clears it afterward.
+An active rerun request blocks closure until consumed. If the operator has filed a rerun via `wave control rerun request`, the retry engine applies it on the next retry and clears it afterward.
 
 ## Structured Markers Reference
 
@@ -119,7 +127,7 @@ Marker ownership:
 | `[infra-status]` | Infra role |
 | `[deploy-status]` | Deploy role |
 
-When you encounter a marker in the coordination log, treat it as the authoritative state from that role. If a role emits multiple markers during a wave, the last one supersedes earlier ones.
+When you encounter a marker in the coordination log or a role report, treat it as a role-owned closure output and compatibility surface. If it conflicts with landed code, canonical state, or typed result artifacts, escalate the contradiction instead of treating the marker text as unchallengeable authority.
 
 <!-- CUSTOMIZE: Add project-specific marker types or extend existing formats here. -->
 

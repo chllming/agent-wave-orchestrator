@@ -3,7 +3,7 @@
 These docs are organized around three core ideas:
 
 - one orchestrator, many runtimes across Claude, Codex, OpenCode, and local execution
-- a blackboard-style multi-agent system with goal-driven, proof-bounded closure
+- a blackboard-style multi-agent system with a canonical authority set, generated projections, and proof-bounded closure
 - compiled context from shared state, skills, runtime files, and Context7 instead of hand-maintained per-runtime context files
 
 The useful path is journey-first:
@@ -39,6 +39,8 @@ The useful path is journey-first:
   Read [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) and the standing reviewer prompt in [agents/wave-security-role.md](./agents/wave-security-role.md).
 - Upgrading an existing repo:
   Read [plans/migration.md](./plans/migration.md), then review the release notes in [../CHANGELOG.md](../CHANGELOG.md) before running `pnpm exec wave upgrade`.
+- Tracking the architecture hardening cutover:
+  Read [plans/architecture-hardening-migration.md](./plans/architecture-hardening-migration.md) for the staged migration from launcher-centric decisions to reducer and phase-engine ownership.
 - Looking for concrete example waves:
   Read [reference/sample-waves.md](./reference/sample-waves.md) for showcase-first examples that demonstrate the current authored wave surface.
 - Release notes and shipped deltas:

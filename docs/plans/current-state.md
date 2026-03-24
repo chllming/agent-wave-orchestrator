@@ -1,6 +1,7 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.7.3` package release surface.
+- The starter workspace in this source repo reflects the `0.8.0` package release surface.
+- The staged architecture cutover from launcher-centric decisions to reducer and phase-engine ownership is tracked in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
 - Runtime launch entrypoints now perform a best-effort npmjs version check, cache the result under `.wave/package-update-check.json`, and point operators at `pnpm exec wave self-update` when a newer published package exists.
@@ -25,7 +26,8 @@
   - wave agents can add explicit `### Skills`
   - runtime projections are generated for Codex, Claude, OpenCode, and local execution
 - The runtime now includes:
-  - a canonical coordination JSONL log
+  - a canonical authority set built from wave definitions, coordination JSONL logs, and control-plane JSONL events
+  - immutable attempt-scoped result envelopes for structured role outcomes
   - a generated markdown board projection
   - compiled shared summaries and per-agent inboxes
   - active live-wave orchestration refresh that keeps summaries, inboxes, clarification triage, and dashboard coordination metrics current while agents are still running
@@ -43,7 +45,7 @@
   - operator-applied retry overrides projected to `.tmp/<lane>-wave-launcher/control/` for compatibility with selected reruns, explicit reuse selectors, reuse clearing or preservation, and explicit resume targets
   - authoritative proof registries projected to `.tmp/<lane>-wave-launcher/proof/` for compatibility, while preserving proof bundle lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure
   - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for local-first, best-effort reporting to the Railway-hosted analysis plane
-  - a thinner launcher entrypoint that now delegates session launch or wait and closure-sweep orchestration to dedicated modules while preserving the existing CLI surface
+  - reducer-driven live state snapshots plus a launcher entrypoint that is being hardened toward thin orchestration while preserving the existing CLI surface
 - Runtime executor support now includes:
   - Codex `exec` profile, inline config, search, image, add-dir, JSON, and ephemeral flags
   - Claude settings overlay merging for inline settings and hooks

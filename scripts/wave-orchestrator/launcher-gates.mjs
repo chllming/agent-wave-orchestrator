@@ -3,7 +3,10 @@ import path from "node:path";
 import {
   agentSummaryPathFromStatusPath,
   buildAgentExecutionSummary,
+  buildEnvelopeFromLegacySignals,
+  buildExecutionSummaryFromEnvelope,
   readAgentExecutionSummary,
+  readAgentResultEnvelope,
   validateContQaSummary,
   validateContEvalSummary,
   validateImplementationSummary,
@@ -11,6 +14,7 @@ import {
   validateSecuritySummary,
   validateIntegrationSummary,
   writeAgentExecutionSummary,
+  writeAgentResultEnvelope,
 } from "./agent-state.mjs";
 import {
   REPO_ROOT,
@@ -20,32 +24,55 @@ import {
   parseVerdictFromText,
   REPORT_VERDICT_REGEX,
   WAVE_VERDICT_REGEX,
-  toIsoTimestamp,
   writeJsonAtomic,
 } from "./shared.mjs";
 import {
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
-  isContEvalImplementationOwningAgent,
   isContEvalReportOnlyAgent,
 } from "./role-helpers.mjs";
 import {
   augmentSummaryWithProofRegistry,
 } from "./proof-registry.mjs";
 import {
-  agentRequiresProofCentricValidation,
-  waveRequiresProofCentricValidation,
   validateWaveComponentPromotions,
   validateWaveComponentMatrixCurrentLevels,
 } from "./wave-files.mjs";
 import {
   isOpenCoordinationStatus,
   openClarificationLinkedRequests,
-  buildCoordinationResponseMetrics,
 } from "./coordination-store.mjs";
-import {
-  parseStructuredSignalsFromLog,
-} from "./dashboard-state.mjs";
+import { contradictionsBlockingGate } from "./contradiction-entity.mjs";
+
+function contradictionList(value) {
+  if (value instanceof Map) {
+    return [...value.values()];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value);
+  }
+  return [];
+}
+
+function readIntegrationContradictionBarrier(derivedState, agentId, logPath) {
+  const blockingContradictions = contradictionsBlockingGate(
+    contradictionList(derivedState?.contradictions),
+    "integrationBarrier",
+  );
+  if (blockingContradictions.length === 0) {
+    return null;
+  }
+  return {
+    ok: false,
+    agentId,
+    statusCode: "integration-contradiction-open",
+    detail: `Unresolved blocking contradictions remain (${blockingContradictions.map((c) => c.contradictionId).join(", ")}).`,
+    logPath,
+  };
+}
 
 function resolveRunReportPath(wave, runInfo) {
   if (!wave || !runInfo?.agent) {
@@ -77,6 +104,14 @@ export function materializeAgentExecutionSummaryForRun(wave, runInfo) {
     reportPath,
   });
   writeAgentExecutionSummary(runInfo.statusPath, summary);
+  writeAgentResultEnvelope(
+    runInfo.statusPath,
+    buildEnvelopeFromLegacySignals(runInfo.agent, summary, {
+      waveNumber: wave?.wave ?? null,
+      attempt: statusRecord.attempt ?? null,
+      exitCode: typeof statusRecord.code === "number" ? statusRecord.code : 0,
+    }),
+  );
   if (runInfo?.previewPath && fs.existsSync(runInfo.previewPath)) {
     const previewPayload = readJsonOrNull(runInfo.previewPath);
     if (previewPayload && typeof previewPayload === "object") {
@@ -110,6 +145,7 @@ export function readRunExecutionSummary(runInfo, wave = null) {
   const applyProofRegistry = (summary) =>
     runInfo?.proofRegistry ? augmentSummaryWithProofRegistry(runInfo.agent, summary, runInfo.proofRegistry) : summary;
   const statusRecord = runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null;
+  const reportPath = wave && runInfo?.logPath ? resolveRunReportPath(wave, runInfo) : null;
   const summaryReadOptions =
     wave && runInfo?.logPath
       ? {
@@ -117,11 +153,27 @@ export function readRunExecutionSummary(runInfo, wave = null) {
           statusPath: runInfo.statusPath,
           statusRecord,
           logPath: runInfo.logPath,
-          reportPath: resolveRunReportPath(wave, runInfo),
+          reportPath,
         }
       : {};
+  const envelopeReadOptions = {
+    agent: runInfo?.agent,
+    waveNumber: wave?.wave ?? null,
+    attempt: statusRecord?.attempt ?? null,
+    logPath: runInfo?.logPath || null,
+    reportPath,
+  };
   if (runInfo?.summary && typeof runInfo.summary === "object") {
-    return applyProofRegistry(runInfo.summary);
+    const summary = runInfo.summary.schemaVersion === 2
+      ? buildExecutionSummaryFromEnvelope(runInfo.summary, envelopeReadOptions)
+      : runInfo.summary;
+    return applyProofRegistry(summary);
+  }
+  if (runInfo?.statusPath && fs.existsSync(runInfo.statusPath)) {
+    const envelope = readAgentResultEnvelope(runInfo.statusPath);
+    if (envelope) {
+      return applyProofRegistry(buildExecutionSummaryFromEnvelope(envelope, envelopeReadOptions));
+    }
   }
   if (runInfo?.summaryPath && fs.existsSync(runInfo.summaryPath)) {
     return applyProofRegistry(readAgentExecutionSummary(runInfo.summaryPath, summaryReadOptions));
@@ -569,6 +621,14 @@ export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, option
       logPath: markerGate.logPath,
     };
   }
+  const contradictionBarrier = readIntegrationContradictionBarrier(
+    derivedState,
+    markerGate.agentId,
+    markerGate.logPath,
+  );
+  if (contradictionBarrier) {
+    return contradictionBarrier;
+  }
   return markerGate;
 }
 
@@ -893,7 +953,7 @@ export function readWaveComponentGatePure(wave, agentResults, options = {}) {
   }
   const componentState = analyzePromotedComponentOwnersPure(validation.componentId, agents, summariesByAgentId);
   return {
-    ok: false, agentId: componentState.ownerAgentIds[0] || null,
+    ok: false, agentId: componentState.waitingOnAgentIds[0] || componentState.ownerAgentIds[0] || null,
     componentId: validation.componentId || null,
     statusCode: validation.statusCode, detail: validation.detail, logPath: null,
     ownerAgentIds: componentState.ownerAgentIds,
@@ -1019,6 +1079,14 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
         statusCode: "integration-needs-more-work",
         detail: integrationSummary.detail || `Integration summary still reports ${integrationSummary.recommendation}.`,
         logPath: integrationMarkerGate.logPath };
+    }
+    const contradictionBarrier = readIntegrationContradictionBarrier(
+      derivedState,
+      integrationMarkerGate.agentId,
+      integrationMarkerGate.logPath,
+    );
+    if (contradictionBarrier) {
+      return contradictionBarrier;
     }
     return integrationMarkerGate;
   })();

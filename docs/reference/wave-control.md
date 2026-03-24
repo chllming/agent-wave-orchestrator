@@ -9,7 +9,7 @@ Wave Control is the telemetry and analysis plane for Wave runs.
 
 The design rule is:
 
-- local files stay authoritative
+- local canonical state stays authoritative
 - remote reporting is best-effort
 - dashboards and markdown remain projections over typed local state
 
@@ -27,6 +27,8 @@ Wave Control normalizes these entity types:
 - `rerun_request`
 - `human_input`
 - `artifact`
+- `contradiction`
+- `fact`
 - `benchmark_run`
 - `benchmark_item`
 - `verification`
@@ -76,7 +78,7 @@ For the explicit README-failure-case-to-signal map, see [proof-metrics.md](./pro
 Signals to preserve:
 
 - canonical-state fidelity:
-  `coordination_record`, `wave_run`, `attempt`, and `artifact` telemetry prove the scheduler truth came from JSON state, not only markdown boards
+  `coordination_record`, `wave_run`, `attempt`, `artifact`, `contradiction`, and `fact` telemetry prove decisions came from canonical structured state, not only markdown boards or summaries
 - evidence pooling:
   integration and closure telemetry should cite the proof artifacts and evidence refs they relied on
 - contradiction repair:

@@ -4,6 +4,7 @@ import {
   normalizeWaveControlArtifactDescriptor,
   normalizeWaveControlEventEnvelope,
   normalizeWaveControlRunIdentity,
+  WAVE_CONTROL_ENTITY_TYPES,
 } from "../../scripts/wave-orchestrator/wave-control-schema.mjs";
 
 describe("wave-control schema", () => {
@@ -128,5 +129,10 @@ describe("wave-control schema", () => {
         }),
       ],
     });
+  });
+
+  it("declares contradiction and fact as canonical control-plane entity types", () => {
+    expect(WAVE_CONTROL_ENTITY_TYPES.has("contradiction")).toBe(true);
+    expect(WAVE_CONTROL_ENTITY_TYPES.has("fact")).toBe(true);
   });
 });

@@ -36,7 +36,7 @@ The planner writes two artifacts:
 - `docs/plans/waves/specs/wave-<n>.json`
 - `docs/plans/waves/wave-<n>.md`
 
-The JSON spec is the planner-owned structured artifact. The markdown wave is still the launcher-owned execution surface.
+The JSON spec is the planner-owned structured artifact. The markdown wave remains a human-reviewable declaration surface, while live execution is driven from the parsed wave definition plus reducer and phase-engine state.
 
 When you review the generated wave, tighten the parts the planner cannot fully infer:
 
@@ -58,7 +58,7 @@ Every wave should be authored with an explicit operating posture in mind:
 - `dark-factory`
   Use only when environments, validation, rollback, and closure evidence are already explicit enough for routine execution without human intervention.
 
-Human feedback is an escalation path, not the operating mode itself. The launcher still tries to resolve clarification inside the orchestration loop before creating a human ticket.
+Human feedback is an escalation path, not the operating mode itself. The orchestrator still tries to resolve clarification inside the control-plane and coordination workflow before creating a human ticket.
 
 ## 4. Choose The Operator Surface
 
@@ -113,7 +113,7 @@ Useful flags:
 
 ## 7. Understand Closure
 
-A wave is not done when an implementation agent says it is done. Closure depends on the combined runtime surfaces:
+A wave is not done when an implementation agent says it is done. Closure depends on the canonical authority set, typed result state, and the combined runtime projections:
 
 - implementation contracts pass
 - required deliverables exist

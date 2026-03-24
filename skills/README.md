@@ -3,6 +3,7 @@
 Skills are repo-owned procedural bundles that Wave attaches to agents at runtime. They capture durable operating knowledge such as coding norms, role checklists, runtime behavior, provider verification, and closure rules.
 
 Skills are not one-off prompts. They are reusable procedures with explicit routing metadata.
+They are runtime inputs and overlays, not canonical runtime state.
 
 ## Bundle Layout
 
@@ -129,6 +130,8 @@ Runtime behavior:
 | Claude | Compact catalog appended to the generated system prompt. |
 | OpenCode | Compact catalog injected into `opencode.json`; `skill.json`, `SKILL.md`, the selected adapter, and recursive references attached via `--file`. |
 | Local | Compact catalog only. |
+
+Skills guide how agents interpret canonical state and projections. They do not become canonical runtime state, control-plane records, or replay inputs by themselves.
 
 ## Validation
 

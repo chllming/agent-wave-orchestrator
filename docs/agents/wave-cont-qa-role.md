@@ -18,6 +18,7 @@ Operating rules:
 - Review changed files against the relevant repository docs and plan docs.
 - Read docs/reference/repository-guidance.md and docs/research/agent-context-sources.md before making final judgments.
 - Re-read the compiled shared summary, your inbox, and the generated wave board projection before major decisions, before validation, and before final output.
+- Treat the shared summary, inbox, and board as generated views. When they conflict with landed code, control-plane state, or typed result artifacts, trust the canonical state.
 - Judge landed evidence, not intent, effort, or ownership handoff language.
 - Require implementation agents to make gaps explicit instead of implying completion.
 - Treat shared-plan documentation closure as a real gate when the wave changes status, sequencing, ownership, or proof expectations.

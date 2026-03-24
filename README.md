@@ -13,7 +13,7 @@ The framework does three things:
 - `One orchestrator, many runtimes.`
   Planning, skills, evals, proof, and traces stay constant while the executor adapter changes.
 - `A blackboard-style multi-agent system.`
-  The coordination log is canonical shared state; the rolling board, shared summary, inboxes, ledger, and integration views are generated projections over that state.
+  Wave definitions, the coordination log, the control-plane log, and immutable result envelopes form the machine-trustable authority set; the rolling board, shared summary, inboxes, ledger, and integration views are generated projections over that state.
 - `Completion is goal-driven and proof-bounded.`
   Waves close only when deliverables, proof artifacts, eval targets, dependencies, and closure stewards agree.
 - `Context is compiled, not hand-maintained.`
@@ -28,7 +28,7 @@ The framework does three things:
 1. Define shared docs plus `docs/plans/waves/wave-<n>.md` files, or generate them with `wave draft`.
 2. Run `wave launch --dry-run` to validate the wave and materialize prompts, shared summaries, inboxes, dashboards, and executor previews before any live execution.
 3. During live execution, implementation agents write claims, evidence, requests, and decisions into the canonical coordination log instead of relying on ad hoc terminal narration.
-4. The launcher compiles blackboard projections from that state: rolling board, shared summary, per-agent inboxes, ledger, docs queue, dependency views, and integration summaries.
+4. The reducer and derived-state engines materialize blackboard projections from the canonical authority set: rolling board, shared summary, per-agent inboxes, ledger, docs queue, dependency views, and integration summaries.
 5. Closure runs only when the integrated state is ready: optional `cont-EVAL` (`E0`), optional security review, integration (`A8`), documentation (`A9`), and `cont-QA` (`A0`).
 
 ## Architecture Surfaces
@@ -36,7 +36,7 @@ The framework does three things:
 - `Wave contract`
   Shared plan docs, wave markdown, deliverables, proof artifacts, and eval targets define the goal.
 - `Shared state`
-  The coordination log is the source of truth; the board is for humans, not the scheduler.
+  Decisions come from the canonical authority set; boards, inboxes, dashboards, and other summaries are human-facing or operator-facing projections.
 - `Runtime abstraction`
   Executor adapters preserve Codex, Claude, and OpenCode-specific launch features without changing the higher-level wave contract.
 - `Compiled context`
@@ -59,7 +59,7 @@ Representative rolling message board output from a real wave run:
 Recent multi-agent research keeps returning to the same failure modes:
 
 - `Cosmetic board, no canonical state`
-  Agents appear coordinated, but there is no machine-trustable source of truth underneath the conversation.
+  Agents appear coordinated, but there is no machine-trustable authority set underneath the conversation.
 - `Hidden evidence never gets pooled`
   One agent has the critical fact, but it never reaches shared state before closure.
 - `Communication without global-state reconstruction`
@@ -73,24 +73,24 @@ Recent multi-agent research keeps returning to the same failure modes:
 - `Premature closure`
   Agents say they are done before proof, evals, or integrated state actually support PASS.
 
-Wave is built to mitigate those failures with canonical shared state, generated blackboard projections, explicit ownership, goal-driven, proof-bounded closure, replayable traces, and local-first telemetry. For the research framing and the current gaps, see [docs/research/coordination-failure-review.md](./docs/research/coordination-failure-review.md). For the concrete signal map, see [docs/reference/proof-metrics.md](./docs/reference/proof-metrics.md).
+Wave is built to mitigate those failures with a canonical authority set, generated blackboard projections, explicit ownership, goal-driven, proof-bounded closure, replayable traces, and local-first telemetry. For the research framing and the current gaps, see [docs/research/coordination-failure-review.md](./docs/research/coordination-failure-review.md). For the concrete signal map, see [docs/reference/proof-metrics.md](./docs/reference/proof-metrics.md).
 
 ## Quick Start
 
 Current release:
 
-- `@chllming/wave-orchestration@0.7.3`
-- Release tag: [`v0.7.3`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.7.3)
+- `@chllming/wave-orchestration@0.8.0`
+- Release tag: [`v0.8.0`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.0)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.7.3`:
+Highlights in `0.8.0`:
 
-- Malformed end-of-tail fenced blocks no longer hide later final `[wave-proof]`, `[wave-doc-delta]`, and `[wave-component]` markers from the structured-signal collector.
-- Legacy proof-centric summaries now rebuild from source logs when required proof/doc/component fields are missing, even if a stale `structuredSignalDiagnostics` object already exists.
-- Final implementation marker diagnostics still distinguish truly missing markers from malformed marker syntax, so proof-centric failures stay actionable instead of collapsing into generic missing-marker noise.
-- Implementation prompts now keep incomplete work inside the required final markers with `state=gap` and route unresolved issues through `wave coord post`.
-- Upgrade and operator docs now cover the full `0.7.3` package surface end to end.
+- Reducer and task replay hardening now keeps coordination-derived task identity deterministic and strengthens authoritative replay of live wave state.
+- Gate evaluation, contradiction or fact schema wiring, and resume planning are aligned around control-plane state plus typed result-envelope reads.
+- Live launcher evaluation now computes reducer snapshots during real runs instead of leaving that path effectively test-only.
+- The package now ships a dedicated architecture hardening migration plan and aligns the active README, guides, role prompts, and starter skills to the canonical authority-set and thin-launcher model.
+- Upgrade and operator docs now cover the full `0.8.0` package surface end to end.
 
 Requirements:
 
@@ -183,6 +183,7 @@ codex mcp list
 - [docs/plans/examples/wave-example-rollout-fidelity.md](./docs/plans/examples/wave-example-rollout-fidelity.md): concrete example of what good wave fidelity looks like for a narrow, closure-ready outcome
 - [docs/reference/cli-reference.md](./docs/reference/cli-reference.md): complete CLI syntax for all commands and flags
 - [docs/plans/wave-orchestrator.md](./docs/plans/wave-orchestrator.md): operator runbook
+- [docs/plans/architecture-hardening-migration.md](./docs/plans/architecture-hardening-migration.md): staged cutover from the transitional launcher-centric runtime to the authority-set / reducer / phase-engine architecture
 - [docs/plans/context7-wave-orchestrator.md](./docs/plans/context7-wave-orchestrator.md): Context7 setup and bundle authoring
 - [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): executor, runtime, and skill-projection configuration
 - [docs/reference/wave-control.md](./docs/reference/wave-control.md): local-first telemetry contract and Railway control-plane model

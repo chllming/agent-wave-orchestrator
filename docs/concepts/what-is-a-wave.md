@@ -38,17 +38,18 @@ Waves force a higher planning bar than ad hoc prompts. A good wave answers:
 
 ## Why This Is A Blackboard-Style Model
 
-Wave is blackboard-style because agents work against shared state instead of treating chat output as the system of record.
+Wave is blackboard-style because agents work against shared canonical state instead of treating chat output as the system of record.
 
-- the canonical coordination log is the machine-readable source of truth
-- the rolling board is a human projection over that state, not the scheduler's authority
-- shared summaries and per-agent inboxes are compiled views over the same state
+- wave definitions, the coordination log, and the control-plane log form the canonical authority set
+- attempt-scoped result envelopes are the immutable structured outcome surface for completed agent work
+- the rolling board is a human projection over that state, not a decision input
+- shared summaries and per-agent inboxes are compiled views over the same authority set
 - helper assignments, clarification flow, dependencies, and integration all operate on that shared state
 - closure depends on the integrated state, not on whether an agent says "done"
 
 ## Wave Anatomy
 
-Wave markdown is the authored execution surface today. A typical wave can include:
+Wave markdown is one authored declaration surface today. A typical wave can include:
 
 - title and commit message
 - project profile details such as oversight mode and lane
@@ -107,10 +108,10 @@ Implementation or specialist agents own the actual work slices. Closure roles do
 
 1. Author or draft the wave.
 2. Run `wave launch --dry-run --no-dashboard`.
-3. The launcher validates the wave, resolves executors and skills, builds prompts, and materializes operator surfaces.
+3. The launcher parses the wave, resolves executors and skills, rebuilds reducer state, and materializes operator surfaces.
 4. A live run launches implementation agents first when implementation work remains.
 5. Agents write structured coordination events instead of relying on ad hoc terminal output.
-6. The launcher checks implementation contracts, promoted-component proof, helper assignments, dependencies, and clarification state.
+6. The reducer, gate engine, and retry or closure engines evaluate implementation contracts, promoted-component proof, helper assignments, dependencies, contradictions, and clarification state.
 7. If implementation is ready, closure runs in order: optional `cont-EVAL`, optional security review, integration, documentation, then cont-QA.
 8. The attempt is captured in per-wave traces, ledgers, inboxes, summaries, and copied artifacts.
 
@@ -187,6 +188,7 @@ For proof-first live-wave examples, see [docs/reference/live-proof-waves.md](../
 The wave file is only part of the story. The runtime writes durable state under `.tmp/<lane>-wave-launcher/`, including:
 
 - prompts and logs
+- result envelopes
 - status summaries
 - coordination logs
 - rendered message boards
@@ -205,7 +207,7 @@ That is why a wave is better understood as a bounded execution record, not just 
 The planner foundation adds a JSON draft spec at `docs/plans/waves/specs/wave-<n>.json`.
 
 - The JSON spec is the canonical planner artifact.
-- The rendered markdown stays compatible with the launcher and parser.
-- The launcher still executes the markdown wave file today.
+- The rendered markdown stays compatible with the current parser and operator workflow.
+- Live execution decisions come from parsed wave definitions plus canonical state, not from treating markdown as the only execution authority.
 
-This split keeps authoring structured while preserving the established execution surface.
+This split keeps authoring structured while preserving the established declaration surface.

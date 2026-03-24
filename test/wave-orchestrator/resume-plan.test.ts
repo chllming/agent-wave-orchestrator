@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildResumePlan } from "../../scripts/wave-orchestrator/launcher-retry.mjs";
+import { reduceWaveState } from "../../scripts/wave-orchestrator/wave-state-reducer.mjs";
 
 function makeClosureEligibility(overrides = {}) {
   return {
@@ -140,6 +141,53 @@ describe("buildResumePlan", () => {
     ]);
   });
 
+  it("treats reducer-produced human feedback blockers as human input blockers", () => {
+    const state = reduceWaveState({
+      waveDefinition: {
+        wave: 2,
+        agents: [
+          {
+            agentId: "A1",
+            title: "Implementation",
+            ownedPaths: ["src/app.ts"],
+            exitContract: {
+              completion: "contract",
+              durability: "durable",
+              proof: "unit",
+              docImpact: "none",
+            },
+          },
+        ],
+        componentPromotions: [],
+      },
+      coordinationRecords: [
+        {
+          id: "fb-1",
+          kind: "human-feedback",
+          status: "open",
+          agentId: "A1",
+          summary: "Need API key from team lead",
+          detail: "Blocked on secrets.",
+          lane: "main",
+          wave: 2,
+          createdAt: "2026-03-23T00:00:00.000Z",
+          updatedAt: "2026-03-23T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const plan = buildResumePlan(state);
+
+    expect(plan.reason).toBe("human-request");
+    expect(plan.humanInputBlockers).toEqual([
+      {
+        taskId: "fb-1",
+        title: "Need API key from team lead",
+        assigneeAgentId: "A1",
+      },
+    ]);
+  });
+
   it("detects shared-component sibling pending", () => {
     const waveState = {
       wave: 3,
@@ -194,6 +242,40 @@ describe("buildResumePlan", () => {
 
     expect(plan.resumeFromPhase).toBe("integrating");
     expect(plan.reason).toBe("gate-failure");
+  });
+
+  it("reads executor changes from reducer-style retry target objects", () => {
+    const waveState = {
+      wave: 4,
+      lane: "main",
+      attempt: 2,
+      closureEligibility: makeClosureEligibility({ waveMayClose: false }),
+      gateSnapshot: makeGateSnapshot({
+        overall: { ok: false, gate: "implementationGate", statusCode: "rate-limit", detail: "", agentId: "A2" },
+      }),
+      openBlockers: [],
+      retryTargetSet: {
+        agentIds: ["A2"],
+        targets: [
+          {
+            agentId: "A2",
+            reason: "rate-limit",
+            currentExecutor: "codex",
+          },
+        ],
+      },
+    };
+
+    const plan = buildResumePlan(waveState);
+
+    expect(plan.executorChanges).toEqual([
+      {
+        agentId: "A2",
+        currentExecutor: "codex",
+        suggestedFallback: "claude",
+        reason: "rate-limit",
+      },
+    ]);
   });
 
   it("maps documentationGate to resumeFromPhase docs-closure", () => {

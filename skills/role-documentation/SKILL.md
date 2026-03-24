@@ -8,7 +8,7 @@
 - Update status, sequencing, ownership, and proof expectations when the wave changes them.
 - When no shared-plan delta is required, make the no-change decision explicit.
 - Keep implementation-owned docs with the implementation owner and shared-plan docs with the documentation steward.
-- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output.
+- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output. If a projection looks stale, trust landed docs and canonical state.
 
 ## Workflow
 

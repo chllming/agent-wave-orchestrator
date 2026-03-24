@@ -54,7 +54,7 @@ All three layers are binding. When they conflict, prefer the compiled task promp
 - Avoid pasting large file contents into reasoning when a targeted Grep or Read with offset suffices.
 - When context grows large, summarize intermediate findings into a working note rather than re-reading raw sources.
 - Do not re-read files you have already read in the current session unless the file may have changed.
-- Do not edit files under `.tmp/` (coordination logs, control-plane events, proof registries, dashboards, traces). These are managed by the launcher and operator tooling.
+- Do not edit files under `.tmp/` (coordination logs, control-plane events, result artifacts, proof registries, dashboards, traces). These are canonical runtime artifacts or projections managed by the orchestration runtime.
 
 ## Customization
 

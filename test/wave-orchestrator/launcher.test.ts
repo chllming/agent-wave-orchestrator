@@ -27,6 +27,11 @@ import {
   selectReusablePreCompletedAgentIds,
   selectInitialWaveRuns,
 } from "../../scripts/wave-orchestrator/launcher.mjs";
+import {
+  buildAgentResultEnvelope,
+  writeAgentExecutionSummary,
+  writeAgentResultEnvelope,
+} from "../../scripts/wave-orchestrator/agent-state.mjs";
 import { materializeCoordinationState } from "../../scripts/wave-orchestrator/coordination-store.mjs";
 import { hashAgentPromptFingerprint } from "../../scripts/wave-orchestrator/context7.mjs";
 
@@ -315,6 +320,81 @@ describe("readWaveContEvalGate", () => {
       ok: true,
       statusCode: "pass",
       detail: "ready",
+    });
+  });
+
+  it("prefers result envelopes over stale legacy summaries", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-4-cont-eval.md");
+    const logPath = path.join(dir, "wave-4-e0.log");
+    const statusPath = path.join(dir, "wave-4-e0.status");
+
+    fs.writeFileSync(reportPath, "# cont-EVAL\n", "utf8");
+    fs.writeFileSync(logPath, "[wave-eval] state=blocked targets=0 benchmarks=0 regressions=0 detail=stale-log\n", "utf8");
+    fs.writeFileSync(statusPath, JSON.stringify({ code: 0, promptHash: "hash" }, null, 2), "utf8");
+    writeAgentExecutionSummary(statusPath, {
+      agentId: "E0",
+      eval: {
+        state: "blocked",
+        targets: 0,
+        benchmarks: 0,
+        regressions: 0,
+        targetIds: [],
+        benchmarkIds: [],
+        detail: "Stale summary should be ignored.",
+      },
+      reportPath,
+    });
+    writeAgentResultEnvelope(
+      statusPath,
+      buildAgentResultEnvelope(
+        { agentId: "E0", role: "cont-eval" },
+        {
+          agentId: "E0",
+          eval: {
+            state: "satisfied",
+            targets: 1,
+            benchmarks: 1,
+            regressions: 0,
+            targetIds: ["response-quality"],
+            benchmarkIds: ["golden-response-smoke"],
+            detail: "Envelope is authoritative.",
+          },
+        },
+      ),
+    );
+
+    expect(
+      readWaveContEvalGate(
+        {
+          contEvalReportPath: reportPath,
+          evalTargets: [
+            {
+              id: "response-quality",
+              selection: "delegated",
+              benchmarkFamily: "service-output",
+              benchmarks: [],
+              objective: "Tune response quality",
+              threshold: "Golden response smoke passes",
+            },
+          ],
+        },
+        [
+          {
+            agent: { agentId: "E0" },
+            logPath,
+            statusPath,
+          },
+        ],
+        {
+          mode: "live",
+          benchmarkCatalogPath: "docs/evals/benchmark-catalog.json",
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+      detail: "Envelope is authoritative.",
     });
   });
 });
@@ -1655,6 +1735,93 @@ describe("runClosureSweepPhase", () => {
     expect(result.failures[0]).toMatchObject({
       agentId: "A8",
       statusCode: "integration-needs-more-work",
+    });
+  });
+
+  it("stops after integration when blocking contradictions remain open", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const runLog = path.join(dir, "wave-0-a8.log");
+    const runStatus = path.join(dir, "wave-0-a8.status");
+    const closureRuns = [
+      {
+        agent: { agentId: "A8", title: "Integration" },
+        sessionName: "wave-a8",
+        promptPath: path.join(dir, "a8.prompt.md"),
+        logPath: runLog,
+        statusPath: runStatus,
+        messageBoardPath: path.join(dir, "board.md"),
+        messageBoardSnapshot: "",
+        sharedSummaryPath: path.join(dir, "shared.md"),
+        sharedSummaryText: "",
+        inboxPath: path.join(dir, "a8.inbox.md"),
+        inboxText: "",
+      },
+    ];
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: { wave: 0, integrationAgentId: "A8" },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Integration summary itself is clean.",
+        },
+        contradictions: new Map([
+          [
+            "contra-1",
+            {
+              contradictionId: "contra-1",
+              status: "detected",
+              severity: "blocking",
+              impactedGates: ["integrationBarrier"],
+            },
+          ],
+        ]),
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        fs.writeFileSync(
+          params.statusPath,
+          JSON.stringify({ code: 0, promptHash: "hash" }, null, 2),
+          "utf8",
+        );
+        fs.writeFileSync(
+          params.logPath,
+          "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=ready\n",
+          "utf8",
+        );
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual(["A8"]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      agentId: "A8",
+      statusCode: "integration-contradiction-open",
     });
   });
 

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-03-24
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, sample-wave docs, and npm publishing runbook to advertise `0.8.0` as the current release surface.
+- Added the architecture hardening migration plan and aligned the active README, guides, runbooks, role prompts, and starter skills to the canonical authority-set and thin-launcher architecture model.
+
+### Fixed And Hardened
+
+- Hardened reducer and task replay determinism so coordination-derived work uses stable semantic task identity and reducer output is fit for authoritative replay.
+- Hardened helper-assignment, contradiction or fact wiring, resume planning, and gate evaluation so the reducer, control-plane schema, and result-envelope path agree on the same live closure and retry state.
+- Hardened live launcher evaluation by computing reducer snapshots during real runs instead of keeping that path effectively test-only.
+
+### Testing And Validation
+
+- Added regression coverage that guards the active docs and starter skills against stale launcher-truth wording and asserts the migration surface is anchored on the canonical authority-set architecture.
+- Re-ran the full Vitest suite, `wave doctor --json`, and `wave launch --lane main --dry-run --no-dashboard`, while preserving shared `0.7.3` parity behavior where the release-era suites overlap.
+
 ## 0.7.3 - 2026-03-23
 
 ### Changed

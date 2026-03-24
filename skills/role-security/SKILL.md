@@ -8,7 +8,7 @@ Use this skill when the agent is the wave's dedicated security reviewer.
 - Default to report-only work. Route fixes to the owning agent unless the prompt explicitly gives you additional implementation ownership.
 - Fail closed on unresolved blocking findings. Do not mark the wave clear while findings or approvals remain open.
 - Prefer exact exploit paths, exact affected files or surfaces, and exact owners over broad warnings.
-- Re-read the shared summary, inbox, and board projection before final disposition.
+- Re-read the shared summary, inbox, and board projection before final disposition. If the projection diverges from landed code or canonical state, trust the canonical state.
 
 ## Workflow
 

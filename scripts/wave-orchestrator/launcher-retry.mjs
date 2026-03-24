@@ -226,6 +226,33 @@ export function relaunchReasonBuckets(runs, failures, derivedState) {
   };
 }
 
+const HUMAN_INPUT_BLOCKER_KINDS = new Set([
+  "human-input",
+  "human-feedback",
+  "human-escalation",
+]);
+
+function isHumanInputBlocker(blocker) {
+  return HUMAN_INPUT_BLOCKER_KINDS.has(String(blocker?.kind || "").trim().toLowerCase());
+}
+
+function normalizeRetryTargets(retryTargetSet) {
+  if (Array.isArray(retryTargetSet)) {
+    return retryTargetSet;
+  }
+  if (Array.isArray(retryTargetSet?.targets)) {
+    return retryTargetSet.targets;
+  }
+  if (Array.isArray(retryTargetSet?.agentIds)) {
+    return retryTargetSet.agentIds.map((agentId) => ({
+      agentId,
+      reason: retryTargetSet.reason || null,
+      retryOverride: retryTargetSet.retryOverride || null,
+    }));
+  }
+  return [];
+}
+
 export function applySharedComponentWaitStateToDashboard(componentGate, dashboardState) {
   const waitingSummary = (componentGate?.waitingOnAgentIds || []).join("/");
   if (!waitingSummary) {
@@ -769,7 +796,7 @@ function classifyResumeReason(waveState) {
     return "all-gates-pass";
   }
   const humanBlockers = (waveState.openBlockers || []).filter(
-    (blocker) => blocker.kind === "human-input",
+    (blocker) => isHumanInputBlocker(blocker),
   );
   if (humanBlockers.length > 0) {
     return "human-request";
@@ -792,11 +819,14 @@ function classifyResumeReason(waveState) {
 
 function collectResumeHumanInputBlockers(waveState) {
   return (waveState.openBlockers || [])
-    .filter((b) => b.kind === "human-input")
+    .filter((b) => isHumanInputBlocker(b))
     .map((b) => ({
       taskId: b.taskId || b.id || null,
       title: b.title || b.detail || null,
-      assigneeAgentId: b.agentId || b.assigneeAgentId || null,
+      assigneeAgentId:
+        b.agentId ||
+        b.assigneeAgentId ||
+        (Array.isArray(b.blockedAgentIds) ? b.blockedAgentIds[0] || null : null),
     }));
 }
 
@@ -813,13 +843,13 @@ function collectResumeGateBlockers(gateSnapshot) {
 }
 
 function collectResumeExecutorChanges(waveState) {
-  const retryTargets = waveState.retryTargetSet || [];
-  return (Array.isArray(retryTargets) ? retryTargets : [])
+  const retryTargets = normalizeRetryTargets(waveState.retryTargetSet);
+  return retryTargets
     .filter((t) => t.reason === "rate-limit-exhausted" || t.reason === "rate-limit" || t.retriesExhausted === true)
     .map((t) => ({
       agentId: t.agentId,
       currentExecutor: t.currentExecutor || t.executor || null,
-      suggestedFallback: "claude",
+      suggestedFallback: t.retryOverride?.executorId || "claude",
       reason: t.reason || "rate-limit-exhausted",
     }));
 }

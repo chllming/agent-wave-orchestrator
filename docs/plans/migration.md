@@ -1,5 +1,7 @@
 # Migration
 
+For the staged internal cutover from the legacy launcher-centric runtime to the authority-set / reducer / phase-engine architecture, see [architecture-hardening-migration.md](./architecture-hardening-migration.md). This page stays focused on package adoption and upgrade steps for repo operators.
+
 ## Default Adoption Path
 
 1. Install the package from npmjs with `pnpm add -D @chllming/wave-orchestration`.
@@ -22,13 +24,13 @@ GitHub Packages remains available as an authenticated fallback path, and maintai
 - Fresh `wave init` seeds the starter `skills/` library. `wave init --adopt-existing` records existing repo-owned skill bundles when they are already present, but does not replace or rewrite them.
 - The current runtime expects the post-roadmap model: typed coordination, compiled inboxes, `A8` integration, staged closure, orchestrator-first clarification, and operational runtime policy.
 
-## Upgrading From 0.6.x To 0.7.3
+## Upgrading From 0.6.x To 0.8.0
 
 Read `CHANGELOG.md` first, then treat this section as the repo-owned migration checklist for adopted `0.6.x` workspaces.
 
 `wave upgrade` updates the installed runtime only. It does not copy planner starter files into a repo that already owns its docs, skills, and Context7 bundles.
 
-`0.7.3` keeps the proof-centric closure hardening from `0.7.2` and closes the remaining parser hole: malformed unmatched end-of-tail fenced blocks no longer hide later final implementation markers, stale summaries rebuild when required proof/doc/component fields are still missing even if diagnostics already exist, malformed marker syntax still surfaces explicit parse errors, and incomplete implementation work should stay inside the required final markers with `state=gap` instead of trailing `[wave-gap]` lines.
+`0.8.0` carries forward the `0.7.3` proof-centric closure hardening and adds the first architecture-hardening release surface: reducer and retry parity fixes, result-envelope-first gate wiring, contradiction or fact schema alignment, a dedicated architecture migration plan, and starter docs or skills that now describe the canonical authority-set model instead of the old launcher-centric wording.
 
 ### Required Repo Changes
 
@@ -39,6 +41,14 @@ If the repo adopted Wave before the planner corpus became a tracked required sur
 - `docs/context7/planner-agent/`
 - `docs/reference/wave-planning-lessons.md`
 - the `planner-agentic` bundle entry in `docs/context7/bundles.json`
+
+If the repo copied the shipped starter architecture docs or skills and wants the `0.8.0` authority-model language, also sync:
+
+- `docs/agents/wave-launcher-role.md`
+- `docs/agents/wave-orchestrator-role.md`
+- `skills/wave-core/`
+- the relevant runtime and closure-role starter skills under `skills/`
+- `docs/plans/architecture-hardening-migration.md`
 
 ### Recommended Upgrade Validation
 

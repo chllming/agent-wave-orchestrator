@@ -9,6 +9,8 @@ export const WAVE_CONTROL_ENTITY_TYPES = new Set([
   "rerun_request",
   "attempt",
   "human_input",
+  "contradiction",
+  "fact",
   "wave_run",
   "agent_run",
   "coordination_record",

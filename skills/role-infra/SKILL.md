@@ -8,7 +8,7 @@
 - Prefer exact dependency, identity, and admission proof over vague environment notes.
 - Do not improvise destructive infra changes. Keep actions explicit and approved.
 - Surface setup-required versus blocked states precisely so later closure decisions stay honest.
-- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output.
+- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output. If infra evidence disagrees with a projection, trust the canonical state and direct verification.
 
 ## Workflow
 

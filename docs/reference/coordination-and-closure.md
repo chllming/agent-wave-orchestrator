@@ -31,6 +31,10 @@ The runtime writes several different artifacts, but they do different jobs:
 
 - canonical coordination log:
   `.tmp/<lane>-wave-launcher/coordination/wave-<n>.jsonl`
+- canonical control-plane log:
+  `.tmp/<lane>-wave-launcher/control-plane/wave-<n>.jsonl`
+- result envelopes:
+  `.tmp/<lane>-wave-launcher/results/wave-<n>/attempt-<a>/<agent>.json`
 - helper-assignment snapshot:
   `.tmp/<lane>-wave-launcher/assignments/wave-<n>.json`
 - dependency snapshot:
@@ -46,13 +50,13 @@ The runtime writes several different artifacts, but they do different jobs:
 - run-state:
   `.tmp/<lane>-wave-launcher/run-state.json`
 
-The important rule is that the JSONL coordination log is the scheduler truth. The markdown board is a projection for humans. See [wave-orchestrator.md](../plans/wave-orchestrator.md).
+The important rule is that decisions come from the canonical authority set: wave definitions, the coordination log, the control-plane log, and immutable result envelopes. The markdown board is a projection for humans. See [wave-orchestrator.md](../plans/wave-orchestrator.md).
 
 Live waves now keep refreshing that derived state while agents are still running. Shared summaries, inboxes, dashboard coordination metrics, and clarification routing are not only recomputed at attempt boundaries; they are also refreshed during active wave execution so stale clarification and acknowledgement timing is machine-visible before the attempt ends.
 
 ## What Agents Should Use
 
-Use the coordination log for durable state:
+Use the coordination log for conversational or workflow state:
 
 - `request`
   Use this when you need another agent or capability owner to do work. Target it explicitly. This is the kind that becomes a helper assignment.
@@ -173,7 +177,7 @@ This is the important distinction:
 - A1 may be done with A1's ownership
 - the wave is not done
 
-The launcher will still see:
+The reducer and gate engine will still see:
 
 - an open helper assignment for the request
 - an integration summary that is not yet ready for doc closure
@@ -197,7 +201,7 @@ That usually means:
 
 ### Step 5: Closure Can Continue
 
-Only after that does the launcher allow the wave to move on to:
+Only after that does the closure engine allow the wave to move on to:
 
 1. documentation closure
 2. cont-QA closure

@@ -67,4 +67,4 @@ Example:
 - Field values must not contain spaces; use hyphens for compound values.
 - Markers are machine-parsed; do not add extra fields or change field order.
 - Each closure role emits exactly one final marker per wave attempt.
-- Markers in agent output are the authoritative proof surface for orchestrator validation.
+- Markers in agent output are role-owned compatibility and review surfaces. Live gate evaluation should prefer canonical state and typed result artifacts when they are available.

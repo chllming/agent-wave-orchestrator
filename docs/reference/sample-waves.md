@@ -1,11 +1,11 @@
 ---
 title: "Sample Waves"
-summary: "Showcase-first sample waves that demonstrate the current 0.7.3 Wave surface."
+summary: "Showcase-first sample waves that demonstrate the current 0.8.0 Wave surface."
 ---
 
 # Sample Waves
 
-This guide points to showcase-first sample waves that demonstrate the current `0.7.3` authored Wave surface.
+This guide points to showcase-first sample waves that demonstrate the current `0.8.0` authored Wave surface.
 
 The examples are intentionally denser than typical production waves. Their job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready files.
 
@@ -15,7 +15,7 @@ The examples are intentionally denser than typical production waves. Their job i
   Shows what a good `repo-landed` outcome looks like when one promoted component only closes honestly if desired-state records, reconcile-loop substrate, and cluster-view surfaces land together. It emphasizes maturity discipline, explicit deliverables, and shared-plan closure without drifting into `pilot-live` claims.
 
 - [Full modern sample wave](../plans/examples/wave-example-live-proof.md)
-  Shows the combined `0.7.3` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
+  Shows the combined `0.8.0` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
 
 ## What These Examples Teach
 
@@ -38,7 +38,7 @@ The examples are intentionally denser than typical production waves. Their job i
 
 ## Feature Coverage Map
 
-Together these samples cover the main surfaces added or hardened for `0.7.3`:
+Together these samples cover the main surfaces added or hardened for `0.8.0`:
 
 - repo-landed maturity discipline and anti-overclaim framing
 - explicit shared-plan closure for future-wave safety

@@ -9,7 +9,7 @@ summary: "Assessment of whether the Wave orchestrator constructively addresses c
 
 The Wave orchestrator addresses several coordination failure modes constructively in code, not just in prose. In particular, it has:
 
-- a canonical machine-readable coordination log
+- a canonical authority set with machine-readable coordination and control-plane state
 - compiled shared summaries plus per-agent inboxes
 - explicit clarification, helper-assignment, dependency, integration, documentation, and cont-QA barriers
 - structured proof and verdict validation
@@ -24,7 +24,7 @@ The main weakness is empirical, not architectural. The repo now carries coordina
 The research cited in this repo keeps returning to a fairly stable set of failure modes. In Wave language, the common ones are:
 
 - `Cosmetic board, no canonical state`
-  Agents appear coordinated because they share a board or chat, but there is no machine-trustable source of truth underneath. Wave responds with a canonical coordination log and treats the board as a projection.
+  Agents appear coordinated because they share a board or chat, but there is no machine-trustable authority set underneath. Wave responds with canonical state and treats the board as a projection.
 - `Hidden evidence never gets pooled`
   One agent has the decision-changing fact, but it never reaches the shared state before closure. Wave responds with shared summaries, per-agent inboxes, and integration gating, but this still needs stronger empirical validation.
 - `Communication without global-state reconstruction`
@@ -82,7 +82,7 @@ For this repo, the key question is whether the design relies on self-organizing 
 
 #### 1. It uses a real canonical shared state, not a cosmetic board
 
-The strongest blackboard-like mechanism is the canonical JSONL coordination log plus materialized state in [scripts/wave-orchestrator/coordination-store.mjs](../../scripts/wave-orchestrator/coordination-store.mjs). The markdown board is explicitly a projection for humans, not the scheduler's source of truth, as stated in [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md).
+The strongest blackboard-like mechanism is the canonical authority set: the coordination log, the control-plane event log, immutable result envelopes, and materialized state in [scripts/wave-orchestrator/coordination-store.mjs](../../scripts/wave-orchestrator/coordination-store.mjs). The markdown board is explicitly a projection for humans, not a decision input, as stated in [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md).
 
 That state is then compiled into:
 
@@ -185,7 +185,7 @@ Assessment against the papers:
 
 The docs are not purely aspirational here. The main claims in [docs/plans/current-state.md](../plans/current-state.md) and [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md) are broadly backed by the code:
 
-- canonical coordination log plus generated board
+- canonical authority-set state plus generated projections
 - compiled shared summaries and per-agent inboxes
 - orchestrator-first clarification triage
 - blocking helper assignments and cross-lane dependencies

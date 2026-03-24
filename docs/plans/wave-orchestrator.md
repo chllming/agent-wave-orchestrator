@@ -7,7 +7,7 @@ For the broader docs map, concept pages, and workflow guides, start at [docs/REA
 This runbook is the operational view of the architecture:
 
 - one wave contract defines goals, ownership, proof, and closure
-- one canonical coordination log acts as the shared blackboard state
+- one canonical authority set acts as the shared blackboard state: wave definitions, coordination records, control-plane events, and immutable result envelopes
 - generated board, shared summary, inboxes, ledger, and integration outputs are projections over that state
 - executor adapters preserve Claude, Codex, and OpenCode-specific runtime features at the edge
 - closure makes completion depend on integrated proof and shared state, not on free-form agent narration
@@ -145,11 +145,11 @@ Compatibility note:
 
 - `wave coord`, `wave retry`, and `wave proof` remain available as compatibility surfaces, but new operator docs and runbooks should prefer `wave control`.
 
-The canonical state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not the scheduler's source of truth.
+The canonical conversational state is the JSONL log under `.tmp/<lane>-wave-launcher/coordination/`. The markdown board is a generated projection for humans, not a decision input.
 
-Control-plane facts that drive reruns, proof, attempt state, and operator tasks are appended separately under `.tmp/<lane>-wave-launcher/control-plane/`. Legacy proof and retry files remain derived projections for compatibility, not the source of truth.
+Control-plane facts that drive reruns, proof, attempt state, contradictions, facts, and operator tasks are appended separately under `.tmp/<lane>-wave-launcher/control-plane/`. Result envelopes live under `.tmp/<lane>-wave-launcher/results/`. Legacy proof and retry files remain derived projections for compatibility, not decision inputs.
 
-Capability-targeted requests now become deterministic helper assignments. The launcher resolves the assignee from explicit targets, `capabilityRouting.preferredAgents`, then least-busy matching capability owners, writes that assignment into `.tmp/<lane>-wave-launcher/assignments/`, mirrors the decision into coordination state, and keeps the wave blocked until the linked follow-up resolves.
+Capability-targeted requests now become deterministic helper assignments. The runtime resolves the assignee from explicit targets, `capabilityRouting.preferredAgents`, then least-busy matching capability owners, writes that assignment into `.tmp/<lane>-wave-launcher/assignments/`, mirrors the decision into coordination state, and keeps the wave blocked until the linked follow-up resolves.
 
 Clarification flow is orchestrator-first:
 
@@ -159,9 +159,9 @@ Clarification flow is orchestrator-first:
 4. Routed clarification follow-up requests remain blocking until they resolve.
 5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
 
-During live runs, the launcher now keeps an active orchestration loop while agents are still running. It refreshes the derived coordination surfaces on cadence, surfaces overdue acknowledgements and stale clarification chains in dashboards and traces, and can reroute clarification follow-up requests inside the same attempt when the routed owner never acknowledges them.
+During live runs, the orchestrator now keeps an active supervision and state-refresh loop while agents are still running. It refreshes the derived coordination surfaces on cadence, surfaces overdue acknowledgements and stale clarification chains in dashboards and traces, and can reroute clarification follow-up requests inside the same attempt when the routed owner never acknowledges them.
 
-If you opt into `--resident-orchestrator`, the launcher also starts a long-running non-owning orchestrator session for the wave. That session can inspect the same coordination artifacts and intervene through coordination records, but the launcher remains the scheduler truth and closure authority.
+If you opt into `--resident-orchestrator`, the launcher also starts a long-running non-owning orchestrator session for the wave. That session can inspect the same coordination artifacts and intervene through coordination records, but it does not override reducer, gate, or closure decisions.
 
 Retry intent, operator tasks, attempt lifecycle, and proof injection are now first-class control-plane artifacts rather than manual file surgery:
 
@@ -229,7 +229,9 @@ pnpm exec wave changelog --since-installed
 - docs queue: `.tmp/<lane>-wave-launcher/docs-queue/`
 - trace bundles: `.tmp/<lane>-wave-launcher/traces/`
 - control-plane events: `.tmp/<lane>-wave-launcher/control-plane/`
-  Canonical append-only JSONL log of operator tasks, rerun requests, proof bundles, attempt lifecycle, and human-input events. This is the source of truth for `wave control`. Telemetry queue lives under `control-plane/telemetry/`.
+  Canonical append-only JSONL log of operator tasks, rerun requests, proof bundles, attempt lifecycle, contradictions, facts, and human-input events. This is the canonical lifecycle state for `wave control`. Telemetry queue lives under `control-plane/telemetry/`.
+- result envelopes: `.tmp/<lane>-wave-launcher/results/`
+  Attempt-scoped immutable structured result snapshots used by reducer, gate, retry, and replay flows.
 - proof registries: `.tmp/<lane>-wave-launcher/proof/`
   Projected from control-plane state for compatibility. Operator-registered authoritative proof bundles that feed integration, cont-QA, and replay.
 - retry overrides: `.tmp/<lane>-wave-launcher/control/`
@@ -246,7 +248,7 @@ pnpm exec wave changelog --since-installed
 
 Ad-hoc runs mirror the same state shape under `.tmp/<lane>-wave-launcher/adhoc/<run-id>/`, including dry-run previews at `.tmp/<lane>-wave-launcher/adhoc/<run-id>/dry-run/`. Their docs queue can still point at canonical shared-plan docs when the run reports a shared-plan delta.
 
-The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now delegates session launch or wait mechanics to `launcher-runtime.mjs` and closure-sweep sequencing to `launcher-closure.mjs`. The CLI and `traceVersion: 2` replay contract stay unchanged.
+The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` is being hardened toward a thin orchestrator over reducer, derived-state, retry, gate, closure, and supervision modules. The CLI and `traceVersion: 2` replay contract stay unchanged.
 
 ## Trace Contract
 

@@ -14,17 +14,18 @@ These layers are runtime-neutral:
 
 - wave parsing and validation
 - planner-produced wave specs and authored wave markdown
+- reducer state and phase-engine decisions
 - eval targets, deliverables, and proof artifacts
 - component and closure gates
 - skill resolution and attachment policy
 - compiled shared summaries and per-agent inboxes
-- coordination log and rendered message board
+- canonical authority-set state plus rendered projections
 - helper assignments and dependency handling
 - integration summaries, docs queues, and ledgers
 - dry-run previews
 - trace bundles and replay metadata
 
-The runtime only changes at the last step, when the launcher translates the resolved assignment into an executor-specific invocation.
+The runtime only changes at the last step, when the session supervisor and executor adapter translate the resolved assignment into an executor-specific invocation.
 
 ## Where Runtime-Specific Logic Lives
 
@@ -68,7 +69,7 @@ Executor choice resolves in a fixed order:
 4. CLI `--executor`
 5. global default
 
-After that choice is final, the launcher resolves runtime-specific overlays and any runtime-attached skill packs.
+After that choice is final, the orchestrator resolves runtime-specific overlays and any runtime-attached skill packs.
 
 ## Fallback And Mix Policy
 
@@ -86,7 +87,7 @@ The important part is that fallback does not change the higher-level wave contra
 The skill system follows the same pattern:
 
 - `skills/` is the canonical repo-owned source
-- the launcher resolves skill ids without caring which runtime will consume them
+- the orchestrator resolves skill ids without caring which runtime will consume them
 - the executor adapter projects those skills into the surface each runtime understands
 
 Examples:

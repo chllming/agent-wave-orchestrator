@@ -8,7 +8,7 @@
 - Name the exact service, package, or runtime surface being rolled out.
 - Record health, readiness, failure, and rollback state explicitly.
 - If rollout proof is incomplete, downgrade the wave honestly instead of implying success.
-- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output.
+- Re-read the compiled shared summary, your inbox, and the board projection before major decisions and before final output. If deployment evidence disagrees with a projection, trust the deployment evidence and canonical state.
 
 ## Workflow
 

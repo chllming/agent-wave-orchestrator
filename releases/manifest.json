@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.0",
+      "date": "2026-03-24",
+      "summary": "Architecture hardening foundations, envelope-first closure wiring, docs and skill alignment, and 0.8.0 release-surface alignment.",
+      "features": [
+        "Reducer and task replay hardening now keeps coordination-derived task identity deterministic and strengthens authoritative replay of live wave state.",
+        "Gate evaluation, contradiction or fact schema wiring, and resume planning are now aligned around control-plane state plus typed result-envelope reads instead of legacy summary-only behavior.",
+        "Live launcher evaluation now computes reducer snapshots during real runs, so the shadow or migration path exists in production execution as well as tests.",
+        "A dedicated architecture hardening migration plan now ships, and the active README, guides, role prompts, and starter skills now describe the canonical authority set, phase-engine model, and thin-launcher direction consistently.",
+        "Regression coverage now guards the docs and skill surface against stale launcher-truth wording while preserving shared `0.7.3` parity behavior in the overlapping release-era suites."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.0` runtime and starter-surface contract.",
+        "If an adopted repo fails `wave doctor` after the upgrade, sync the repo-owned planner starter surface (`docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry) before relying on planner-aware validation.",
+        "If an adopted repo copied the starter architecture docs or skill bundles, sync the updated role prompts, `skills/wave-core/`, runtime skills, and closure-role skills so local guidance matches the `0.8.0` authority model.",
+        "Review `docs/plans/architecture-hardening-migration.md` before continuing the reducer-authoritative cutover work in repos that extend the shipped starter surface."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.7.3",
       "date": "2026-03-23",
       "summary": "Unmatched-fence structured-signal recovery, stale-summary rebuild hardening, and 0.7.3 release-surface alignment.",

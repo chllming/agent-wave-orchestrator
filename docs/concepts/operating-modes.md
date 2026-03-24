@@ -38,7 +38,7 @@ Treat them as planning posture:
 
 Human feedback is a runtime escalation mechanism, not an operating mode.
 
-The launcher flow is:
+The runtime flow is:
 
 1. agent emits a clarification request or blocker
 2. the orchestrator tries to resolve it from repo state, policy, ownership, or targeted rerouting

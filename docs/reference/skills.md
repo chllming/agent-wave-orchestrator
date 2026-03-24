@@ -1,6 +1,7 @@
 # Skills Reference
 
 Skills are repo-owned reusable instruction bundles. Wave resolves them by config layer, then filters them through each bundle's activation metadata before projecting them into the selected runtime.
+They shape runtime behavior, but they are not part of the canonical authority set.
 
 ## Canonical Bundle Layout
 
@@ -191,6 +192,8 @@ Runtime delivery:
   The compact catalog is injected into `opencode.json`, and `skill.json`, `SKILL.md`, the selected adapter, and every recursive `references/**` file are attached through `--file`.
 - Local
   The compact catalog stays prompt-only.
+
+These runtime projections are guidance surfaces. They should stay aligned with the canonical authority model, but they are not replay inputs or decision state on their own.
 
 ## Generated Artifacts
 

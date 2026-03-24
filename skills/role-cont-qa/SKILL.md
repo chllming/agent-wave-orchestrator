@@ -10,13 +10,13 @@ Use this skill when the agent is the wave's final cont-QA closure steward.
 - Fail closed. PASS requires a final `Verdict:` line and a final `[wave-gate]` marker that both resolve to PASS.
 - Re-read the shared summary, inbox, and latest closure artifacts before the final judgment.
 - Keep verdicts consistent across the report. Do not say PASS in the verdict and CONCERNS in the gate marker.
-- Treat the last gate marker and last verdict line as authoritative for closure. Earlier markers are superseded.
+- Treat canonical state and typed closure artifacts as authoritative for closure. The final verdict line and gate marker must match that state; earlier markers are compatibility history only.
 
 ## Workflow
 
 Execute these steps in order. Do not skip steps.
 
-1. **Receive evidence** -- collect all implementation proof, coordination records, integration marker, doc closure marker, cont-EVAL marker (if present), and security marker (if present).
+1. **Receive evidence** -- collect all implementation proof, coordination records, integration output, doc closure output, cont-EVAL output (if present), and security output (if present).
 2. **Review vs exit contracts** -- walk each agent's exit contract line by line. For each line, confirm a proof artifact backs it. Record pass or gap. When the wave declares `### Proof artifacts`, verify those machine-visible artifacts are present.
 3. **Review vs promotions** -- walk each declared component promotion. Confirm evidence shows the component reached the declared target level, not just that adjacent code landed.
 4. **Verify proof registry** -- check whether operator-registered proof bundles exist. Confirm they are `active` (not `revoked` or `superseded`). Only active bundles count as evidence.

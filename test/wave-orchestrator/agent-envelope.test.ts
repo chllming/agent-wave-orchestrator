@@ -44,8 +44,8 @@ describe("agentEnvelopePathFromStatusPath", () => {
 });
 
 describe("buildAgentResultEnvelope", () => {
-  it("extracts correct fields from a full summary", () => {
-    const agent = { agentId: "A1" };
+  it("extracts correct fields from an implementation summary", () => {
+    const agent = { agentId: "A1", role: "implementation" };
     const summary = {
       agentId: "A1",
       proof: {
@@ -67,116 +67,156 @@ describe("buildAgentResultEnvelope", () => {
       components: [
         { componentId: "wave-parser", level: "repo-landed", state: "met" },
       ],
-      gate: {
+    };
+
+    const envelope = buildAgentResultEnvelope(agent, summary);
+
+    expect(envelope.schemaVersion).toBe(2);
+    expect(envelope.agentId).toBe("A1");
+    expect(envelope.role).toBe("implementation");
+    expect(envelope.proof).toEqual({
+      state: "satisfied",
+      completion: "contract",
+      durability: "none",
+      proofLevel: "unit",
+      detail: "All tests pass.",
+    });
+    expect(envelope.proofArtifacts).toEqual([
+      {
+        path: "test/output.xml",
+        kind: "test-report",
+        sha256: "abc123",
+        exists: true,
+        requiredFor: null,
+      },
+    ]);
+    expect(envelope.deliverables).toEqual([
+      { path: "src/feature.mjs", exists: true, sha256: null },
+    ]);
+    expect(envelope.implementation).toEqual({
+      docDelta: {
+        state: "owned",
+        paths: ["docs/api.md"],
+        detail: "Updated API docs.",
+      },
+      components: [
+        {
+          componentId: "wave-parser",
+          level: "repo-landed",
+          state: "met",
+          detail: null,
+        },
+      ],
+    });
+    expect(envelope.gaps).toEqual([]);
+    expect(envelope.unresolvedBlockers).toEqual([]);
+    expect(envelope.riskNotes).toEqual([]);
+    expect(envelope.facts).toEqual([]);
+    expect(envelope.integration).toBeUndefined();
+    expect(envelope.security).toBeUndefined();
+    expect(envelope.contQa).toBeUndefined();
+    expect(typeof envelope.completedAt).toBe("string");
+  });
+
+  it("extracts correct fields from a cont-QA summary", () => {
+    const envelope = buildAgentResultEnvelope(
+      { agentId: "A0", role: "cont-qa" },
+      {
+        agentId: "A0",
+        gate: {
+          architecture: "pass",
+          integration: "pass",
+          durability: "pass",
+          live: "pass",
+          docs: "pass",
+        },
+        verdict: {
+          verdict: "pass",
+          detail: "All gates clear.",
+        },
+      },
+    );
+
+    expect(envelope.schemaVersion).toBe(2);
+    expect(envelope.role).toBe("cont-qa");
+    expect(envelope.contQa).toEqual({
+      verdict: {
+        verdict: "pass",
+        detail: "All gates clear.",
+      },
+      gateClaims: {
         architecture: "pass",
         integration: "pass",
         durability: "pass",
         live: "pass",
         docs: "pass",
-        detail: "All gates clear.",
       },
-      security: {
-        state: "clear",
-        findings: 0,
-        approvals: 0,
-        detail: "No security issues.",
-      },
-      integration: {
-        state: "ready-for-doc-closure",
-        claims: 2,
-        conflicts: 0,
-        blockers: 0,
-        detail: "Integration ready.",
-      },
-    };
-
-    const envelope = buildAgentResultEnvelope(agent, summary);
-
-    expect(envelope.envelopeVersion).toBe(1);
-    expect(envelope.agentId).toBe("A1");
-    expect(envelope.exitContract).toEqual({
-      completion: "contract",
-      durability: "none",
-      proof: "unit",
-      docImpact: "owned",
     });
-    expect(envelope.proofArtifacts).toEqual([
-      { path: "test/output.xml", kind: "test-report", sha256: "abc123", exists: true },
-    ]);
-    expect(envelope.deliverables).toEqual([{ path: "src/feature.mjs", exists: true }]);
-    expect(envelope.components).toEqual([
-      { componentId: "wave-parser", level: "repo-landed", state: "met" },
-    ]);
-    expect(envelope.gateClaims).toEqual([
-      { gateId: "architecture", claim: "pass", detail: "All gates clear." },
-      { gateId: "integration", claim: "pass", detail: "All gates clear." },
-      { gateId: "durability", claim: "pass", detail: "All gates clear." },
-      { gateId: "live", claim: "pass", detail: "All gates clear." },
-      { gateId: "docs", claim: "pass", detail: "All gates clear." },
-    ]);
-    expect(envelope.validationOutputs.testsPassed).toBe(true);
-    expect(envelope.validationOutputs.buildPassed).toBe(true);
-    expect(envelope.securityFindings).toEqual([
-      { state: "clear", findings: 0, approvals: 0, detail: "No security issues." },
-    ]);
-    expect(envelope.integrationClaims).toEqual([
+  });
+
+  it("extracts correct fields from an integration summary", () => {
+    const envelope = buildAgentResultEnvelope(
+      { agentId: "A8", role: "integration" },
       {
-        state: "ready-for-doc-closure",
-        claims: 2,
-        conflicts: 0,
-        blockers: 0,
-        detail: "Integration ready.",
+        agentId: "A8",
+        integration: {
+          state: "ready-for-doc-closure",
+          claims: 2,
+          conflicts: 0,
+          blockers: 0,
+          detail: "Integration ready.",
+        },
       },
-    ]);
-    expect(envelope.docsDeltas).toEqual([
-      { state: "owned", paths: ["docs/api.md"], detail: "Updated API docs." },
-    ]);
-    expect(envelope.riskNotes).toEqual([]);
-    expect(envelope.unresolvedBlockers).toEqual([]);
-    expect(typeof envelope.createdAt).toBe("string");
+    );
+
+    expect(envelope.schemaVersion).toBe(2);
+    expect(envelope.role).toBe("integration");
+    expect(envelope.integration).toEqual({
+      state: "ready-for-doc-closure",
+      claims: 2,
+      conflicts: 0,
+      blockers: 0,
+      detail: "Integration ready.",
+    });
   });
 
   it("returns safe defaults from null summary", () => {
     const envelope = buildAgentResultEnvelope(null, null);
 
-    expect(envelope.envelopeVersion).toBe(1);
+    expect(envelope.schemaVersion).toBe(2);
     expect(envelope.agentId).toBeNull();
-    expect(envelope.exitContract).toEqual({
+    expect(envelope.role).toBeNull();
+    expect(envelope.proof).toEqual({
+      state: "not_applicable",
       completion: null,
       durability: null,
-      proof: null,
-      docImpact: null,
+      proofLevel: null,
+      detail: null,
     });
     expect(envelope.proofArtifacts).toEqual([]);
     expect(envelope.deliverables).toEqual([]);
-    expect(envelope.components).toEqual([]);
-    expect(envelope.gateClaims).toEqual([]);
-    expect(envelope.validationOutputs).toEqual({
-      testsPassed: false,
-      buildPassed: false,
-    });
+    expect(envelope.gaps).toEqual([]);
     expect(envelope.riskNotes).toEqual([]);
     expect(envelope.unresolvedBlockers).toEqual([]);
-    expect(envelope.docsDeltas).toEqual([]);
-    expect(envelope.securityFindings).toEqual([]);
-    expect(envelope.integrationClaims).toEqual([]);
+    expect(envelope.facts).toEqual([]);
+    expect(envelope.implementation).toBeUndefined();
   });
 
   it("returns safe defaults from empty summary", () => {
     const envelope = buildAgentResultEnvelope({}, {});
 
-    expect(envelope.envelopeVersion).toBe(1);
+    expect(envelope.schemaVersion).toBe(2);
     expect(envelope.agentId).toBeNull();
-    expect(envelope.exitContract).toEqual({
+    expect(envelope.proof).toEqual({
+      state: "not_applicable",
       completion: null,
       durability: null,
-      proof: null,
-      docImpact: null,
+      proofLevel: null,
+      detail: null,
     });
     expect(envelope.proofArtifacts).toEqual([]);
     expect(envelope.deliverables).toEqual([]);
-    expect(envelope.components).toEqual([]);
-    expect(envelope.gateClaims).toEqual([]);
+    expect(envelope.gaps).toEqual([]);
   });
 
   it("takes agentId from agent when summary has none", () => {
@@ -197,13 +237,12 @@ describe("buildAgentResultEnvelope", () => {
     expect(envelope.agentId).toBe("A1");
   });
 
-  it("reports testsPassed false when proof state is gap", () => {
+  it("reports partial proof state when proof state is gap", () => {
     const summary = {
       proof: { completion: "contract", durability: "none", proof: "unit", state: "gap" },
     };
     const envelope = buildAgentResultEnvelope({}, summary);
-    expect(envelope.validationOutputs.testsPassed).toBe(false);
-    expect(envelope.validationOutputs.buildPassed).toBe(false);
+    expect(envelope.proof.state).toBe("partial");
   });
 });
 
@@ -229,10 +268,10 @@ describe("writeAgentResultEnvelope / readAgentResultEnvelope round-trip", () => 
 
     const read = readAgentResultEnvelope(statusPath);
     expect(read).not.toBeNull();
-    expect(read.envelopeVersion).toBe(1);
+    expect(read.schemaVersion).toBe(2);
     expect(read.agentId).toBe("A1");
-    expect(read.exitContract.completion).toBe("contract");
-    expect(read.deliverables).toEqual([{ path: "src/main.mjs", exists: true }]);
+    expect(read.proof.completion).toBe("contract");
+    expect(read.deliverables).toEqual([{ path: "src/main.mjs", exists: true, sha256: null }]);
   });
 
   it("returns null when no envelope file exists", () => {

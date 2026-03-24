@@ -25,8 +25,14 @@ const codeExtensions = new Set([
 function shouldSkipDir(relativePath: string) {
   return (
     relativePath === ".git" ||
+    relativePath === ".tmp" ||
+    relativePath === ".wave" ||
+    relativePath === ".claude" ||
     relativePath === "node_modules" ||
     relativePath.startsWith(".git/") ||
+    relativePath.startsWith(".tmp/") ||
+    relativePath.startsWith(".wave/") ||
+    relativePath.startsWith(".claude/") ||
     relativePath.startsWith("node_modules/") ||
     relativePath.startsWith("services/slowfast/node_modules/")
   );

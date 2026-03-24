@@ -21,6 +21,7 @@ import {
   truncate,
   writeJsonAtomic,
 } from "./shared.mjs";
+import { answerHumanInputByRequest } from "./human-input-resolution.mjs";
 import { safeQueueWaveControlEvent } from "./wave-control-client.mjs";
 
 function sanitizeToken(value) {
@@ -363,7 +364,7 @@ export async function runFeedbackCli(argv) {
     if (!options.id || !options.response) {
       throw new Error("respond requires --id and --response");
     }
-    answerFeedbackRequest({
+    const answered = answerFeedbackRequest({
       feedbackStateDir: stateDir,
       feedbackRequestsDir: requestsDir,
       requestId: options.id,
@@ -372,6 +373,14 @@ export async function runFeedbackCli(argv) {
       force: options.force,
       recordTelemetry: true,
     });
+    if (answered?.lane && Number.isFinite(Number(answered.wave))) {
+      answerHumanInputByRequest({
+        lane: answered.lane,
+        waveNumber: Number(answered.wave),
+        requestId: options.id,
+        operator: options.operator,
+      });
+    }
     console.log(`[wave-human-feedback] answered ${options.id}`);
     return;
   }

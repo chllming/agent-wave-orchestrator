@@ -2255,6 +2255,37 @@ describe("validateWaveComponentMatrixCurrentLevels", () => {
       componentId: "wave-parser-and-launcher",
     });
   });
+
+  it("skips matrix loading when a wave declares no component promotions", () => {
+    expect(
+      validateWaveComponentMatrixCurrentLevels(
+        {
+          wave: 2,
+          agents: [
+            {
+              agentId: "A1",
+              title: "Implementation",
+              components: ["wave-parser-and-launcher"],
+            },
+          ],
+          componentPromotions: [],
+        },
+        {
+          laneProfile: {
+            validation: { requireComponentPromotionsFromWave: 0 },
+          },
+          componentMatrixPayload: {
+            version: 1,
+            levels: [],
+            components: {},
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+    });
+  });
 });
 
 describe("validateWaveComponentPromotions", () => {

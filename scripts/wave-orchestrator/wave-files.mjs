@@ -2357,18 +2357,16 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
       securityRolePromptPath,
     }),
   );
-  if (
-    promotions.length === 0 &&
-    ((componentThreshold === null || wave.wave < componentThreshold) ||
-      implementationOwningAgents.length === 0)
-  ) {
+  if (promotions.length === 0) {
     return {
       ok: true,
       statusCode: "pass",
       detail:
         implementationOwningAgents.length === 0
           ? `Wave ${wave.wave} has no implementation-owned component promotions to reconcile.`
-          : "Component current-level gate is not active for this wave.",
+          : componentThreshold === null || wave.wave < componentThreshold
+            ? "Component current-level gate is not active for this wave."
+            : `Wave ${wave.wave} declares no promoted components to reconcile against the component matrix.`,
       componentId: null,
     };
   }

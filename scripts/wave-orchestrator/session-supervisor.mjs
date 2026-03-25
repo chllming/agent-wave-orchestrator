@@ -33,7 +33,6 @@ import {
 } from "./terminals.mjs";
 import {
   recordGlobalDashboardEvent,
-  writeGlobalDashboard,
 } from "./dashboard-state.mjs";
 import { buildHumanFeedbackWorkflowUpdate } from "./human-input-workflow.mjs";
 import {
@@ -169,7 +168,6 @@ export function markLauncherFailed(
       level: "error",
       message: error instanceof Error ? error.message : String(error),
     });
-    writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
   }
   appendCoordination({
     event: "launcher_finish",

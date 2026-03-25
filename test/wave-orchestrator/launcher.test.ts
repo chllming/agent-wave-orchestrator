@@ -2816,7 +2816,6 @@ describe("readWaveComponentMatrixGate", () => {
 describe("markLauncherFailed", () => {
   it("marks the global dashboard as failed and records coordination output", () => {
     const dir = makeTempDir();
-    const dashboardPath = path.join(dir, "global.json");
     const coordinationEvents = [];
     const globalDashboard = {
       status: "running",
@@ -2828,7 +2827,7 @@ describe("markLauncherFailed", () => {
       globalDashboard,
       {
         lane: "leap-claw",
-        globalDashboardPath: dashboardPath,
+        globalDashboardPath: path.join(dir, "global.json"),
       },
       [0],
       (entry) => coordinationEvents.push(entry),
@@ -2836,7 +2835,10 @@ describe("markLauncherFailed", () => {
     );
 
     expect(globalDashboard.status).toBe("failed");
-    expect(JSON.parse(fs.readFileSync(dashboardPath, "utf8")).status).toBe("failed");
+    expect(globalDashboard.events.at(-1)).toMatchObject({
+      level: "error",
+      message: "boom",
+    });
     expect(coordinationEvents[0]).toMatchObject({
       event: "launcher_finish",
       status: "failed",

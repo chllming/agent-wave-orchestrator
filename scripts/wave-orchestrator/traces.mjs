@@ -55,11 +55,17 @@ function fileHashOrNull(filePath) {
   if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
+  if (!fs.statSync(filePath).isFile()) {
+    return null;
+  }
   return hashText(fs.readFileSync(filePath, "utf8"));
 }
 
 function copyFileIfExists(sourcePath, destPath) {
   if (!sourcePath || !fs.existsSync(sourcePath)) {
+    return false;
+  }
+  if (!fs.statSync(sourcePath).isFile()) {
     return false;
   }
   ensureDirectory(path.dirname(destPath));

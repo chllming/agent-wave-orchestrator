@@ -806,8 +806,11 @@ describe("trace bundles", () => {
     writeJson(componentMatrixJsonPath, { components: [] });
     writeText(componentMatrixDocPath, "# Component Matrix\n");
     const lanePaths = makeLanePaths(dir, componentMatrixJsonPath, componentMatrixDocPath);
+    lanePaths.requireComponentPromotionsFromWave = null;
+    lanePaths.laneProfile.validation.requireComponentPromotionsFromWave = null;
     const wave = {
       wave: 0,
+      file: "docs/plans/waves/wave-0.md",
       agents: [
         {
           agentId: "A1",
@@ -1005,7 +1008,9 @@ describe("trace bundles", () => {
     });
 
     const replay = replayTraceBundle(traceDir);
-    expect(replay.ok).toBe(true);
+    expect(replay.validation.ok).toBe(true);
+    expect(replay.matchesStoredGateSnapshot).toBe(true);
+    expect(replay.ok).toBe(false);
     expect(replay.gateSnapshot.integrationBarrier).toMatchObject({
       ok: false,
       statusCode: "integration-contradiction-open",

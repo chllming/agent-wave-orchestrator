@@ -37,7 +37,7 @@
   - explicit integration summaries with actionable claim, interface, proof, docs, and deploy-risk evidence
   - versioned runtime artifact contracts for manifests, dashboards, relaunch plans, helper-assignment snapshots, dependency snapshots, and run-state
   - append-only `run-state.json` history with per-wave current state, compatibility `completedWaves`, and causal completion or blocker evidence
-  - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
+  - hermetic `traceVersion: 2` per-attempt trace bundles with copied launched-agent summaries, copied component matrices for promoted waves only, a hashed `outcome.json` replay baseline, run metadata, and cumulative quality metrics
   - an internal, read-only replay validator for trace bundles, with legacy `traceVersion: 1` bundles kept in best-effort warning mode
   - orchestrator-first clarification triage plus human escalation artifacts
   - answered human-feedback responses that reconcile canonical coordination state, helper assignments, and safe continuation intent even when the launcher is no longer active
@@ -50,6 +50,7 @@
   - reducer-driven live state snapshots plus persisted machine-readable shadow diffs for helper-assignment, blocker, contradiction, closure, and retry slices
   - reducer-authoritative helper-assignment blocking, retry target selection, and resume planning, with live gate and closure reads now driven from validated result envelopes
   - hermetic replay that reconstructs contradiction-driven blockers from bundled control-plane events
+  - `projection-writer.mjs` as the single persistence layer for projection outputs such as dashboards, traces, generated board projections, compiled summaries and inboxes, helper-assignment and dependency snapshots, docs queues, ledgers, and integration or security summaries; clarification-triage workflow artifacts remain workflow-owned
   - reducer phases that materialize open human-feedback and escalation barriers as `clarifying` with blocked `waveState`, instead of flattening them into generic `running`
   - replay, reconcile, and trace materialization compatibility adapters that can still synthesize envelopes from legacy summaries or marker-era artifacts without deciding live correctness
   - a launcher entrypoint that now sequences explicit engine modules plus the session supervisor, with the old `launcher-*` engine module names removed from the live runtime tree

@@ -119,6 +119,10 @@ describe("docs architecture alignment", () => {
     expect(migrationDoc).toContain("shared `0.7.3` parity suites");
     expect(endStateArchitecture).toContain("Runtime Module Layout");
     expect(endStateArchitecture).toContain("no longer part of the live runtime tree");
+    expect(endStateArchitecture).toContain("projection writes");
+    expect(endStateArchitecture).not.toContain(
+      "The projection writer is the single module responsible for all non-canonical file writes.",
+    );
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/inboxes/wave-<N>/shared-summary.md");
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/messageboards/wave-<N>.md");
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/waves.manifest.json");

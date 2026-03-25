@@ -21,7 +21,7 @@ The live runtime is organized around explicit modules:
 - `implementation-engine.mjs`
   Chooses initial or retry implementation fan-out.
 - `derived-state-engine.mjs`
-  Rebuilds shared summary, inboxes, assignments, dependency views, ledger, docs queue, and integration or security summaries.
+  Computes shared summary, inbox, assignment, dependency, ledger, docs queue, and integration or security projection payloads from canonical state.
 - `gate-engine.mjs`
   Evaluates live gates from validated result envelopes plus canonical state.
 - `retry-engine.mjs`
@@ -33,7 +33,7 @@ The live runtime is organized around explicit modules:
 - `session-supervisor.mjs`
   Launches and monitors sessions and writes observed `wave_run`, `attempt`, and `agent_run` lifecycle facts.
 - `projection-writer.mjs`
-  Writes traces and other non-canonical projections.
+  Persists projection outputs such as dashboards, traces, board projections, compiled summaries and inboxes, assignment and dependency snapshots, docs queues, ledgers, and integration or security summaries. Clarification-triage workflow artifacts stay workflow-owned.
 
 ## What It Does
 
@@ -300,6 +300,7 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now acts as 
 - `outcome.json` is the stored replay baseline. Replay compares recomputed gates and quality against it instead of trusting only inline metadata.
 - For `traceVersion: 2`, launched agents must have copied prompt/log/status/inbox/summary artifacts, and promoted-component waves must include the copied component matrix JSON.
 - `security.json` stores the derived per-wave security state that feeds integration summaries, gate snapshots, and replay.
+- Non-promoted contradiction replay relies on copied control-plane facts and result artifacts; copied component matrices are only required when the trace declares promoted components.
 - `quality.json` is cumulative through the current attempt. It is intended for regression comparison, not only for one-shot pass/fail reporting.
 - `quality.json` also reports capability-assignment and dependency-resolution metrics, plus coordination response metrics (overdue acknowledgements, clarification timing, human escalation counts), in addition to the Phase 2/3 communication, fallback, and closure metrics.
 - Replay support is internal. The source tree contains helpers to load, validate, and replay trace bundles against the same gate logic the runtime uses, but there is no public replay CLI yet.

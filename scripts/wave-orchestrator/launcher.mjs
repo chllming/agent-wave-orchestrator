@@ -16,15 +16,7 @@ import {
   readWaveHumanFeedbackRequests,
 } from "./coordination.mjs";
 import {
-  appendCoordinationRecord,
   buildCoordinationResponseMetrics,
-  compileAgentInbox,
-  compileSharedSummary,
-  renderCoordinationBoardProjection,
-  updateSeedRecords,
-  writeCompiledInbox,
-  writeCoordinationBoardProjection,
-  writeJsonArtifact,
 } from "./coordination-store.mjs";
 import {
   applyContext7SelectionsToWave,
@@ -41,10 +33,7 @@ import {
   recordWaveDashboardEvent,
   refreshWaveDashboardAgentStates,
   setWaveDashboardAgent,
-  syncGlobalWaveFromWaveDashboard,
   updateWaveDashboardMessageBoard,
-  writeGlobalDashboard,
-  writeWaveDashboard,
 } from "./dashboard-state.mjs";
 import {
   DEFAULT_AGENT_LAUNCH_STAGGER_MS,
@@ -125,8 +114,6 @@ import {
   validateSecuritySummary,
   writeAgentExecutionSummary,
 } from "./agent-state.mjs";
-import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
-import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
 import {
   augmentSummaryWithProofRegistry,
   readWaveProofRegistry,
@@ -139,7 +126,6 @@ import {
 import { appendWaveControlEvent, readControlPlaneEvents } from "./control-plane.mjs";
 import { materializeContradictionsFromControlPlaneEvents } from "./contradiction-entity.mjs";
 import { flushWaveControlQueue } from "./wave-control-client.mjs";
-import { triageClarificationRequests } from "./clarification-triage.mjs";
 import { readProjectProfile, resolveDefaultTerminalSurface } from "./project-profile.mjs";
 import {
   isContEvalImplementationOwningAgent,
@@ -152,17 +138,6 @@ import {
 import {
   summarizeResolvedSkills,
 } from "./skills.mjs";
-import {
-  buildDependencySnapshot,
-  buildRequestAssignments,
-  renderDependencySnapshotMarkdown,
-  syncAssignmentRecords,
-  writeDependencySnapshotMarkdown,
-} from "./routing-state.mjs";
-import {
-  writeAssignmentSnapshot,
-  writeDependencySnapshot,
-} from "./artifact-schemas.mjs";
 import {
   collectUnexpectedSessionFailures as collectUnexpectedSessionFailuresImpl,
   launchAgentSession as launchAgentSessionImpl,
@@ -197,10 +172,8 @@ import {
 import {
   waveAssignmentsPath,
   waveDependencySnapshotPath,
-  writeWaveDerivedState,
+  buildWaveDerivedState,
   applyDerivedStateToDashboard,
-  buildWaveSecuritySummary,
-  buildWaveIntegrationSummary,
 } from "./derived-state-engine.mjs";
 import {
   readWaveRelaunchPlan,
@@ -240,6 +213,8 @@ import {
   planRetryWaveAttempt,
 } from "./implementation-engine.mjs";
 import {
+  writeDashboardProjections,
+  writeWaveDerivedProjections,
   writeWaveAttemptTraceProjection,
   writeWaveRelaunchProjection,
 } from "./projection-writer.mjs";
@@ -818,7 +793,7 @@ export async function runLauncherCli(argv) {
     if (options.dryRun) {
       pruneDryRunExecutorPreviewDirs(lanePaths, allWaves);
       for (const wave of filteredWaves) {
-        const derivedState = writeWaveDerivedState({
+        const derivedState = buildWaveDerivedState({
           lanePaths,
           wave,
           summariesByAgentId: {},
@@ -826,6 +801,7 @@ export async function runLauncherCli(argv) {
           attempt: 0,
           orchestratorId: options.orchestratorId,
         });
+        writeWaveDerivedProjections({ lanePaths, wave, derivedState });
         const agentRuns = wave.agents.map((agent) => {
           const safeName = `wave-${wave.wave}-${agent.slug}`;
           return {
@@ -890,7 +866,7 @@ export async function runLauncherCli(argv) {
       manifestOut: options.manifestOut,
       feedbackRequestsDir: lanePaths.feedbackRequestsDir,
     });
-    writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+    writeDashboardProjections({ lanePaths, globalDashboard });
 
     if (terminalRegistryEnabled && !options.keepTerminals) {
       const removed = removeLaneTemporaryTerminalEntries(lanePaths.terminalsPath, lanePaths);
@@ -909,7 +885,7 @@ export async function runLauncherCli(argv) {
         });
       }
     }
-    writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+    writeDashboardProjections({ lanePaths, globalDashboard });
 
     if (options.dashboard) {
       globalDashboardTerminalEntry = createGlobalDashboardTerminalEntry(
@@ -953,10 +929,10 @@ export async function runLauncherCli(argv) {
         status: "running",
         details: `agents=${wave.agents.map((agent) => agent.agentId).join(", ")}; wave_file=${wave.file}`,
       });
-      writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+      writeDashboardProjections({ lanePaths, globalDashboard });
 
       const runTag = crypto.randomBytes(3).toString("hex");
-      let derivedState = writeWaveDerivedState({
+      let derivedState = buildWaveDerivedState({
         lanePaths,
         wave,
         summariesByAgentId: {},
@@ -964,6 +940,7 @@ export async function runLauncherCli(argv) {
         attempt: 0,
         orchestratorId: options.orchestratorId,
       });
+      writeWaveDerivedProjections({ lanePaths, wave, derivedState });
       const messageBoardPath = derivedState.messageBoardPath;
       console.log(`Wave message board: ${path.relative(REPO_ROOT, messageBoardPath)}`);
 
@@ -975,12 +952,15 @@ export async function runLauncherCli(argv) {
       const residentOrchestratorState = { closed: false };
 
       const flushDashboards = () => {
-        if (!dashboardState) {
+        if (!dashboardState && !globalDashboard) {
           return;
         }
-        writeWaveDashboard(dashboardPath, dashboardState);
-        syncGlobalWaveFromWaveDashboard(globalDashboard, dashboardState);
-        writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+        writeDashboardProjections({
+          lanePaths,
+          globalDashboard,
+          dashboardState,
+          dashboardPath,
+        });
       };
 
       const recordCombinedEvent = ({ level = "info", agentId = null, message }) => {
@@ -1068,7 +1048,7 @@ export async function runLauncherCli(argv) {
             agentIds: agentRuns.map((run) => run.agent.agentId),
             orchestratorId: options.orchestratorId,
           });
-          derivedState = writeWaveDerivedState({
+          derivedState = buildWaveDerivedState({
             lanePaths,
             wave,
             agentRuns,
@@ -1077,6 +1057,7 @@ export async function runLauncherCli(argv) {
             attempt: attemptNumber,
             orchestratorId: options.orchestratorId,
           });
+          writeWaveDerivedProjections({ lanePaths, wave, derivedState });
           const controlPlaneLogPath = path.join(
             lanePaths.controlPlaneDir,
             `wave-${wave.wave}.jsonl`,
@@ -2079,14 +2060,14 @@ export async function runLauncherCli(argv) {
           if (WAVE_TERMINAL_STATES.has(globalWave.status)) {
             globalWave.completedAt = toIsoTimestamp();
           }
-          writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+          writeDashboardProjections({ lanePaths, globalDashboard });
         }
       }
     }
 
     globalDashboard.status = "completed";
     recordGlobalDashboardEvent(globalDashboard, { message: "All selected waves completed." });
-    writeGlobalDashboard(lanePaths.globalDashboardPath, globalDashboard);
+    writeDashboardProjections({ lanePaths, globalDashboard });
     appendCoordination({
       event: "launcher_finish",
       waves: selectedWavesForCoordination,
@@ -2101,6 +2082,7 @@ export async function runLauncherCli(argv) {
       appendCoordination,
       error,
     );
+    writeDashboardProjections({ lanePaths, globalDashboard });
     throw error;
   } finally {
     if (globalDashboardTerminalAppended && globalDashboardTerminalEntry && !options.keepTerminals) {

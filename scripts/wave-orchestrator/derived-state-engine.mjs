@@ -13,9 +13,6 @@ import {
   readMaterializedCoordinationState,
   renderCoordinationBoardProjection,
   updateSeedRecords,
-  writeCompiledInbox,
-  writeCoordinationBoardProjection,
-  writeJsonArtifact,
   buildCoordinationResponseMetrics,
 } from "./coordination-store.mjs";
 import { triageClarificationRequests } from "./clarification-triage.mjs";
@@ -24,17 +21,10 @@ import {
   buildRequestAssignments,
   renderDependencySnapshotMarkdown,
   syncAssignmentRecords,
-  writeDependencySnapshotMarkdown,
 } from "./routing-state.mjs";
-import {
-  writeAssignmentSnapshot,
-  writeDependencySnapshot,
-} from "./artifact-schemas.mjs";
-import { deriveWaveLedger, readWaveLedger, writeWaveLedger } from "./ledger.mjs";
-import { buildDocsQueue, readDocsQueue, writeDocsQueue } from "./docs-queue.mjs";
-import {
-  parseStructuredSignalsFromLog,
-} from "./dashboard-state.mjs";
+import { deriveWaveLedger, readWaveLedger } from "./ledger.mjs";
+import { buildDocsQueue, readDocsQueue } from "./docs-queue.mjs";
+import { parseStructuredSignalsFromLog } from "./dashboard-state.mjs";
 import {
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
@@ -44,10 +34,8 @@ import {
 import {
   REPO_ROOT,
   compactSingleLine,
-  ensureDirectory,
   readJsonOrNull,
   toIsoTimestamp,
-  writeTextAtomic,
 } from "./shared.mjs";
 import {
   validateContEvalSummary,
@@ -306,27 +294,6 @@ export function buildWaveSecuritySummary({
     createdAt,
     updatedAt: createdAt,
   };
-}
-
-function renderWaveSecuritySummaryMarkdown(securitySummary) {
-  return [
-    `# Wave ${securitySummary.wave} Security Summary`,
-    "",
-    `- State: ${securitySummary.overallState || "unknown"}`,
-    `- Detail: ${securitySummary.detail || "n/a"}`,
-    `- Total findings: ${securitySummary.totalFindings || 0}`,
-    `- Total approvals: ${securitySummary.totalApprovals || 0}`,
-    `- Reviewers: ${(securitySummary.agents || []).length}`,
-    "",
-    "## Reviews",
-    ...((securitySummary.agents || []).length > 0
-      ? securitySummary.agents.map(
-          (entry) =>
-            `- ${entry.agentId}: state=${entry.state || "unknown"} findings=${entry.findings || 0} approvals=${entry.approvals || 0}${entry.reportPath ? ` report=${entry.reportPath}` : ""}${entry.detail ? ` detail=${entry.detail}` : ""}`,
-        )
-      : ["- None."]),
-    "",
-  ].join("\n");
 }
 
 function padReportedEntries(entries, minimumCount, label) {
@@ -623,63 +590,7 @@ export function buildWaveIntegrationSummary({
   };
 }
 
-function renderIntegrationSection(title, items) {
-  return [
-    title,
-    ...((items || []).length > 0 ? items.map((item) => `- ${item}`) : ["- None."]),
-    "",
-  ];
-}
-
-function renderIntegrationSummaryMarkdown(integrationSummary) {
-  return [
-    `# Wave ${integrationSummary.wave} Integration Summary`,
-    "",
-    `- Recommendation: ${integrationSummary.recommendation || "unknown"}`,
-    `- Detail: ${integrationSummary.detail || "n/a"}`,
-    `- Open claims: ${(integrationSummary.openClaims || []).length}`,
-    `- Conflicting claims: ${(integrationSummary.conflictingClaims || []).length}`,
-    `- Unresolved blockers: ${(integrationSummary.unresolvedBlockers || []).length}`,
-    `- Changed interfaces: ${(integrationSummary.changedInterfaces || []).length}`,
-    `- Cross-component impacts: ${(integrationSummary.crossComponentImpacts || []).length}`,
-    `- Proof gaps: ${(integrationSummary.proofGaps || []).length}`,
-    `- Deploy risks: ${(integrationSummary.deployRisks || []).length}`,
-    `- Documentation gaps: ${(integrationSummary.docGaps || []).length}`,
-    `- Security review: ${integrationSummary.securityState || "not-applicable"}`,
-    `- Security findings: ${(integrationSummary.securityFindings || []).length}`,
-    `- Security approvals: ${(integrationSummary.securityApprovals || []).length}`,
-    `- Inbound dependencies: ${(integrationSummary.inboundDependencies || []).length}`,
-    `- Outbound dependencies: ${(integrationSummary.outboundDependencies || []).length}`,
-    `- Helper assignments: ${(integrationSummary.helperAssignments || []).length}`,
-    "",
-    ...renderIntegrationSection("## Open Claims", integrationSummary.openClaims),
-    ...renderIntegrationSection("## Conflicting Claims", integrationSummary.conflictingClaims),
-    ...renderIntegrationSection("## Unresolved Blockers", integrationSummary.unresolvedBlockers),
-    ...renderIntegrationSection("## Changed Interfaces", integrationSummary.changedInterfaces),
-    ...renderIntegrationSection(
-      "## Cross-Component Impacts",
-      integrationSummary.crossComponentImpacts,
-    ),
-    ...renderIntegrationSection("## Proof Gaps", integrationSummary.proofGaps),
-    ...renderIntegrationSection("## Deploy Risks", integrationSummary.deployRisks),
-    ...renderIntegrationSection("## Security Findings", integrationSummary.securityFindings),
-    ...renderIntegrationSection("## Security Approvals", integrationSummary.securityApprovals),
-    ...renderIntegrationSection("## Inbound Dependencies", integrationSummary.inboundDependencies),
-    ...renderIntegrationSection("## Outbound Dependencies", integrationSummary.outboundDependencies),
-    ...renderIntegrationSection("## Helper Assignments", integrationSummary.helperAssignments),
-    "## Runtime Assignments",
-    ...((integrationSummary.runtimeAssignments || []).length > 0
-      ? integrationSummary.runtimeAssignments.map(
-          (assignment) =>
-            `- ${assignment.agentId}: executor=${assignment.executorId || "n/a"} role=${assignment.role || "n/a"} profile=${assignment.profile || "none"} fallback_used=${assignment.fallbackUsed ? "yes" : "no"}`,
-        )
-      : ["- None."]),
-    "",
-    ...renderIntegrationSection("## Documentation Gaps", integrationSummary.docGaps),
-  ].join("\n");
-}
-
-export function writeWaveDerivedState({
+export function buildWaveDerivedState({
   lanePaths,
   wave,
   agentRuns = [],
@@ -743,18 +654,6 @@ export function writeWaveDerivedState({
     ledger: existingLedger,
     capabilityRouting: lanePaths.capabilityRouting,
   });
-  writeAssignmentSnapshot(waveAssignmentsPath(lanePaths, wave.wave), capabilityAssignments, {
-    lane: lanePaths.lane,
-    wave: wave.wave,
-  });
-  writeDependencySnapshot(waveDependencySnapshotPath(lanePaths, wave.wave), dependencySnapshot, {
-    lane: lanePaths.lane,
-    wave: wave.wave,
-  });
-  writeDependencySnapshotMarkdown(
-    waveDependencySnapshotMarkdownPath(lanePaths, wave.wave),
-    dependencySnapshot,
-  );
   const runtimeAssignments = wave.agents.map((agent) => ({
     agentId: agent.agentId,
     role: agent.executorResolved?.role || null,
@@ -777,18 +676,12 @@ export function writeWaveDerivedState({
     componentPromotions: wave.componentPromotions,
     runtimeAssignments,
   });
-  writeDocsQueue(waveDocsQueuePath(lanePaths, wave.wave), docsQueue);
   const securitySummary = buildWaveSecuritySummary({
     lanePaths,
     wave,
     attempt,
     summariesByAgentId,
   });
-  writeJsonArtifact(waveSecurityPath(lanePaths, wave.wave), securitySummary);
-  writeTextAtomic(
-    waveSecurityMarkdownPath(lanePaths, wave.wave),
-    `${renderWaveSecuritySummaryMarkdown(securitySummary)}\n`,
-  );
   const integrationSummary = buildWaveIntegrationSummary({
     lanePaths,
     wave,
@@ -802,11 +695,6 @@ export function writeWaveDerivedState({
     dependencySnapshot,
     securitySummary,
   });
-  writeJsonArtifact(waveIntegrationPath(lanePaths, wave.wave), integrationSummary);
-  writeTextAtomic(
-    waveIntegrationMarkdownPath(lanePaths, wave.wave),
-    `${renderIntegrationSummaryMarkdown(integrationSummary)}\n`,
-  );
   const ledger = deriveWaveLedger({
     lane: lanePaths.lane,
     wave,
@@ -823,9 +711,7 @@ export function writeWaveDerivedState({
     capabilityAssignments,
     dependencySnapshot,
   });
-  writeWaveLedger(waveLedgerPath(lanePaths, wave.wave), ledger);
   const inboxDir = waveInboxDir(lanePaths, wave.wave);
-  ensureDirectory(inboxDir);
   const sharedSummary = compileSharedSummary({
     wave,
     state: coordinationState,
@@ -835,7 +721,6 @@ export function writeWaveDerivedState({
     dependencySnapshot,
   });
   const sharedSummaryPath = path.join(inboxDir, "shared-summary.md");
-  writeCompiledInbox(sharedSummaryPath, sharedSummary.text);
   const inboxesByAgentId = {};
   for (const agent of wave.agents) {
     const inbox = compileAgentInbox({
@@ -849,7 +734,6 @@ export function writeWaveDerivedState({
       dependencySnapshot,
     });
     const inboxPath = path.join(inboxDir, `${agent.agentId}.md`);
-    writeCompiledInbox(inboxPath, inbox.text);
     inboxesByAgentId[agent.agentId] = { path: inboxPath, text: inbox.text, truncated: inbox.truncated };
   }
   const boardText = renderCoordinationBoardProjection({
@@ -862,26 +746,25 @@ export function writeWaveDerivedState({
   });
   const responseMetrics = buildCoordinationResponseMetrics(coordinationState);
   const messageBoardPath = path.join(lanePaths.messageboardsDir, `wave-${wave.wave}.md`);
-  writeCoordinationBoardProjection(messageBoardPath, {
-    wave: wave.wave,
-    waveFile: wave.file,
-    agents: wave.agents,
-    state: coordinationState,
-    capabilityAssignments,
-    dependencySnapshot,
-  });
   return {
     coordinationLogPath,
     coordinationState,
     clarificationTriage,
     docsQueue,
+    docsQueuePath: waveDocsQueuePath(lanePaths, wave.wave),
     capabilityAssignments,
+    assignmentSnapshotPath: waveAssignmentsPath(lanePaths, wave.wave),
     dependencySnapshot,
+    dependencySnapshotPath: waveDependencySnapshotPath(lanePaths, wave.wave),
+    dependencySnapshotMarkdownPath: waveDependencySnapshotMarkdownPath(lanePaths, wave.wave),
     securitySummary,
+    securitySummaryPath: waveSecurityPath(lanePaths, wave.wave),
     integrationSummary,
+    integrationSummaryPath: waveIntegrationPath(lanePaths, wave.wave),
     integrationMarkdownPath: waveIntegrationMarkdownPath(lanePaths, wave.wave),
     securityMarkdownPath: waveSecurityMarkdownPath(lanePaths, wave.wave),
     ledger,
+    ledgerPath: waveLedgerPath(lanePaths, wave.wave),
     responseMetrics,
     sharedSummaryPath,
     sharedSummaryText: sharedSummary.text,

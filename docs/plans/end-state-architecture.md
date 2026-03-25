@@ -90,15 +90,16 @@ implementation-engine.mjs  Drives the implementation phase
                            Does NOT output: agent_run.started, attempt.running
                            (those are observed facts written by the supervisor)
 
-derived-state-engine.mjs   Materializes all derived state from canonical sources
+derived-state-engine.mjs   Computes all derived state from canonical sources
                            Inputs:  coordination log, control-plane events,
                                     agent result envelopes
-                           Outputs: shared summaries, per-agent inboxes,
-                                    assignment snapshots, dependency snapshots,
-                                    ledger, docs queue, security summary,
-                                    integration summary
+                           Outputs: derived payloads for shared summaries,
+                                    per-agent inboxes, assignment snapshots,
+                                    dependency snapshots, ledger, docs queue,
+                                    security summary, integration summary
                            Rule:    reads only from canonical authority set,
-                                    never from its own prior outputs
+                                    never from its own prior outputs and
+                                    never persists projections directly
 
 gate-engine.mjs            Evaluates all closure gates
                            Inputs:  agent result envelopes, proof registry,
@@ -148,7 +149,7 @@ wave-state-reducer.mjs     Rebuilds full wave state from canonical authority set
 
 The supervisor is the only module that interacts with the outside world: launching processes, managing terminals, and monitoring sessions. It reads decisions from phase engines and executes them. It is the only module that writes observed lifecycle events.
 
-The projection writer is the single module responsible for all non-canonical file writes.
+The projection writer is the single module responsible for projection writes. Workflow-owned compatibility state, clarification triage, and canonical coordination/control-plane mutations stay in their own modules.
 
 ```
 session-supervisor.mjs     Launches and monitors agent sessions
@@ -168,7 +169,7 @@ session-supervisor.mjs     Launches and monitors agent sessions
                                     are control-plane workflow semantics
                                     materialized by the reducer)
 
-projection-writer.mjs      Writes all non-canonical outputs
+projection-writer.mjs      Writes projection outputs
   (new)                    Inputs:  derived state from materializer,
                                     gate verdicts from gate engine,
                                     wave state from reducer
@@ -176,7 +177,10 @@ projection-writer.mjs      Writes all non-canonical outputs
                                     markdown board projections,
                                     coordination board projection,
                                     trace bundles, quality metrics,
-                                    human-facing status summaries
+                                    shared summaries, inboxes, assignment
+                                    and dependency snapshots, ledger,
+                                    docs queue, security summary,
+                                    integration summary
                            Rule:    never reads its own outputs,
                                     always writes atomically,
                                     labels every artifact with its class
@@ -194,14 +198,14 @@ launcher.mjs               Thin orchestrator
                               a. reducer.rebuild() → current state
                               b. retry-engine.plan() → retry decisions
                               c. implementation-engine.select() → run selections
-                              d. derived-state-engine.materialize() → projections
+                              d. derived-state-engine.materialize() → derived payloads
                               e. supervisor.launch(run selections) → agent sessions
                                  (supervisor writes agent_run.started)
                               f. supervisor.wait() → completion
                                  (supervisor writes agent_run.completed)
                               g. gate-engine.evaluate() → gate verdicts
                               h. closure-engine.sequence() → closure phases
-                              i. projection-writer.write() → dashboards, traces
+                              i. projection-writer.write() → persisted projections
                            4. Release lock, exit
 ```
 
@@ -848,13 +852,13 @@ The runtime tree now uses the engine-oriented module names directly.
 |---------------|----------------|
 | `launcher.mjs` | Thin orchestrator and CLI entrypoint |
 | `implementation-engine.mjs` | Implementation fan-out planning |
-| `derived-state-engine.mjs` | Blackboard projection materialization |
+| `derived-state-engine.mjs` | Derived state computation from canonical inputs |
 | `gate-engine.mjs` | Live gate evaluation |
 | `closure-engine.mjs` | Closure sequencing |
 | `retry-engine.mjs` | Retry and resume planning |
 | `wave-state-reducer.mjs` | Deterministic wave-state reconstruction |
 | `session-supervisor.mjs` | Session launch and observation |
-| `projection-writer.mjs` | Non-canonical projection writes |
+| `projection-writer.mjs` | Projection writes |
 | `result-envelope.mjs` | Envelope schema, validation, and compatibility synthesis |
 | `launcher-runtime.mjs` | Low-level launch and wait helpers used by the session supervisor |
 | `control-plane.mjs` | Canonical control-plane event log |

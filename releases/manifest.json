@@ -3,6 +3,26 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.4",
+      "date": "2026-03-25",
+      "summary": "Contradiction replay repair, consistent component-promotion thresholds, projection-writer persistence centralization, and 0.8.4 release-surface alignment.",
+      "features": [
+        "Hermetic contradiction replay no longer depends on component-matrix parsing when the trace does not declare promoted components.",
+        "`requireComponentPromotionsFromWave` now gates both component-promotion proof validation and component-matrix current-level validation consistently across live and replay paths.",
+        "Projection persistence is now centralized under `projection-writer.mjs`, while `derived-state-engine.mjs` computes projection payloads without writing them directly.",
+        "The operator migration guide now covers fresh adoption plus upgrades from `0.8.3`, `0.8.0`-`0.8.2`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier with explicit repo-owned surface sync guidance.",
+        "Shipped package metadata, README, migration guidance, current-state notes, sample-wave docs, and npm publishing instructions now point at the `0.8.4` release surface."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.4` replay, projection, and component-threshold behavior.",
+        "If your adopted repo uses planner workflows and copied the starter planner corpus, sync `docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry in `docs/context7/bundles.json`.",
+        "If your repo copied the shipped starter docs or skills, sync the current operator runbook, architecture docs, launcher or orchestrator prompts, planner corpus, and relevant runtime or closure-role starter skills before relying on local runbooks.",
+        "If your repo keeps historical replay fixtures, replay at least one contradiction-blocked trace and one promoted-component trace after the upgrade so both code paths stay covered.",
+        "If an older adopted repo still carries legacy evaluator wording or pre-control-plane operator docs, complete the repo-owned prompt and runbook migration described in `docs/plans/migration.md` before cutting live waves on `0.8.4`."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.3",
       "date": "2026-03-24",
       "summary": "Human-input reconciliation repair, ad-hoc feedback-run context hardening, and 0.8.3 release-surface alignment.",

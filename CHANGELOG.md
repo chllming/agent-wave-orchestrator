@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.8.4 - 2026-03-25
+
+### Changed
+
+- Updated the shipped package metadata, release manifest, README, migration guide, current-state notes, sample-wave docs, and npm publishing runbook to advertise `0.8.4` as the current release surface.
+- Rewrote the operator migration guide so it now covers fresh adoption plus upgrades from `0.8.3`, `0.8.0`-`0.8.2`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier with explicit repo-owned surface sync guidance.
+- Clarified the README and architecture docs so `derived-state-engine.mjs` is described as compute-only and `projection-writer.mjs` as the projection persistence boundary.
+
+### Fixed And Hardened
+
+- Hermetic contradiction replay no longer depends on component-matrix parsing when a trace does not declare promoted components.
+- `requireComponentPromotionsFromWave` now gates both component-promotion proof validation and component-matrix current-level validation consistently across live and replay paths.
+- Projection persistence is now centralized under `projection-writer.mjs`, including dashboards, traces, ledgers, docs queues, summaries, inboxes, assignment snapshots, dependency snapshots, and board projections.
+
+### Testing And Validation
+
+- Added regression coverage for the projection-writer persistence boundary and for component-matrix short-circuiting when no promotions are declared.
+- Re-ran the full Vitest suite, `wave doctor --json`, and `wave launch --lane main --dry-run --no-dashboard`.
+
 ## 0.8.3 - 2026-03-24
 
 ### Changed

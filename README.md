@@ -29,7 +29,8 @@ The framework does three things:
 2. Run `wave launch --dry-run` to validate the wave and materialize prompts, shared summaries, inboxes, dashboards, and executor previews before any live execution.
 3. During live execution, implementation agents write claims, evidence, requests, and decisions into the canonical coordination log instead of relying on ad hoc terminal narration.
 4. The reducer and derived-state engines materialize blackboard projections from the canonical authority set: rolling board, shared summary, per-agent inboxes, ledger, docs queue, dependency views, and integration summaries. Helper-assignment blocking, retry target selection, and resume planning read from reducer state during live runs.
-5. Live closure is result-envelope-first. Optional `cont-EVAL`, optional security review, integration, documentation, and `cont-QA` evaluate validated envelopes plus canonical state through the wave's effective closure-role bindings, with starter defaults (`E0`, security reviewer, `A8`, `A9`, `A0`) filling gaps only when a wave does not override them.
+5. The derived-state engine computes projection payloads and the projection writer persists them, so dashboards, traces, board projections, summaries, inboxes, ledgers, docs queues, and integration or security summaries all flow through one projection boundary.
+6. Live closure is result-envelope-first. Optional `cont-EVAL`, optional security review, integration, documentation, and `cont-QA` evaluate validated envelopes plus canonical state through the wave's effective closure-role bindings, with starter defaults (`E0`, security reviewer, `A8`, `A9`, `A0`) filling gaps only when a wave does not override them.
 
 ## Runtime Modules
 
@@ -38,7 +39,7 @@ The framework does three things:
 - `implementation-engine.mjs`
   Selects the implementation fan-out for a wave or retry attempt.
 - `derived-state-engine.mjs`
-  Materializes shared summary, inboxes, assignments, dependency views, ledger, docs queue, and integration/security summaries.
+  Computes shared summary, inboxes, assignments, dependency views, ledger, docs queue, and integration/security projection payloads from canonical state.
 - `gate-engine.mjs`
   Evaluates implementation, component, assignment, dependency, clarification, `cont-EVAL`, security, integration, documentation, and `cont-QA` gates.
 - `retry-engine.mjs`
@@ -50,7 +51,7 @@ The framework does three things:
 - `session-supervisor.mjs`
   Owns launches, waits, tmux sessions, lock handling, resident orchestrator sessions, and observed `wave_run`, `attempt`, and `agent_run` lifecycle facts.
 - `projection-writer.mjs`
-  Writes traces and other non-canonical operator projections.
+  Persists dashboards, traces, summaries, inboxes, board projections, assignment/dependency snapshots, ledgers, docs queues, and integration/security summaries.
 
 ## Architecture Surfaces
 
@@ -100,18 +101,18 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.3`
-- Release tag: [`v0.8.3`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.3)
+- `@chllming/wave-orchestration@0.8.4`
+- Release tag: [`v0.8.4`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.4)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.3`:
+Highlights in `0.8.4`:
 
-- Answering a human-feedback request now reconciles linked clarification, escalation, and helper-assignment state back into the canonical coordination log instead of only updating the feedback JSON.
-- `wave feedback respond --run <id>` now applies that same reconciliation and safe continuation flow to ad-hoc runs instead of writing into the roadmap lane state root.
-- When a stranded wave can safely continue after the answer arrives and no attempt is still running, Wave writes a one-shot continuation request automatically.
-- The completed-wave control-status hardening from `0.8.2` remains intact.
-- Upgrade and operator docs now cover the full `0.8.3` package surface end to end.
+- Hermetic contradiction replay no longer depends on component-matrix parsing when the trace does not declare promoted components.
+- `requireComponentPromotionsFromWave` now gates both component-promotion proof validation and component-matrix current-level validation consistently in live and replay paths.
+- Projection persistence is now centralized under `projection-writer.mjs`, while `derived-state-engine.mjs` stays compute-only.
+- The migration guide now includes explicit upgrade guidance for `0.8.3`, `0.8.0`-`0.8.2`, `0.6.x`-`0.7.x`, and older starter repos instead of only a narrow point upgrade.
+- Release docs, sample waves, current-state notes, and npm publishing instructions now point at the `0.8.4` surface.
 
 Requirements:
 

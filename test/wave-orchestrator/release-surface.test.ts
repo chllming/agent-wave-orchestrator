@@ -104,7 +104,9 @@ describe("release surface alignment", () => {
     expect(plannerGuide).toContain("docs/context7/planner-agent/");
     expect(plannerGuide).toContain("docs/reference/wave-planning-lessons.md");
     expect(plannerGuide).toContain("planner-agentic");
-    expect(migrationGuide).toContain(`## Upgrading From 0.6.x To ${packageJson.version}`);
+    expect(migrationGuide).toContain(`current \`${packageJson.version}\` surface`);
+    expect(migrationGuide).toContain(`## Upgrading From \`0.8.3\` To \`${packageJson.version}\``);
+    expect(migrationGuide).toContain(`## Upgrading From \`0.6.x\` Or \`0.7.x\` To \`${packageJson.version}\``);
     expect(migrationGuide).toContain("wave dashboard --lane <lane> --attach current");
     expect(JSON.stringify(manifest.releases[0])).toContain("planner-agentic");
   });

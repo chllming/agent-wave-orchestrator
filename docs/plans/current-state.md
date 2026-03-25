@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.8.3` package release surface.
+- The starter workspace in this source repo reflects the `0.8.4` package release surface.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
@@ -50,6 +50,8 @@
   - reducer-driven live state snapshots plus persisted machine-readable shadow diffs for helper-assignment, blocker, contradiction, closure, and retry slices
   - reducer-authoritative helper-assignment blocking, retry target selection, and resume planning, with live gate and closure reads now driven from validated result envelopes
   - hermetic replay that reconstructs contradiction-driven blockers from bundled control-plane events
+  - contradiction replay for non-promoted traces that no longer depends on copied component-matrix parsing
+  - consistent `requireComponentPromotionsFromWave` threshold handling across both component-promotion proof validation and component-matrix current-level validation
   - `projection-writer.mjs` as the single persistence layer for projection outputs such as dashboards, traces, generated board projections, compiled summaries and inboxes, helper-assignment and dependency snapshots, docs queues, ledgers, and integration or security summaries; clarification-triage workflow artifacts remain workflow-owned
   - reducer phases that materialize open human-feedback and escalation barriers as `clarifying` with blocked `waveState`, instead of flattening them into generic `running`
   - replay, reconcile, and trace materialization compatibility adapters that can still synthesize envelopes from legacy summaries or marker-era artifacts without deciding live correctness

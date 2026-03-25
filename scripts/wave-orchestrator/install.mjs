@@ -27,6 +27,8 @@ export const CHANGELOG_MANIFEST_PATH = path.join(PACKAGE_ROOT, "releases", "mani
 export const WORKSPACE_PACKAGE_JSON_PATH = path.join(REPO_ROOT, "package.json");
 export const STARTER_TEMPLATE_PATHS = [
   "wave.config.json",
+  "scripts/wave-status.sh",
+  "scripts/wave-watch.sh",
   "docs/README.md",
   "docs/agents/wave-documentation-role.md",
   "docs/agents/wave-design-role.md",

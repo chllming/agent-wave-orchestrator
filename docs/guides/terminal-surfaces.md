@@ -69,6 +69,26 @@ Important flags:
 - `--keep-terminals`
   Keep temporary VS Code terminal entries instead of cleaning them up.
 
+## Operator Wrapper Scripts
+
+Fresh `wave init` and `wave upgrade` now seed two thin shell helpers into the adopted repo:
+
+- `bash scripts/wave-status.sh [wave]`
+  Prints a one-line status summary for the current or selected wave and exits with a machine-friendly code.
+- `bash scripts/wave-watch.sh [--follow|--until-change] [wave]`
+  Polls `wave-status.sh` until completion, human input, or a status change.
+
+Exit codes:
+
+- `0`
+  The wave is in `phase=completed`.
+- `10`
+  The wave is still waiting on background work or non-human blockers.
+- `20`
+  The wave needs human input or escalation.
+
+These wrappers are useful when one terminal owns `wave launch` and another agent or operator needs a cheap polling surface that can be chained into scripts without parsing the full JSON payload manually.
+
 ## Best Practices
 
 - Use `vscode` for local interactive operator work when the temporary terminal registry is useful.
@@ -93,4 +113,6 @@ Important flags:
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --terminal-surface vscode
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --terminal-surface tmux --keep-sessions
 pnpm exec wave launch --lane main --start-wave 2 --end-wave 2 --dry-run --no-dashboard --terminal-surface none
+bash scripts/wave-status.sh
+bash scripts/wave-watch.sh --until-change
 ```

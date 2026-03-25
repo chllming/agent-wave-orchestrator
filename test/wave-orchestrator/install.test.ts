@@ -101,6 +101,8 @@ describe("wave init", () => {
 
     expect(result.status).toBe(0);
     expect(fs.existsSync(path.join(repoDir, "wave.config.json"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "scripts", "wave-status.sh"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "scripts", "wave-watch.sh"))).toBe(true);
     expect(fs.existsSync(path.join(repoDir, "docs", "plans", "waves", "wave-0.md"))).toBe(true);
     expect(
       fs.existsSync(path.join(repoDir, "docs", "reference", "runtime-config", "README.md")),
@@ -117,6 +119,8 @@ describe("wave init", () => {
       initMode: "fresh",
     });
     expect(installState.seededFiles).toContain("wave.config.json");
+    expect(installState.seededFiles).toContain("scripts/wave-status.sh");
+    expect(installState.seededFiles).toContain("scripts/wave-watch.sh");
   });
 
   it("requires adopt-existing when bootstrap files already exist", () => {

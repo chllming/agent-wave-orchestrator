@@ -78,6 +78,17 @@ Important flags:
 - Pair `--keep-sessions` with incident review or deep debugging, not as a default steady-state mode.
 - Pair `--no-dashboard` with scripted dry-runs or when the board and summaries are sufficient.
 
+## Operator Wrappers
+
+Starter repos now include two thin helper scripts:
+
+- `scripts/wave-status.sh`
+  Reads `wave control status --json`, prints a single machine-friendly line, and exits `0` for completed, `10` for waiting/running, and `20` for input-required.
+- `scripts/wave-watch.sh`
+  Polls the same status JSON until the watched signal version changes. `--until-change` exits `30` when the signal changed but the wave is still active.
+
+Both wrappers are convenience readers only. The canonical surface is the versioned signal projection under `.tmp/<lane>-wave-launcher/signals/`.
+
 ## Suggested Defaults
 
 - Local development:

@@ -19,6 +19,7 @@ describe("buildLanePaths", () => {
     expect(dryRun.statusDir).toBe(path.join(dryRun.stateDir, "status"));
     expect(dryRun.messageboardsDir).toBe(path.join(dryRun.stateDir, "messageboards"));
     expect(dryRun.dashboardsDir).toBe(path.join(dryRun.stateDir, "dashboards"));
+    expect(dryRun.signalsDir).toBe(path.join(dryRun.stateDir, "signals"));
     expect(dryRun.launcherLockPath).toBe(path.join(dryRun.stateDir, "launcher.lock"));
     expect(dryRun.defaultOrchestratorBoardPath).toBe(
       path.join(dryRun.stateDir, "orchestrator", "messageboards", "orchestrator.md"),

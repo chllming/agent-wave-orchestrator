@@ -13,6 +13,8 @@ export const WAVE_CONTROL_ENTITY_TYPES = new Set([
   "fact",
   "wave_run",
   "agent_run",
+  "wave_signal",
+  "agent_signal",
   "coordination_record",
   "gate",
   "artifact",

@@ -26,12 +26,13 @@
   - lane config can attach skills by base, role, runtime, and deploy kind
   - wave agents can add explicit `### Skills`
   - runtime projections are generated for Codex, Claude, OpenCode, and local execution
-  - the starter surface includes `skills/role-design/`, `skills/tui-design/`, `roles.designRolePromptPath`, and `executors.profiles.design-pass`
+  - the starter surface includes `skills/role-design/`, `skills/tui-design/`, `skills/signal-hygiene/`, `roles.designRolePromptPath`, and `executors.profiles.design-pass`
 - The runtime now includes:
   - a canonical authority set built from wave definitions, coordination JSONL logs, and control-plane JSONL events
   - immutable attempt-scoped result envelopes for structured role outcomes under `.tmp/<lane>-wave-launcher/results/wave-<n>/attempt-<a>/<agent>.json`
   - a generated markdown board projection
   - compiled shared summaries and per-agent inboxes
+  - canonical versioned signal projections under `.tmp/<lane>-wave-launcher/signals/` for waves, per-agent wake state, and resident-orchestrator acknowledgement loops
   - active live-wave orchestration refresh that keeps summaries, inboxes, clarification triage, and dashboard coordination metrics current while agents are still running
   - a per-wave ledger
   - docs queues
@@ -43,6 +44,7 @@
   - orchestrator-first clarification triage plus human escalation artifacts
   - answered human-feedback responses that reconcile canonical coordination state, helper assignments, and safe continuation intent even when the launcher is no longer active
   - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
+  - seeded operator wrappers `scripts/wave-status.sh` and `scripts/wave-watch.sh` that expose machine-friendly wait, completion, and input-required status by reading `wave control status --json`
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
   - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, contradictions, facts, human-input workflow, and observed `wave_run`, `attempt`, and `agent_run` lifecycle events as append-only JSONL; `wave control` materializes state from this log
   - operator-applied retry overrides projected to `.tmp/<lane>-wave-launcher/control/` for compatibility with selected reruns, explicit reuse selectors, reuse clearing or preservation, and explicit resume targets
@@ -79,6 +81,7 @@
   - helper assignments are written into coordination state, the ledger, summaries, and traces
   - helper assignments remain blocking until the linked follow-up resolves
 - Waves with a `design` worker role now run that design pass before code-owning implementation starts; implementation resumes only after every design packet is `ready-for-implementation`.
+- Long-running non-resident agents can opt into `signal-hygiene` through explicit `### Skills`; that skill makes them wait on signal-version changes, acknowledge a new version through an ack file, and only then resume work.
 - Closure now runs in staged order through the wave's effective closure roles: implementation and proof, then optional `cont-EVAL`, then optional security review, then integration, then documentation, then `cont-QA`. Starter defaults remain `E0`, security reviewer, `A8`, `A9`, and `A0` when a wave does not override them.
 - `E0` is hybrid: planner-generated waves keep it report-only, while hand-authored waves may assign explicit tuning files and thereby make `E0` participate in implementation proof gating.
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.

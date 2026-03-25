@@ -36,6 +36,10 @@ import { readWaveRelaunchPlanSnapshot, readWaveRetryOverride, resolveRetryOverri
 import { flushWaveControlQueue, readWaveControlQueueState } from "./wave-control-client.mjs";
 import { readAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
 import { isContEvalReportOnlyAgent, isSecurityReviewAgent } from "./role-helpers.mjs";
+import {
+  buildSignalStatusLine,
+  syncWaveSignalProjections,
+} from "./signals.mjs";
 
 function printUsage() {
   console.log(`Usage:
@@ -676,6 +680,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
     proofBundles: (proofRegistry?.entries || []).filter(
       (entry) => !agentId || entry.agentId === agentId,
     ),
+    feedbackRequests,
     selectionSource: selection.source,
     rerunRequest,
     relaunchPlan,
@@ -690,6 +695,7 @@ function ensureWaveStateDirs(lanePaths) {
   ensureDirectory(lanePaths.controlPlaneDir);
   ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
+  ensureDirectory(lanePaths.signalsDir);
   ensureDirectory(lanePaths.messageboardsDir);
   ensureDirectory(lanePaths.docsQueueDir);
   ensureDirectory(lanePaths.ledgerDir);
@@ -714,6 +720,9 @@ function printStatus(payload) {
     ? `${payload.blockingEdge.kind} ${payload.blockingEdge.id}: ${payload.blockingEdge.detail}`
     : "none";
   console.log(`lane=${payload.lane} wave=${payload.wave} phase=${payload.phase}`);
+  if (payload.signals?.wave) {
+    console.log(buildSignalStatusLine(payload.signals.wave, payload));
+  }
   console.log(`blocking=${blocking}`);
   if (payload.nextTimer) {
     console.log(`next-timer=${payload.nextTimer.kind} ${payload.nextTimer.taskId} at ${payload.nextTimer.at}`);
@@ -901,6 +910,16 @@ export async function runControlCli(argv) {
       wave,
       agentId: options.agent || "",
     });
+    const signalSync = syncWaveSignalProjections({
+      lanePaths,
+      wave,
+      statusPayload: payload,
+      includeResident: Boolean(options.orchestratorId),
+    });
+    payload.signals = {
+      wave: signalSync.wave?.snapshot || null,
+      agents: (signalSync.agents || []).map((entry) => entry.snapshot),
+    };
     if (options.json) {
       console.log(JSON.stringify(payload, null, 2));
     } else {

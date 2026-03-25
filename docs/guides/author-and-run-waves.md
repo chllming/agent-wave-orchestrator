@@ -47,6 +47,7 @@ When you review the generated wave, tighten the parts the planner cannot fully i
 - `cont-EVAL` targets when needed
 - security review expectations when needed
 - explicit `### Skills` only where defaults are not enough
+- `signal-hygiene` only when an agent is intentionally long-running and should wait for orchestrator-written signal changes instead of exiting after a one-shot pass
 
 If you want examples of denser hand-authored waves, read [docs/reference/sample-waves.md](../reference/sample-waves.md).
 
@@ -71,6 +72,8 @@ The starter contract in `0.8.5` is:
 When a wave includes one or more design agents, the runtime runs them before code-owning implementation agents. Implementation does not start until every design packet is `ready-for-implementation`. `needs-clarification` and `blocked` behave like normal wave blockers.
 
 If a wave explicitly gives a design steward source-code ownership, that agent becomes a hybrid design steward. The runtime still runs its design pass first, then includes the same agent in the later implementation fan-out with normal proof obligations. Interactive `wave draft` scaffolds the docs-first default; use manual edits or an agentic planner payload when you want the hybrid path.
+
+For long-running non-design agents that should stay alive and react only to feedback or coordination changes, add `signal-hygiene` explicitly in `### Skills`. That skill is not for normal one-shot implementation work.
 
 ## 3. Choose The Execution Posture
 

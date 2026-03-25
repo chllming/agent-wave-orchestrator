@@ -269,6 +269,18 @@ describe("wave control CLI", () => {
       blockingEdge: {
         kind: "human-input",
       },
+      signals: {
+        wave: {
+          signal: "feedback-requested",
+        },
+        agents: [
+          expect.objectContaining({
+            agentId: "A1",
+            signal: "feedback-requested",
+            shouldWake: true,
+          }),
+        ],
+      },
       tasks: [
         expect.objectContaining({
           taskType: "human-input",

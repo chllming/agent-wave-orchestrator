@@ -199,6 +199,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     telemetryDir: path.join(stateDir, "control-plane", "telemetry"),
     assignmentsDir: path.join(stateDir, "assignments"),
     inboxesDir: path.join(stateDir, "inboxes"),
+    signalsDir: path.join(stateDir, "signals"),
     ledgerDir: path.join(stateDir, "ledger"),
     integrationDir: path.join(stateDir, "integration"),
     resultsDir: path.join(stateDir, "results"),

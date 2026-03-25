@@ -203,6 +203,8 @@ export function buildExecutionPrompt({
   sharedPlanDocs = null,
   designPacketPaths = null,
   designExecutionMode = null,
+  signalStatePath = null,
+  signalAckPath = null,
   contQaAgentId = "A0",
   contEvalAgentId = "E0",
   integrationAgentId = "A8",
@@ -213,6 +215,10 @@ export function buildExecutionPrompt({
     ? path.relative(REPO_ROOT, sharedSummaryPath)
     : null;
   const relativeInboxPath = inboxPath ? path.relative(REPO_ROOT, inboxPath) : null;
+  const relativeSignalStatePath = signalStatePath
+    ? path.relative(REPO_ROOT, signalStatePath)
+    : null;
+  const relativeSignalAckPath = signalAckPath ? path.relative(REPO_ROOT, signalAckPath) : null;
   const lanePlansDir = lane === DEFAULT_WAVE_LANE ? "docs/plans" : `docs/${lane}/plans`;
   const resolvedSharedPlanDocs =
     sharedPlanDocs && sharedPlanDocs.length > 0
@@ -531,12 +537,31 @@ export function buildExecutionPrompt({
           `Agent inbox repo-relative path: ${relativeInboxPath}`,
         ]
       : []),
+    ...(signalStatePath
+      ? [
+          `Signal state absolute path: ${signalStatePath}`,
+          `Signal state repo-relative path: ${relativeSignalStatePath}`,
+          `Signal ack absolute path: ${signalAckPath}`,
+          `Signal ack repo-relative path: ${relativeSignalAckPath}`,
+        ]
+      : []),
     "",
     ...(sharedSummaryText
       ? ["Current wave shared summary:", "```markdown", sharedSummaryText, "```", ""]
       : []),
     ...(inboxText
       ? ["Current agent inbox:", "```markdown", inboxText, "```", ""]
+      : []),
+    ...(signalStatePath
+      ? [
+          "Long-running signal loop:",
+          "- If you are operating as a resident or waiting agent, keep watching the signal state JSON instead of exiting early.",
+          "- When the signal `version` increases beyond the version recorded in the signal ack file, immediately write the ack file before acting.",
+          `- Write the ack file as JSON with exactly these keys: \`agentId\`, \`version\`, \`signal\`, and \`observedAt\`. Use \`${agent.agentId}\` as \`agentId\` and an ISO-8601 timestamp for \`observedAt\`.`,
+          "- After writing the ack, re-read the inbox, shared summary, and message board, then handle the new signal once.",
+          "- If the signal version has not changed, stay idle. Do not busy-loop or repeat unchanged work.",
+          "",
+        ]
       : []),
     ...exitContractLines,
     ...promotedComponentLines,
@@ -564,6 +589,8 @@ export function buildResidentOrchestratorPrompt({
   sharedSummaryPath,
   dashboardPath,
   triagePath = null,
+  signalStatePath = null,
+  signalAckPath = null,
   rolePrompt = "",
 }) {
   const coordinationCommand = [
@@ -612,6 +639,8 @@ export function buildResidentOrchestratorPrompt({
     `- Wave dashboard: ${dashboardPath}`,
     `- Message board projection: ${messageBoardPath}`,
     ...(triagePath ? [`- Feedback triage log: ${triagePath}`] : []),
+    ...(signalStatePath ? [`- Signal state: ${signalStatePath}`] : []),
+    ...(signalAckPath ? [`- Signal ack: ${signalAckPath}`] : []),
     "",
     "Action surface:",
     `- Coordination command: \`${coordinationCommand}\``,
@@ -624,6 +653,12 @@ export function buildResidentOrchestratorPrompt({
     "2. Identify open clarifications, open clarification-linked requests, overdue acknowledgements, and human-feedback state.",
     "3. If action is needed, write a durable coordination update and explain the policy basis for the action.",
     "4. If nothing needs action, continue monitoring. Do not exit until the wave is clearly terminal or the launcher stops the session.",
+    ...(signalStatePath
+      ? [
+          "5. When the signal state `version` increases, immediately write the signal ack file before taking action so the launcher knows you observed the change.",
+          "6. After acknowledging the signal, re-read the shared summary, dashboard, coordination log, and triage artifacts before intervening.",
+        ]
+      : []),
     "",
     ...(roleSection
       ? [

@@ -159,6 +159,22 @@ describe("skill resolution", () => {
     );
   });
 
+  it("lets long-running agents opt into the signal-hygiene bundle explicitly", () => {
+    const resolved = resolveAgentSkills(
+      makeAgent("codex", "implementation", {
+        agentId: "A1",
+        skills: ["signal-hygiene"],
+      }),
+      {},
+      { laneProfile: makeLaneProfile() },
+    );
+
+    expect(resolved.ids).toEqual(
+      expect.arrayContaining(["role-implementation", "signal-hygiene"]),
+    );
+    expect(resolved.promptText).toContain("## Skill signal-hygiene");
+  });
+
   it("auto-attaches provider skills only for allowed roles and keeps explicit per-agent overrides", () => {
     const laneProfile = makeLaneProfile();
     const railwayWave = {

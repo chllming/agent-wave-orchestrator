@@ -209,7 +209,9 @@ import {
   recordAttemptState,
   recordWaveRunState,
   runTmux,
+  syncLiveWaveSignals,
 } from "./session-supervisor.mjs";
+import { buildControlStatusPayload } from "./control-cli.mjs";
 import {
   planInitialWaveAttempt,
   planRetryWaveAttempt,
@@ -624,6 +626,7 @@ export async function runLauncherCli(argv) {
   ensureDirectory(lanePaths.controlDir);
   ensureDirectory(lanePaths.assignmentsDir);
   ensureDirectory(lanePaths.inboxesDir);
+  ensureDirectory(lanePaths.signalsDir);
   ensureDirectory(lanePaths.ledgerDir);
   ensureDirectory(lanePaths.integrationDir);
   ensureDirectory(lanePaths.proofDir);
@@ -1188,6 +1191,19 @@ export async function runLauncherCli(argv) {
           flushDashboards();
           return true;
         };
+        const syncWaveSignals = () =>
+          syncLiveWaveSignals({
+            lanePaths,
+            wave,
+            statusPayload: buildControlStatusPayload({
+              lanePaths,
+              wave,
+            }),
+            agentRuns,
+            residentEnabled: Boolean(residentOrchestratorRun),
+            recordCombinedEvent,
+            appendCoordination,
+          });
 
         const proofRegistryForReuse = readWaveProofRegistry(lanePaths, wave.wave);
         const initialAttemptPlan = planInitialWaveAttempt({
@@ -1217,6 +1233,7 @@ export async function runLauncherCli(argv) {
         }
         flushDashboards();
         emitCoordinationAlertEvents(derivedState);
+        syncWaveSignals();
 
         if (options.dashboard && currentWaveDashboardTerminalEntry) {
           launchWaveDashboardSession(lanePaths, {
@@ -1281,6 +1298,7 @@ export async function runLauncherCli(argv) {
               details: `session=${residentOrchestratorRun.sessionName}; executor=${residentOrchestratorRun.lastExecutorId || "unknown"}`,
               actionRequested: "None",
             });
+            syncWaveSignals();
           }
         }
 
@@ -1487,6 +1505,7 @@ export async function runLauncherCli(argv) {
                   updateWaveDashboardMessageBoard(dashboardState, messageBoardPath);
                   flushDashboards();
                 }
+                syncWaveSignals();
               },
               {
                 controlPlane: {
@@ -1501,6 +1520,7 @@ export async function runLauncherCli(argv) {
 
           materializeAgentExecutionSummaries(wave, agentRuns);
           refreshDerivedState(attempt);
+          syncWaveSignals();
           lastLiveCoordinationRefreshAt = Date.now();
           emitCoordinationAlertEvents(derivedState);
           failures = reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures);

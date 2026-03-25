@@ -180,6 +180,7 @@ Runtime:
 Design reference:
 
 - `tui-design`
+- `signal-hygiene`
 
 Provider:
 
@@ -204,6 +205,8 @@ Provider skills are configured by deploy kind, but the shipped manifests further
 7. Run `node scripts/wave.mjs doctor --json`.
 
 For terminal or operator-surface design work, keep `role-design` as the packet contract and add `tui-design` explicitly in the wave's `### Skills`.
+
+For long-running watcher agents, add `signal-hygiene` explicitly in the wave's `### Skills`. Do not attach it to normal one-shot implementation agents.
 
 ## Further Reading
 

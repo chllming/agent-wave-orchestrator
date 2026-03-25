@@ -1,0 +1,20 @@
+{
+  "id": "signal-hygiene",
+  "title": "Long-Running Signal Hygiene",
+  "description": "Use for long-running resident or waiting agents that must stay idle until the orchestrator writes a new signal version, then acknowledge that change before acting.",
+  "activation": {
+    "when": "Attach explicitly when an agent is expected to stay resident, wait for human feedback or coordination changes, and react only when the orchestrator updates the signal state file.",
+    "roles": [],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the signal reaches a terminal state or the agent is no longer expected to stay resident and wait for follow-up work.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  }
+}

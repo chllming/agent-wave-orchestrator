@@ -40,6 +40,13 @@ import {
   launchAgentSession as launchAgentSessionImpl,
   waitForWaveCompletion as waitForWaveCompletionImpl,
 } from "./launcher-runtime.mjs";
+import {
+  agentUsesSignalHygiene,
+  buildSignalStatusLine,
+  residentSignalAckPath,
+  residentSignalPath,
+  syncWaveSignalProjections,
+} from "./signals.mjs";
 
 function isProcessAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {
@@ -363,6 +370,8 @@ export function buildResidentOrchestratorRun({
         sharedSummaryPath: derivedState.sharedSummaryPath,
         dashboardPath,
         triagePath: derivedState.clarificationTriage?.triagePath || null,
+        signalStatePath: residentSignalPath(lanePaths, wave.wave),
+        signalAckPath: residentSignalAckPath(lanePaths, wave.wave),
         rolePrompt: agent.prompt,
       }),
     },
@@ -776,4 +785,108 @@ export function monitorWaveHumanFeedback({
     }
   }
   return changed;
+}
+
+export function syncLiveWaveSignals({
+  lanePaths,
+  wave,
+  statusPayload,
+  agentRuns,
+  residentEnabled = false,
+  recordCombinedEvent,
+  appendCoordination,
+}) {
+  const activeSignalAgents = new Set(
+    (Array.isArray(agentRuns) ? agentRuns : [])
+      .filter((run) => agentUsesSignalHygiene(run?.agent))
+      .map((run) => run.agent.agentId),
+  );
+  const syncResult = syncWaveSignalProjections({
+    lanePaths,
+    wave,
+    statusPayload,
+    includeResident: residentEnabled,
+  });
+  if (syncResult.wave?.changed) {
+    appendWaveControlEvent(lanePaths, wave.wave, {
+      entityType: "wave_signal",
+      entityId: `wave-${wave.wave}`,
+      action: "updated",
+      source: "session-supervisor",
+      actor: "session-supervisor",
+      data: syncResult.wave.snapshot,
+    });
+    if (typeof recordCombinedEvent === "function") {
+      recordCombinedEvent({
+        level: syncResult.wave.snapshot.shouldWake ? "warn" : "info",
+        message: `Wave signal updated: ${buildSignalStatusLine(syncResult.wave.snapshot)}`,
+      });
+    }
+  }
+  for (const agentResult of syncResult.agents || []) {
+    if (!agentResult.changed) {
+      continue;
+    }
+    appendWaveControlEvent(lanePaths, wave.wave, {
+      entityType: "agent_signal",
+      entityId: `wave-${wave.wave}-agent-${agentResult.agentId}`,
+      action: "updated",
+      source: "session-supervisor",
+      actor: "session-supervisor",
+      data: agentResult.snapshot,
+    });
+    if (
+      agentResult.snapshot?.shouldWake &&
+      activeSignalAgents.has(agentResult.agentId) &&
+      typeof recordCombinedEvent === "function"
+    ) {
+      recordCombinedEvent({
+        level: "info",
+        agentId: agentResult.agentId,
+        message: `Signal changed: ${buildSignalStatusLine(agentResult.snapshot, {
+          lane: lanePaths.lane,
+          wave: wave.wave,
+          agentId: agentResult.agentId,
+        })}`,
+      });
+    }
+  }
+  if (syncResult.resident?.changed) {
+    appendWaveControlEvent(lanePaths, wave.wave, {
+      entityType: "agent_signal",
+      entityId: `wave-${wave.wave}-agent-resident-orchestrator`,
+      action: "updated",
+      source: "session-supervisor",
+      actor: "session-supervisor",
+      data: syncResult.resident.snapshot,
+    });
+    if (syncResult.resident.snapshot?.shouldWake && typeof recordCombinedEvent === "function") {
+      recordCombinedEvent({
+        level: "info",
+        agentId: "ORCH",
+        message: `Resident orchestrator signal changed: ${buildSignalStatusLine(
+          syncResult.resident.snapshot,
+          {
+            lane: lanePaths.lane,
+            wave: wave.wave,
+            agentId: "resident-orchestrator",
+          },
+        )}`,
+      });
+    }
+    if (
+      syncResult.resident.snapshot?.shouldWake &&
+      typeof appendCoordination === "function"
+    ) {
+      appendCoordination({
+        event: "resident_signal_updated",
+        waves: [wave.wave],
+        status: "running",
+        details: syncResult.resident.snapshot.reason || syncResult.resident.snapshot.signal,
+        actionRequested:
+          "Resident orchestrator should re-read the signal snapshot, shared summary, dashboard, and coordination log.",
+      });
+    }
+  }
+  return syncResult;
 }

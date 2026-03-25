@@ -20,6 +20,11 @@ import {
   summarizeResolvedSkills,
   writeResolvedSkillArtifacts,
 } from "./skills.mjs";
+import {
+  agentSignalAckPath,
+  agentSignalPath,
+  agentUsesSignalHygiene,
+} from "./signals.mjs";
 
 export function refreshResolvedSkillsForRun(runInfo, waveDefinition, lanePaths) {
   runInfo.agent.skillsResolved = resolveAgentSkills(
@@ -129,6 +134,12 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
         .map((waveAgent) => resolveDesignReportPath(waveAgent))
         .filter(Boolean),
       designExecutionMode,
+      signalStatePath: agentUsesSignalHygiene(agent)
+        ? agentSignalPath(lanePaths, wave, agent.agentId)
+        : null,
+      signalAckPath: agentUsesSignalHygiene(agent)
+        ? agentSignalAckPath(lanePaths, wave, agent.agentId)
+        : null,
     });
   const promptHash = hashAgentPromptFingerprint(agent);
   fs.writeFileSync(promptPath, `${prompt}\n`, "utf8");

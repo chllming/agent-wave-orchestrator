@@ -96,13 +96,20 @@ Unified operator control surface. Preferred over legacy `wave coord`, `wave retr
 
 ### wave control status
 
-Read-only view: blocking edges, logical agent state, tasks, dependencies, rerun intent, proof bundles, and next timers.
+Read-only view: blocking edges, logical agent state, tasks, dependencies, rerun intent, proof bundles, next timers, and derived wave or agent signal snapshots.
 
 When a launcher attempt is already running, `wave control status` treats that active attempt as the authoritative current fan-out. Older relaunch plans or unrelated closure blockers remain visible in the payload, but they do not override the live attempt view.
 
 ```
 wave control status --lane <lane> --wave <n> [--agent <id>] [--run <id>] [--json]
 ```
+
+The JSON payload now includes:
+
+- `signals.wave`
+  Versioned wave-level signal state for wrappers and external operators.
+- `signals.agents`
+  Versioned per-agent signal state, including `shouldWake` plus any observed ack metadata.
 
 ### wave control telemetry
 

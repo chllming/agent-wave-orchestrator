@@ -126,6 +126,8 @@ Lane-local `lanes.<lane>.skills` extends the global config instead of replacing 
 
 Optional design workers in the shipped `0.8.5` surface normally attach `role-design`. That bundle is intended for docs/spec-first design packets and explicit implementation handoff work before implementation starts. When the design packet covers terminal UX, dashboards, or other operator surfaces, add `tui-design` explicitly in the wave's `### Skills`.
 
+Long-running agents that should stay resident and react only to orchestrator signal changes can add `signal-hygiene` explicitly in `### Skills`. That bundle is not auto-attached and is not meant for normal one-shot implementation agents.
+
 ## Resolution Order
 
 Resolved skills are gathered in this order:
@@ -203,6 +205,12 @@ For the optional `design` worker role, the default pattern is:
 - `role-design` for the design packet contract
 - `tui-design` only when the packet covers terminal UX, dashboards, or other operator surfaces
 - no runtime-specific coding bundle unless the wave explicitly gives the design steward code ownership and makes it a hybrid design steward
+
+For long-running watcher agents, the default pattern is:
+
+- no special bundle by default
+- add `signal-hygiene` only when the agent should stay alive and wait for signal-version changes
+- use the provided signal state path plus signal ack path instead of inventing a second wakeup loop
 
 ## Generated Artifacts
 

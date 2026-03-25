@@ -183,7 +183,7 @@ pnpm exec wave self-update
 - `wave launch` and `wave autonomous`
   Live execution, dry-run validation, retry cadence, terminal surfaces, and orchestrator options.
 - `wave control`
-  Read-only live status plus operator task, rerun, proof, and telemetry control surfaces.
+  Read-only live status plus operator task, rerun, proof, telemetry, and versioned signal surfaces. Seeded helper scripts `scripts/wave-status.sh` and `scripts/wave-watch.sh` are thin readers over `wave control status --json`.
 - `wave coord` and `wave dep`
   Coordination-log and cross-lane dependency utilities. `wave control` is the preferred operator surface; `wave coord` remains useful for direct log inspection and rendering.
 - `wave project`, `wave draft`, and `wave adhoc`

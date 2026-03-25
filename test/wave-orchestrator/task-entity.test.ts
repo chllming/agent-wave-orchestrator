@@ -119,11 +119,12 @@ describe("normalizeTask", () => {
 
 describe("TASK_TYPES / CLOSURE_STATES / LEASE_STATES", () => {
   it("TASK_TYPES contains expected types", () => {
+    expect(TASK_TYPES.has("design")).toBe(true);
     expect(TASK_TYPES.has("implementation")).toBe(true);
     expect(TASK_TYPES.has("cont-qa")).toBe(true);
     expect(TASK_TYPES.has("security")).toBe(true);
     expect(TASK_TYPES.has("escalation")).toBe(true);
-    expect(TASK_TYPES.size).toBe(12);
+    expect(TASK_TYPES.size).toBe(13);
   });
 
   it("CLOSURE_STATES contains expected states", () => {
@@ -315,6 +316,30 @@ describe("buildTasksFromWaveDefinition", () => {
 
   it("returns empty array for null input", () => {
     expect(buildTasksFromWaveDefinition(null)).toEqual([]);
+  });
+
+  it("emits separate design and implementation tasks for hybrid design stewards", () => {
+    const tasks = buildTasksFromWaveDefinition({
+      wave: 4,
+      agents: [
+        {
+          agentId: "D1",
+          title: "Design Steward",
+          rolePromptPaths: ["docs/agents/wave-design-role.md"],
+          ownedPaths: ["docs/plans/waves/design/wave-4-D1.md", "src/runtime.ts"],
+          exitContract: {
+            completion: "contract",
+            durability: "durable",
+            proof: "integration",
+            docImpact: "owned",
+          },
+        },
+      ],
+      componentPromotions: [],
+    });
+
+    expect(tasks.map((task) => task.taskType)).toEqual(["design", "implementation"]);
+    expect(new Set(tasks.map((task) => task.taskId)).size).toBe(2);
   });
 });
 

@@ -1,0 +1,36 @@
+{
+  "id": "tui-design",
+  "title": "TUI Design Review",
+  "description": "Reviews terminal UI and operator-surface design against world-class TUI principles for focus, trust, navigation, information architecture, and recovery. Use when designing or reviewing TUIs, operator shells, dashboards, keyboard flows, or live terminal UX.",
+  "activation": {
+    "when": "Attach when the agent is designing or reviewing a TUI, operator shell, dashboard, keyboard interaction model, live status surface, or terminal-native information architecture.",
+    "roles": [
+      "design"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the design work clearly states whether the TUI is operationally honest, keyboard-first, focus-safe, and aligned with the repo's terminal UX expectations.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "tui-design-review",
+      "role": "design",
+      "runtime": "codex",
+      "expectActive": true
+    },
+    {
+      "id": "implementation-review",
+      "role": "implementation",
+      "runtime": "codex",
+      "expectActive": false
+    }
+  ]
+}

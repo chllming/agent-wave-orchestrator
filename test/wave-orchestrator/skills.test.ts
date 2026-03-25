@@ -39,6 +39,7 @@ function makeLaneProfile(overrides = {}) {
       dir: "skills",
       base: ["wave-core", "repo-coding-rules"],
       byRole: {
+        design: ["role-design"],
         implementation: ["role-implementation"],
         integration: ["role-integration"],
         documentation: ["role-documentation"],
@@ -126,6 +127,35 @@ describe("skill resolution", () => {
     );
     expect(resolved.expandedPromptText).toContain(
       "### claude adapter (skills/provider-railway/adapters/claude.md)",
+    );
+  });
+
+  it("attaches the design role skill for design agents", () => {
+    const resolved = resolveAgentSkills(
+      makeAgent("claude", "design", { agentId: "D1" }),
+      {},
+      { laneProfile: makeLaneProfile() },
+    );
+
+    expect(resolved.ids).toContain("role-design");
+  });
+
+  it("lets design agents opt into the tui-design bundle explicitly", () => {
+    const resolved = resolveAgentSkills(
+      makeAgent("claude", "design", {
+        agentId: "D1",
+        skills: ["tui-design"],
+      }),
+      {},
+      { laneProfile: makeLaneProfile() },
+    );
+
+    expect(resolved.ids).toEqual(
+      expect.arrayContaining(["role-design", "tui-design"]),
+    );
+    expect(resolved.promptText).toContain("## Skill tui-design");
+    expect(resolved.promptText).toContain(
+      "- Reference: skills/tui-design/references/tui-design.md",
     );
   });
 

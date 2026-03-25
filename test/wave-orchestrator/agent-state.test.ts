@@ -6,6 +6,7 @@ import {
   buildAgentExecutionSummary,
   readAgentExecutionSummary,
   validateContEvalSummary,
+  validateDesignSummary,
   validateDocumentationClosureSummary,
   validateContQaSummary,
   validateImplementationSummary,
@@ -270,6 +271,34 @@ describe("buildAgentExecutionSummary", () => {
       approvals: 1,
       detail: "needs-human-review",
     });
+  });
+
+  it("parses the final wave-design marker", () => {
+    const dir = makeRepoTempDir();
+    const logPath = path.join(dir, "d1.log");
+    const reportPath = path.relative(REPO_ROOT, path.join(dir, "wave-3-design.md"));
+    fs.writeFileSync(path.join(REPO_ROOT, reportPath), "# Design Packet\n", "utf8");
+    fs.writeFileSync(
+      logPath,
+      "[wave-design] state=ready-for-implementation decisions=3 assumptions=1 open_questions=0 detail=packet-ready\n",
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "D1" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+      reportPath: path.join(REPO_ROOT, reportPath),
+    });
+
+    expect(summary.design).toMatchObject({
+      state: "ready-for-implementation",
+      decisions: 3,
+      assumptions: 1,
+      openQuestions: 0,
+      detail: "packet-ready",
+    });
+    expect(validateDesignSummary({ agentId: "D1" }, summary).ok).toBe(true);
   });
 
   it("parses bullet-prefixed final marker blocks and records diagnostics", () => {

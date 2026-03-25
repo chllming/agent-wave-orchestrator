@@ -1,0 +1,36 @@
+{
+  "id": "role-design",
+  "title": "Design Role",
+  "description": "Guides optional pre-implementation design agents to produce a design packet with explicit decisions, assumptions, open questions, implementation handoff, and terminal-UX review posture when operator surfaces are in scope.",
+  "activation": {
+    "when": "Attach when the agent owns pre-implementation design work for a wave.",
+    "roles": [
+      "design"
+    ],
+    "runtimes": [],
+    "deployKinds": []
+  },
+  "termination": "Stop when the design packet is implementation-ready, or the exact clarification or blocker is explicit enough to halt coding safely.",
+  "permissions": {
+    "network": [],
+    "shell": [],
+    "mcpServers": []
+  },
+  "trust": {
+    "tier": "repo-owned"
+  },
+  "evalCases": [
+    {
+      "id": "design-claude",
+      "role": "design",
+      "runtime": "claude",
+      "expectActive": true
+    },
+    {
+      "id": "implementation-claude",
+      "role": "implementation",
+      "runtime": "claude",
+      "expectActive": false
+    }
+  ]
+}

@@ -131,6 +131,8 @@ import {
   isContEvalImplementationOwningAgent,
   isContEvalReportOnlyAgent,
   isClosureRoleAgentId,
+  isDesignAgent,
+  isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
   resolveWaveRoleBindings,
   resolveSecurityReviewReportPath,
@@ -496,6 +498,8 @@ function buildGateSnapshot(params) {
 
 function waveGateLabel(gateName) {
   switch (gateName) {
+    case "designGate":
+      return "Design packet";
     case "implementationGate":
       return "Implementation exit contract";
     case "componentGate":
@@ -527,6 +531,8 @@ function waveGateLabel(gateName) {
 
 function waveGateActionRequested(gateName, lanePaths) {
   switch (gateName) {
+    case "designGate":
+      return `Lane ${lanePaths.lane} owners should close the design packet or clarification gap before implementation starts.`;
     case "implementationGate":
       return `Lane ${lanePaths.lane} owners should resolve the implementation contract gap before wave progression.`;
     case "componentGate":
@@ -1335,8 +1341,11 @@ export async function runLauncherCli(argv) {
           });
 
           const launchedImplementationRuns = runsToLaunch.filter(
-            (run) => !isClosureRoleAgentId(run.agent.agentId, roleBindings),
+            (run) =>
+              !isClosureRoleAgentId(run.agent.agentId, roleBindings) &&
+              (!isDesignAgent(run.agent) || isImplementationOwningDesignAgent(run.agent)),
           );
+          const launchedDesignRuns = runsToLaunch.filter((run) => isDesignAgent(run.agent));
           const closureOnlyRetry =
             runsToLaunch.length > 0 &&
             launchedImplementationRuns.length === 0 &&
@@ -1395,6 +1404,14 @@ export async function runLauncherCli(argv) {
                 agentRateLimitBaseDelaySeconds: options.agentRateLimitBaseDelaySeconds,
                 agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
                 context7Enabled: options.context7Enabled,
+                designExecutionMode:
+                  isDesignAgent(runInfo.agent)
+                    ? launchedImplementationRuns.some(
+                        (candidate) => candidate.agent.agentId === runInfo.agent.agentId,
+                      )
+                      ? "implementation-pass"
+                      : "design-pass"
+                    : null,
                 attempt,
                 controlPlane: {
                   waveNumber: wave.wave,
@@ -1507,6 +1524,43 @@ export async function runLauncherCli(argv) {
           }
 
           if (failures.length === 0) {
+            if (launchedDesignRuns.length > 0 && launchedImplementationRuns.length === 0) {
+              const reducerDecision = refreshReducerSnapshot(attempt);
+              const designGate = reducerDecision?.reducerState?.gateSnapshot?.designGate || null;
+              const remainingImplementationRuns = agentRuns.filter(
+                (run) =>
+                  !preCompletedAgentIds.has(run.agent.agentId) &&
+                  !isClosureRoleAgentId(run.agent.agentId, roleBindings) &&
+                  (!isDesignAgent(run.agent) || isImplementationOwningDesignAgent(run.agent)),
+              );
+              if (designGate?.ok && remainingImplementationRuns.length > 0) {
+                recordAttemptState(lanePaths, wave.wave, attempt, "completed", {
+                  selectedAgentIds: runsToLaunch.map((run) => run.agent.agentId),
+                  detail: `Design pass complete; continuing with implementation agents ${remainingImplementationRuns.map((run) => run.agent.agentId).join(", ")}.`,
+                });
+                recordCombinedEvent({
+                  message: `Design pass complete; launching implementation agents next: ${remainingImplementationRuns.map((run) => run.agent.agentId).join(", ")}.`,
+                });
+                appendCoordination({
+                  event: "wave_design_ready",
+                  waves: [wave.wave],
+                  status: "running",
+                  details: `next_agents=${remainingImplementationRuns.map((run) => run.agent.agentId).join(",")}`,
+                  actionRequested: "None",
+                });
+                runsToLaunch = remainingImplementationRuns;
+                for (const run of runsToLaunch) {
+                  setWaveDashboardAgent(dashboardState, run.agent.agentId, {
+                    state: "pending",
+                    detail: "Queued after design handoff",
+                  });
+                }
+                flushDashboards();
+                attempt += 1;
+                traceAttempt += 1;
+                continue;
+              }
+            }
             const implementationGate = readWaveImplementationGate(wave, agentRuns);
             if (!implementationGate.ok) {
               failures = [

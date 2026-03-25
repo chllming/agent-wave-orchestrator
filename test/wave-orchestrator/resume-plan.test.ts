@@ -14,6 +14,7 @@ function makeClosureEligibility(overrides = {}) {
 
 function makeGateSnapshot(overrides = {}) {
   const base = {
+    designGate: { ok: true, statusCode: "pass", detail: "" },
     implementationGate: { ok: true, statusCode: "pass", detail: "" },
     componentGate: { ok: true, statusCode: "pass", detail: "" },
     integrationBarrier: { ok: true, statusCode: "pass", detail: "" },
@@ -242,6 +243,43 @@ describe("buildResumePlan", () => {
 
     expect(plan.resumeFromPhase).toBe("integrating");
     expect(plan.reason).toBe("gate-failure");
+  });
+
+  it("maps designGate to resumeFromPhase design", () => {
+    const waveState = {
+      wave: 3,
+      lane: "main",
+      attempt: 1,
+      closureEligibility: makeClosureEligibility({
+        waveMayClose: false,
+        pendingAgentIds: ["D1"],
+      }),
+      gateSnapshot: makeGateSnapshot({
+        designGate: {
+          ok: false,
+          agentId: "D1",
+          statusCode: "design-needs-clarification",
+          detail: "Need API naming decision.",
+        },
+        overall: {
+          ok: false,
+          gate: "designGate",
+          statusCode: "design-needs-clarification",
+          detail: "Need API naming decision.",
+          agentId: "D1",
+        },
+      }),
+      openBlockers: [],
+      retryTargetSet: [],
+    };
+
+    const plan = buildResumePlan(waveState);
+
+    expect(plan.resumeFromPhase).toBe("design");
+    expect(plan.gateBlockers[0]).toMatchObject({
+      gate: "designGate",
+      agentId: "D1",
+    });
   });
 
   it("maps contEvalGate to resumeFromPhase cont-eval", () => {

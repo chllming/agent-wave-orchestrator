@@ -109,6 +109,7 @@ Top-level and lane-local skill attachment use the same shape:
     "dir": "skills",
     "base": ["wave-core", "repo-coding-rules"],
     "byRole": {
+      "design": ["role-design"],
       "deploy": ["role-deploy"]
     },
     "byRuntime": {
@@ -122,6 +123,8 @@ Top-level and lane-local skill attachment use the same shape:
 ```
 
 Lane-local `lanes.<lane>.skills` extends the global config instead of replacing it.
+
+Optional design workers in the shipped `0.8.5` surface normally attach `role-design`. That bundle is intended for docs/spec-first design packets and explicit implementation handoff work before implementation starts. When the design packet covers terminal UX, dashboards, or other operator surfaces, add `tui-design` explicitly in the wave's `### Skills`.
 
 ## Resolution Order
 
@@ -195,6 +198,12 @@ Runtime delivery:
 
 These runtime projections are guidance surfaces. They should stay aligned with the canonical authority model, but they are not replay inputs or decision state on their own.
 
+For the optional `design` worker role, the default pattern is:
+
+- `role-design` for the design packet contract
+- `tui-design` only when the packet covers terminal UX, dashboards, or other operator surfaces
+- no runtime-specific coding bundle unless the wave explicitly gives the design steward code ownership and makes it a hybrid design steward
+
 ## Generated Artifacts
 
 Executor overlay directories can contain:
@@ -225,3 +234,4 @@ Missing or malformed bundles are configuration errors, not silent no-ops.
 - Use explicit per-agent `### Skills` for true exceptions, not as a substitute for missing activation metadata.
 - Keep provider skills role-scoped unless every role genuinely needs the provider context.
 - Keep bundle ids stable so traces and prompt fingerprints remain intelligible across runs.
+- Keep `role-design` docs/spec-first by default; add `tui-design` when terminal or operator-surface work is in scope, and only attach broader coding bundles when the wave explicitly assigns code ownership and expects the same design steward to return for implementation.

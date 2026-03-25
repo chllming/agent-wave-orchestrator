@@ -199,6 +199,60 @@ describe("reduceWaveState", () => {
       expect(state.proofAvailability.byAgentId.A1.ownedSliceProven).toBe(false);
       expect(state.proofAvailability.allOwnedSlicesProven).toBe(false);
     });
+
+    it("tracks hybrid design stewards across design and implementation tasks", () => {
+      const wave = {
+        wave: 1,
+        agents: [
+          {
+            agentId: "D1",
+            title: "Design Steward",
+            rolePromptPaths: ["docs/agents/wave-design-role.md"],
+            ownedPaths: ["docs/plans/waves/design/wave-1-D1.md", "src/main.ts"],
+            exitContract: {
+              completion: "contract",
+              durability: "durable",
+              proof: "unit",
+              docImpact: "none",
+            },
+          },
+        ],
+        componentPromotions: [],
+      };
+      const state = reduceWaveState({
+        waveDefinition: wave,
+        agentResults: {
+          D1: {
+            agentId: "D1",
+            reportPath: "README.md",
+            design: {
+              state: "ready-for-implementation",
+              decisions: 2,
+              assumptions: 1,
+              openQuestions: 0,
+              detail: "packet-ready",
+            },
+            proof: {
+              completion: "contract",
+              durability: "durable",
+              proof: "unit",
+              state: "gap",
+            },
+            docDelta: {
+              state: "none",
+            },
+          },
+        },
+      });
+
+      expect(state.tasks.filter((task) => task.ownerAgentId === "D1").map((task) => task.taskType)).toEqual([
+        "design",
+        "implementation",
+      ]);
+      expect(state.tasks.find((task) => task.taskType === "design")?.closureState).toBe("owned_slice_proven");
+      expect(state.tasks.find((task) => task.taskType === "implementation")?.closureState).toBe("open");
+      expect(state.phase).toBe("running");
+    });
   });
 
   describe("multi-agent wave", () => {

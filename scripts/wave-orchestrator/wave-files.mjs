@@ -7,6 +7,7 @@ import {
   DEFAULT_CONT_EVAL_ROLE_PROMPT_PATH,
   DEFAULT_CONT_QA_AGENT_ID,
   DEFAULT_CONT_QA_ROLE_PROMPT_PATH,
+  DEFAULT_DESIGN_ROLE_PROMPT_PATH,
   DEFAULT_DOCUMENTATION_AGENT_ID,
   DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH,
   DEFAULT_INTEGRATION_AGENT_ID,
@@ -60,6 +61,11 @@ import {
   isContEvalReportOnlyAgent,
   isContEvalReportPath,
   isContQaReportPath,
+  isDesignAgent,
+  isDocsOnlyDesignAgent,
+  isImplementationOwningDesignAgent,
+  isDesignRolePromptPath,
+  resolveDesignReportPath,
   isSecurityRolePromptPath,
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
@@ -77,6 +83,7 @@ export const WAVE_CONT_EVAL_ROLE_PROMPT_PATH = DEFAULT_CONT_EVAL_ROLE_PROMPT_PAT
 export const WAVE_INTEGRATION_ROLE_PROMPT_PATH = DEFAULT_INTEGRATION_ROLE_PROMPT_PATH;
 export const WAVE_DOCUMENTATION_ROLE_PROMPT_PATH = DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH;
 export const WAVE_SECURITY_ROLE_PROMPT_PATH = DEFAULT_SECURITY_ROLE_PROMPT_PATH;
+export const WAVE_DESIGN_ROLE_PROMPT_PATH = DEFAULT_DESIGN_ROLE_PROMPT_PATH;
 export const SHARED_PLAN_DOC_PATHS = [
   "docs/plans/current-state.md",
   "docs/plans/master-plan.md",
@@ -113,6 +120,10 @@ function resolveSecurityRolePromptPath(laneProfile) {
   return laneProfile?.roles?.securityRolePromptPath || DEFAULT_SECURITY_ROLE_PROMPT_PATH;
 }
 
+function resolveDesignRolePromptPath(laneProfile) {
+  return laneProfile?.roles?.designRolePromptPath || DEFAULT_DESIGN_ROLE_PROMPT_PATH;
+}
+
 function normalizeSecurityCapabilities(capabilities, rolePromptPaths, securityRolePromptPath) {
   const normalized = Array.isArray(capabilities) ? [...capabilities] : [];
   const hasSecurityRolePrompt = Array.isArray(rolePromptPaths)
@@ -125,6 +136,22 @@ function normalizeSecurityCapabilities(capabilities, rolePromptPaths, securityRo
     !normalized.some((capability) => String(capability || "").trim().toLowerCase() === "security-review")
   ) {
     normalized.push("security-review");
+  }
+  return normalized;
+}
+
+function normalizeDesignCapabilities(capabilities, rolePromptPaths, designRolePromptPath) {
+  const normalized = Array.isArray(capabilities) ? [...capabilities] : [];
+  const hasDesignRolePrompt = Array.isArray(rolePromptPaths)
+    ? rolePromptPaths.some((rolePromptPath) =>
+        isDesignRolePromptPath(rolePromptPath, designRolePromptPath),
+      )
+    : false;
+  if (
+    hasDesignRolePrompt &&
+    !normalized.some((capability) => String(capability || "").trim().toLowerCase() === "design")
+  ) {
+    normalized.push("design");
   }
   return normalized;
 }
@@ -1166,12 +1193,14 @@ function isImplementationOwningWaveAgent(
     contEvalAgentId,
     integrationAgentId,
     documentationAgentId,
+    designRolePromptPath,
     securityRolePromptPath,
   },
 ) {
   return (
     ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
     !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+    !isDocsOnlyDesignAgent(agent, { designRolePromptPath }) &&
     !isSecurityReviewAgent(agent, { securityRolePromptPath })
   );
 }
@@ -1184,6 +1213,12 @@ function resolveAgentSummaryReportPath(wave, agentId, { contQaAgentId, contEvalA
     return path.resolve(REPO_ROOT, wave.contEvalReportPath);
   }
   const agent = wave?.agents?.find((entry) => entry.agentId === agentId);
+  if (isDesignAgent(agent)) {
+    const designReportPath = resolveDesignReportPath(agent);
+    if (designReportPath) {
+      return path.resolve(REPO_ROOT, designReportPath);
+    }
+  }
   if (isSecurityReviewAgent(agent)) {
     const securityReportPath = resolveSecurityReviewReportPath(agent);
     if (securityReportPath) {
@@ -1387,6 +1422,7 @@ export function validateWaveDefinition(wave, options = {}) {
   const documentationAgentId =
     laneProfile.roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
+  const designRolePromptPath = resolveDesignRolePromptPath(laneProfile);
   const documentationThreshold = laneProfile.validation.requireDocumentationStewardFromWave;
   const context7Threshold = laneProfile.validation.requireContext7DeclarationsFromWave;
   const exitContractThreshold = laneProfile.validation.requireExitContractsFromWave;
@@ -1437,6 +1473,7 @@ export function validateWaveDefinition(wave, options = {}) {
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      designRolePromptPath,
       securityRolePromptPath,
     }),
   );
@@ -1497,6 +1534,10 @@ export function validateWaveDefinition(wave, options = {}) {
     }
   }
   for (const agent of wave.agents) {
+    const docsOnlyDesignAgent = isDocsOnlyDesignAgent(agent, { designRolePromptPath });
+    const implementationOwningDesignAgent = isImplementationOwningDesignAgent(agent, {
+      designRolePromptPath,
+    });
     if (!Array.isArray(agent.ownedPaths) || agent.ownedPaths.length === 0) {
       errors.push(`Agent ${agent.agentId} must declare at least one owned path`);
       continue;
@@ -1556,6 +1597,7 @@ export function validateWaveDefinition(wave, options = {}) {
     if (
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
       isContEvalReportOnlyAgent(agent, { contEvalAgentId }) ||
+      docsOnlyDesignAgent ||
       isSecurityReviewAgent(agent, { securityRolePromptPath })
     ) {
       if (Array.isArray(agent.components) && agent.components.length > 0) {
@@ -1587,6 +1629,7 @@ export function validateWaveDefinition(wave, options = {}) {
       if (
         ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
         !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+        !docsOnlyDesignAgent &&
         !isSecurityReviewAgent(agent, { securityRolePromptPath })
       ) {
         if (!agent.exitContract) {
@@ -1608,6 +1651,7 @@ export function validateWaveDefinition(wave, options = {}) {
       (!Array.isArray(agent.proofArtifacts) || agent.proofArtifacts.length === 0) &&
       ![contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) &&
       !isContEvalReportOnlyAgent(agent, { contEvalAgentId }) &&
+      !docsOnlyDesignAgent &&
       !isSecurityReviewAgent(agent, { securityRolePromptPath })
     ) {
       errors.push(
@@ -1673,6 +1717,29 @@ export function validateWaveDefinition(wave, options = {}) {
     }
     if (!resolveSecurityReviewReportPath(securityReviewer)) {
       errors.push(`Security reviewer ${securityReviewer.agentId} must own a security review report path`);
+    }
+  }
+  const designAgents = wave.agents.filter((agent) =>
+    isDesignAgent(agent, { designRolePromptPath }),
+  );
+  for (const designAgent of designAgents) {
+    const hybridDesignAgent = isImplementationOwningDesignAgent(designAgent, {
+      designRolePromptPath,
+    });
+    if (!designAgent.rolePromptPaths?.includes(designRolePromptPath)) {
+      errors.push(
+        `Design agent ${designAgent.agentId} must import ${designRolePromptPath}`,
+      );
+    }
+    if (!resolveDesignReportPath(designAgent)) {
+      errors.push(`Design agent ${designAgent.agentId} must own a design packet path`);
+    }
+    if (
+      !hybridDesignAgent &&
+      Array.isArray(designAgent.components) &&
+      designAgent.components.length > 0
+    ) {
+      errors.push(`Design agent ${designAgent.agentId} must stay docs/spec-only unless it explicitly owns implementation files`);
     }
   }
   if (integrationRuleActive) {
@@ -1749,6 +1816,7 @@ export function validateWaveDefinition(wave, options = {}) {
 export function parseWaveContent(content, filePath, options = {}) {
   const laneProfile = resolveLaneProfileForOptions(options);
   const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
+  const designRolePromptPath = resolveDesignRolePromptPath(laneProfile);
   const fileName = path.basename(filePath);
   const waveNumber = waveNumberFromFileName(fileName);
   const commitMessageMatch = content.match(/\*\*Commit message\*\*:\s*`([^`]+)`/);
@@ -1778,7 +1846,11 @@ export function parseWaveContent(content, filePath, options = {}) {
     const executorConfig = extractExecutorConfigFromSection(sectionText, filePath, current.agentId);
     const components = extractAgentComponentsFromSection(sectionText, filePath, current.agentId);
     const capabilities = normalizeSecurityCapabilities(
-      extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId),
+      normalizeDesignCapabilities(
+        extractAgentCapabilitiesFromSection(sectionText, filePath, current.agentId),
+        rolePromptPaths,
+        designRolePromptPath,
+      ),
       rolePromptPaths,
       securityRolePromptPath,
     );
@@ -1922,6 +1994,13 @@ function inferAgentRuntimeRole(agent, laneProfile) {
   }
   if (agent?.agentId === laneProfile.roles.documentationAgentId) {
     return "documentation";
+  }
+  if (
+    isDesignAgent(agent, {
+      designRolePromptPath: laneProfile?.roles?.designRolePromptPath,
+    })
+  ) {
+    return "design";
   }
   if (isSecurityReviewAgent(agent)) {
     return "security";
@@ -2274,12 +2353,14 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
   const documentationAgentId =
     roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
+  const designRolePromptPath = resolveDesignRolePromptPath(laneProfile);
   const implementationOwningAgents = (wave.agents || []).filter((agent) =>
     isImplementationOwningWaveAgent(agent, {
       contQaAgentId,
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      designRolePromptPath,
       securityRolePromptPath,
     }),
   );
@@ -2302,6 +2383,7 @@ export function validateWaveComponentPromotions(wave, summariesByAgentId = {}, o
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      designRolePromptPath,
       securityRolePromptPath,
     })) {
       continue;
@@ -2348,12 +2430,14 @@ export function validateWaveComponentMatrixCurrentLevels(wave, options = {}) {
   const integrationAgentId = roles.integrationAgentId || DEFAULT_INTEGRATION_AGENT_ID;
   const documentationAgentId = roles.documentationAgentId || DEFAULT_DOCUMENTATION_AGENT_ID;
   const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
+  const designRolePromptPath = resolveDesignRolePromptPath(laneProfile);
   const implementationOwningAgents = (wave.agents || []).filter((agent) =>
     isImplementationOwningWaveAgent(agent, {
       contQaAgentId,
       contEvalAgentId,
       integrationAgentId,
       documentationAgentId,
+      designRolePromptPath,
       securityRolePromptPath,
     }),
   );

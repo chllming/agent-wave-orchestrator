@@ -1,6 +1,6 @@
 # End-State Architecture
 
-This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped code now follows.
+This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.8.5` surface now follows.
 
 The thesis is unchanged: bounded waves, closure roles, proof artifacts, selective rerun, and delivery discipline. What changes is the internal authority model. The launcher stops being the decision engine and becomes a thin orchestrator that reads decisions from canonical state, sequences the engines, and delegates process work to the session supervisor.
 
@@ -48,6 +48,8 @@ The system uses **Model B: canonical authority set**, not a single event log. Th
 
 The reducer consumes all three canonical sources plus result envelopes to rebuild state. No other input is read for decision-making.
 
+Optional design packets live in repo-owned docs, usually under `docs/plans/waves/design/`. They are not canonical runtime state by themselves, but the validated packet path and final `design` result are captured in summaries, envelopes, reducer state, and traces.
+
 ---
 
 ## Module Architecture
@@ -87,6 +89,8 @@ implementation-engine.mjs  Drives the implementation phase
                            Outputs: run selections, launch requests,
                                     executor assignments,
                                     prompt construction requests
+                           Rule:    optional design workers run before
+                                    code-owning implementation workers
                            Does NOT output: agent_run.started, attempt.running
                            (those are observed facts written by the supervisor)
 
@@ -109,7 +113,7 @@ gate-engine.mjs            Evaluates all closure gates
                                     per-task owned_slice_proven verdicts
                            Does NOT write: gate events to control-plane
                            (the caller writes gate events after receiving verdicts)
-                           Gates:   implementation-proof, cont-eval, security,
+                           Gates:   design, implementation-proof, cont-eval, security,
                                     integration, documentation, cont-qa,
                                     component-matrix, assignment-barrier,
                                     dependency-barrier, clarification-barrier
@@ -198,6 +202,7 @@ launcher.mjs               Thin orchestrator
                               a. reducer.rebuild() → current state
                               b. retry-engine.plan() → retry decisions
                               c. implementation-engine.select() → run selections
+                                 (design-first when the wave declares design workers)
                               d. derived-state-engine.materialize() → derived payloads
                               e. supervisor.launch(run selections) → agent sessions
                                  (supervisor writes agent_run.started)

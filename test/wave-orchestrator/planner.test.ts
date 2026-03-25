@@ -153,6 +153,39 @@ function buildSecurityDraftInput() {
   ].join("\n");
 }
 
+function buildDesignDraftInput() {
+  return [
+    "Wave 4 Design Packet",
+    "Docs: scaffold design packet flow",
+    "Wave 4 should land a design packet before implementation starts.",
+    "",
+    "oversight",
+    "none",
+    "",
+    "y",
+    "n",
+    "y",
+    "y",
+    "0",
+    "1",
+    "D1",
+    "Design Steward",
+    "design",
+    "design-pass",
+    "docs/plans/waves/design/wave-4-D1.md",
+    "",
+    "design",
+    "docs/plans/current-state.md",
+    "",
+    "Record exact decisions | Leave explicit implementation handoff",
+    "",
+    "",
+    "",
+    "none",
+    "",
+  ].join("\n");
+}
+
 function buildAgenticPlannerFixture() {
   return {
     summary: "Plan the planner-agent rollout in two narrow waves.",
@@ -521,6 +554,30 @@ describe("wave draft", () => {
       { cwd: repoDir },
     );
     expect(dryRunResult.status).toBe(0);
+  });
+
+  it("generates a design wave without an exit-contract section", () => {
+    const repoDir = makeTempRepo();
+    expect(runWaveCli(["init"], { cwd: repoDir }).status).toBe(0);
+    expect(
+      runWaveCli(["project", "setup"], {
+        cwd: repoDir,
+        input: ["n", "", "", "", "main", "0"].join("\n"),
+      }).status,
+    ).toBe(0);
+
+    const draftResult = runWaveCli(["draft", "--wave", "4", "--template", "implementation", "--json"], {
+      cwd: repoDir,
+      input: buildDesignDraftInput(),
+    });
+
+    expect(draftResult.status).toBe(0);
+    const payload = JSON.parse(draftResult.stdout);
+    const waveMarkdown = fs.readFileSync(path.join(repoDir, payload.wavePath), "utf8");
+    expect(waveMarkdown).toContain("docs/agents/wave-design-role.md");
+    expect(waveMarkdown).toContain("- profile: design-pass");
+    expect(waveMarkdown).toContain("docs/plans/waves/design/wave-4-D1.md");
+    expect(waveMarkdown).not.toContain("### Exit contract");
   });
 
   it("generates, shows, and applies an agentic planner run without touching canonical waves until apply", () => {

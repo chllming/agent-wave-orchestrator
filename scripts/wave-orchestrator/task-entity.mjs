@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { toIsoTimestamp } from "./shared.mjs";
 import {
+  validateDesignSummary,
   validateImplementationSummary,
   validateContQaSummary,
   validateContEvalSummary,
@@ -11,6 +12,8 @@ import {
 import {
   isContEvalImplementationOwningAgent,
   isContEvalReportOnlyAgent,
+  isDesignAgent,
+  isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
 } from "./role-helpers.mjs";
 import {
@@ -19,6 +22,7 @@ import {
 } from "./coordination-store.mjs";
 
 export const TASK_TYPES = new Set([
+  "design",
   "implementation",
   "integration",
   "documentation",
@@ -484,7 +488,8 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
 
   for (const agent of agents) {
     const agentId = agent.agentId;
-    const taskType =
+    const hybridDesignAgent = isImplementationOwningDesignAgent(agent);
+    const baseTaskType =
       agentId === contQaAgentId
         ? "cont-qa"
         : agentId === contEvalAgentId
@@ -493,9 +498,11 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
             ? "integration"
             : agentId === documentationAgentId
               ? "documentation"
-              : isSecurityReviewAgent(agent)
-                ? "security"
-                : "implementation";
+              : isDesignAgent(agent)
+                ? "design"
+                : isSecurityReviewAgent(agent)
+                  ? "security"
+                  : "implementation";
     const exitContract =
       agent.exitContract && typeof agent.exitContract === "object"
         ? { ...agent.exitContract }
@@ -509,7 +516,7 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
     const proofLevel = exitContract?.proof || "unit";
     let proofCentric = false;
     let maturityTarget = null;
-    if (taskType === "implementation") {
+    if (baseTaskType === "implementation" || hybridDesignAgent) {
       if (Array.isArray(agent.deliverables) && agent.deliverables.length > 0) {
         proofCentric = true;
       }
@@ -539,48 +546,54 @@ export function buildTasksFromWaveDefinition(waveDefinition, laneConfig = {}) {
     const scope = agent.title
       ? normalizeText(agent.title).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
       : "primary";
-    const semanticId = buildSemanticTaskId(waveNumber, agentId, scope);
+    const pushAgentTask = (taskType, taskScope, overrides = {}) => {
+      tasks.push(
+        normalizeTask(
+          {
+            taskId: buildSemanticTaskId(waveNumber, agentId, `${scope}-${taskScope}`),
+            taskType,
+            title: `${agentId}: ${agent.title || ""}`.trim(),
+            detail: agent.detail || "",
+            ownerAgentId: agentId,
+            assigneeAgentId: agentId,
+            waveNumber,
+            lane,
+            artifactContract: {
+              deliverables,
+              proofArtifacts,
+              requiredPaths: normalizeStringArray(agent.ownedPaths || []),
+              exitContract,
+              componentTargets,
+            },
+            proofRequirements: {
+              proofLevel,
+              proofCentric,
+              maturityTarget,
+            },
+            dependencyEdges: [],
+            components,
+            status: "pending",
+            closureState: "open",
+            priority: taskType === "implementation" ? "normal" : "high",
+            ...overrides,
+          },
+          {
+            createdAt: seededAt,
+            updatedAt: seededAt,
+            waveNumber,
+            lane,
+          },
+        ),
+      );
+    };
 
-    tasks.push(
-      normalizeTask(
-        {
-          taskId: semanticId,
-          taskType,
-          title: `${agentId}: ${agent.title || ""}`.trim(),
-          detail: agent.detail || "",
-          ownerAgentId: agentId,
-          assigneeAgentId: agentId,
-          waveNumber,
-          lane,
-          artifactContract: {
-            deliverables,
-            proofArtifacts,
-            requiredPaths: normalizeStringArray(agent.ownedPaths || []),
-            exitContract,
-            componentTargets,
-          },
-          proofRequirements: {
-            proofLevel,
-            proofCentric,
-            maturityTarget,
-          },
-          dependencyEdges: [],
-          components,
-          status: "pending",
-          closureState: "open",
-          priority:
-            taskType === "implementation"
-              ? "normal"
-              : "high",
-        },
-        {
-          createdAt: seededAt,
-          updatedAt: seededAt,
-          waveNumber,
-          lane,
-        },
-      ),
-    );
+    if (hybridDesignAgent && baseTaskType === "design") {
+      pushAgentTask("design", "design");
+      pushAgentTask("implementation", "implementation");
+      continue;
+    }
+
+    pushAgentTask(baseTaskType, baseTaskType);
   }
 
   for (const promotion of waveDefinition.componentPromotions || []) {
@@ -835,6 +848,13 @@ export function evaluateOwnedSliceProven(task, agentResult, proofBundles = []) {
       }
     }
     return { proven: true, reason: "Exit contract satisfied" };
+  }
+
+  if (task.taskType === "design") {
+    const validation = validateDesignSummary(agent, agentResult);
+    return validation.ok
+      ? { proven: true, reason: "Design packet satisfied" }
+      : { proven: false, reason: validation.detail || validation.statusCode };
   }
 
   if (task.taskType === "component") {

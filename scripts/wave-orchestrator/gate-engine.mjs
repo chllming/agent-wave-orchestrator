@@ -4,6 +4,7 @@ import {
   agentSummaryPathFromStatusPath,
   buildAgentExecutionSummary,
   readAgentExecutionSummary,
+  validateDesignSummary,
   validateContQaSummary,
   validateContEvalSummary,
   validateImplementationSummary,
@@ -33,7 +34,10 @@ import {
   writeJsonAtomic,
 } from "./shared.mjs";
 import {
+  isDocsOnlyDesignAgent,
   isSecurityReviewAgent,
+  isDesignAgent,
+  resolveDesignReportPath,
   resolveSecurityReviewReportPath,
   isContEvalReportOnlyAgent,
 } from "./role-helpers.mjs";
@@ -93,6 +97,10 @@ function resolveRunReportPath(wave, runInfo) {
   if (isSecurityReviewAgent(runInfo.agent)) {
     const securityReportPath = resolveSecurityReviewReportPath(runInfo.agent);
     return securityReportPath ? path.resolve(REPO_ROOT, securityReportPath) : null;
+  }
+  if (isDesignAgent(runInfo.agent)) {
+    const designReportPath = resolveDesignReportPath(runInfo.agent);
+    return designReportPath ? path.resolve(REPO_ROOT, designReportPath) : null;
   }
   return null;
 }
@@ -513,6 +521,7 @@ export function readWaveImplementationGate(wave, agentRuns, options = {}) {
     if (
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId) ||
       isContEvalReportOnlyAgent(runInfo.agent, { contEvalAgentId }) ||
+      isDocsOnlyDesignAgent(runInfo.agent) ||
       isSecurityReviewAgent(runInfo.agent)
     ) {
       continue;
@@ -559,6 +568,65 @@ export function readWaveImplementationGate(wave, agentRuns, options = {}) {
     agentId: null,
     statusCode: "pass",
     detail: "All implementation exit contracts are satisfied.",
+    logPath: null,
+  };
+}
+
+export function readWaveDesignGate(wave, agentRuns, options = {}) {
+  const mode = normalizeReadMode(options.mode || "live");
+  const designRuns = (agentRuns || []).filter((run) => isDesignAgent(run.agent));
+  if (designRuns.length === 0) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: "pass",
+      detail: "No design agent declared for this wave.",
+      logPath: null,
+    };
+  }
+  for (const runInfo of designRuns) {
+    const envelopeResult = readRunResultEnvelope(runInfo, wave, { mode });
+    if (mode === "live" && !envelopeResult.valid) {
+      return {
+        ok: false,
+        agentId: runInfo.agent.agentId,
+        statusCode:
+          envelopeResult.source === "missing-envelope"
+            ? "missing-result-envelope"
+            : "invalid-result-envelope",
+        detail:
+          envelopeResult.detail ||
+          `Missing structured design result envelope for ${runInfo.agent.agentId}.`,
+        logPath: path.relative(REPO_ROOT, runInfo.logPath),
+      };
+    }
+    const summary = envelopeResult.valid
+      ? projectLegacySummaryFromEnvelope(
+          envelopeResult.envelope,
+          buildEnvelopeReadOptions(
+            runInfo,
+            wave,
+            runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null,
+            resolveRunReportPath(wave, runInfo),
+          ),
+        )
+      : readRunExecutionSummary(runInfo, wave, { mode });
+    const validation = validateDesignSummary(runInfo.agent, summary);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        agentId: runInfo.agent.agentId,
+        statusCode: validation.statusCode,
+        detail: validation.detail,
+        logPath: summary?.logPath || path.relative(REPO_ROOT, runInfo.logPath),
+      };
+    }
+  }
+  return {
+    ok: true,
+    agentId: null,
+    statusCode: "pass",
+    detail: "All design packets are ready for implementation.",
     logPath: null,
   };
 }
@@ -1088,6 +1156,7 @@ export function readWaveImplementationGatePure(wave, agentResults, options = {})
     if (
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
       isContEvalReportOnlyAgent(agent, { contEvalAgentId }) ||
+      isDocsOnlyDesignAgent(agent) ||
       isSecurityReviewAgent(agent)
     ) {
       continue;
@@ -1107,6 +1176,40 @@ export function readWaveImplementationGatePure(wave, agentResults, options = {})
   return {
     ok: true, agentId: null, statusCode: "pass",
     detail: "All implementation exit contracts are satisfied.", logPath: null,
+  };
+}
+
+export function readWaveDesignGatePure(wave, agentResults) {
+  const agents = Array.isArray(wave.agents) ? wave.agents : [];
+  const designAgents = agents.filter((agent) => isDesignAgent(agent));
+  if (designAgents.length === 0) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: "pass",
+      detail: "No design agent declared for this wave.",
+      logPath: null,
+    };
+  }
+  for (const agent of designAgents) {
+    const summary = agentResults?.[agent.agentId] || null;
+    const validation = validateDesignSummary(agent, summary);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        agentId: agent.agentId,
+        statusCode: validation.statusCode,
+        detail: validation.detail,
+        logPath: summary?.logPath || null,
+      };
+    }
+  }
+  return {
+    ok: true,
+    agentId: null,
+    statusCode: "pass",
+    detail: "All design packets are ready for implementation.",
+    logPath: null,
   };
 }
 
@@ -1312,6 +1415,7 @@ export function readWaveInfraGatePure(wave, agentResults, options = {}) {
 }
 
 export function buildGateSnapshotPure({ wave, agentResults, derivedState, validationMode = "live", laneConfig = {} }) {
+  const designGate = readWaveDesignGatePure(wave, agentResults);
   const implementationGate = readWaveImplementationGatePure(wave, agentResults, {
     contQaAgentId: laneConfig.contQaAgentId, contEvalAgentId: laneConfig.contEvalAgentId,
     integrationAgentId: laneConfig.integrationAgentId, documentationAgentId: laneConfig.documentationAgentId,
@@ -1363,7 +1467,7 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   const helperAssignmentBarrier = derivedState?.helperAssignmentBarrier || { ok: true, statusCode: "pass", detail: "" };
   const dependencyBarrier = derivedState?.dependencyBarrier || { ok: true, statusCode: "pass", detail: "" };
   const orderedGates = [
-    ["implementationGate", implementationGate], ["componentGate", componentGate],
+    ["designGate", designGate], ["implementationGate", implementationGate], ["componentGate", componentGate],
     ["helperAssignmentBarrier", helperAssignmentBarrier], ["dependencyBarrier", dependencyBarrier],
     ["contEvalGate", contEvalGate], ["securityGate", securityGate],
     ["integrationBarrier", integrationBarrier], ["documentationGate", documentationGate],
@@ -1372,7 +1476,7 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   ];
   const firstFailure = orderedGates.find(([, gate]) => gate?.ok === false);
   return {
-    implementationGate, componentGate, integrationGate: integrationMarkerGate,
+    designGate, implementationGate, componentGate, integrationGate: integrationMarkerGate,
     integrationBarrier, documentationGate, componentMatrixGate,
     contEvalGate, securityGate, contQaGate, infraGate,
     clarificationBarrier, helperAssignmentBarrier, dependencyBarrier,

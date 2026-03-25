@@ -20,6 +20,7 @@ import {
 } from "./shared.mjs";
 import {
   readAgentExecutionSummary,
+  validateDesignSummary,
   validateImplementationSummary,
 } from "./agent-state.mjs";
 import {
@@ -32,6 +33,9 @@ import {
 } from "./proof-registry.mjs";
 import { hashAgentPromptFingerprint } from "./context7.mjs";
 import {
+  isDocsOnlyDesignAgent,
+  isDesignAgent,
+  isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
   resolveWaveRoleBindings,
 } from "./role-helpers.mjs";
@@ -315,6 +319,28 @@ export function hasReusableSuccessStatus(agent, statusPath, options = {}) {
   if (!basicReuseOk) {
     return false;
   }
+  if (isDocsOnlyDesignAgent(agent) || isImplementationOwningDesignAgent(agent)) {
+    const summary = readAgentExecutionSummary(statusPath, {
+      agent,
+      statusPath,
+      statusRecord,
+      logPath: options.logPath || null,
+      reportPath: options.reportPath || null,
+    });
+    if (!summary) {
+      return false;
+    }
+    const effectiveSummary = options.proofRegistry
+      ? augmentSummaryWithProofRegistry(agent, summary, options.proofRegistry)
+      : summary;
+    if (isDocsOnlyDesignAgent(agent)) {
+      return validateDesignSummary(agent, effectiveSummary).ok;
+    }
+    return (
+      validateDesignSummary(agent, effectiveSummary).ok &&
+      validateImplementationSummary(agent, effectiveSummary).ok
+    );
+  }
   const proofCentric =
     agentRequiresProofCentricValidation(agent) || waveRequiresProofCentricValidation(options.wave);
   if (!proofCentric) {
@@ -340,6 +366,37 @@ export function hasReusableSuccessStatus(agent, statusPath, options = {}) {
     return false;
   }
   return true;
+}
+
+function hasReusableDesignPassStatus(agent, statusPath, options = {}) {
+  if (!isDesignAgent(agent)) {
+    return hasReusableSuccessStatus(agent, statusPath, options);
+  }
+  const statusRecord = readStatusRecordIfPresent(statusPath);
+  const basicReuseOk = Boolean(
+    statusRecord && statusRecord.code === 0 && statusRecord.promptHash === hashAgentPromptFingerprint(agent),
+  );
+  if (!basicReuseOk) {
+    return false;
+  }
+  const summary = readAgentExecutionSummary(statusPath, {
+    agent: {
+      ...agent,
+      exitContract: null,
+      components: [],
+      componentTargets: {},
+      deliverables: [],
+      proofArtifacts: [],
+    },
+    statusPath,
+    statusRecord,
+    logPath: options.logPath || null,
+    reportPath: options.reportPath || null,
+  });
+  if (!summary) {
+    return false;
+  }
+  return validateDesignSummary(agent, summary).ok;
 }
 
 function isClosureAgentId(agent, lanePaths, waveDefinition = null) {
@@ -377,6 +434,23 @@ export function selectInitialWaveRuns(agentRuns, lanePaths, waveDefinition = nul
   const implementationRuns = (agentRuns || []).filter(
     (run) => !isClosureAgentId(run?.agent, lanePaths, waveDefinition),
   );
+  const pendingDesignRuns = implementationRuns.filter(
+    (run) =>
+      isDesignAgent(run.agent) &&
+      !hasReusableDesignPassStatus(run.agent, run.statusPath, {
+        wave: waveDefinition,
+        logPath: run.logPath,
+      }),
+  );
+  if (pendingDesignRuns.length > 0) {
+    return pendingDesignRuns;
+  }
+  const implementationFanoutRuns = implementationRuns.filter(
+    (run) => !isDocsOnlyDesignAgent(run.agent),
+  );
+  if (implementationFanoutRuns.length > 0) {
+    return implementationFanoutRuns;
+  }
   return implementationRuns.length > 0 ? implementationRuns : agentRuns;
 }
 
@@ -573,6 +647,9 @@ function runsFromAgentIds(agentRuns, agentIds) {
 
 function resolveRunsForResumePhase(agentRuns, lanePaths, resumePhase, waveDefinition = null) {
   const roleBindings = resolveWaveRoleBindings(waveDefinition, lanePaths, waveDefinition?.agents);
+  if (resumePhase === "design") {
+    return (agentRuns || []).filter((run) => isDesignAgent(run.agent));
+  }
   if (resumePhase === "integrating") {
     return runsFromAgentIds(agentRuns, [roleBindings.integrationAgentId]);
   }
@@ -726,6 +803,12 @@ function resolveRelaunchRunsLegacy(agentRuns, failures, derivedState, lanePaths,
   if (derivedState?.ledger?.phase === "docs-closure") {
     return {
       runs: [runsByAgentId.get(roleBindings.documentationAgentId)].filter(Boolean),
+      barrier: null,
+    };
+  }
+  if (derivedState?.ledger?.phase === "design") {
+    return {
+      runs: agentRuns.filter((run) => isDesignAgent(run.agent)),
       barrier: null,
     };
   }
@@ -1018,6 +1101,8 @@ export function preflightWavesForExecutorAvailability(waves, lanePaths) {
 
 function phaseFromGate(gateName) {
   switch (gateName) {
+    case "designGate":
+      return "design";
     case "implementationGate":
     case "componentGate":
     case "helperAssignmentBarrier":

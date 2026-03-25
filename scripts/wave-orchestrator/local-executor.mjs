@@ -173,6 +173,11 @@ function formatWaveEvalLine(evalMarker, detail) {
   return `[wave-eval] state=satisfied targets=${targetIds.length} benchmarks=${benchmarkIds.length} regressions=0${targetIdSegment}${benchmarkIdSegment} detail=${detail}`;
 }
 
+function isDesignAgentPrompt(rawPrompt) {
+  const text = String(rawPrompt || "");
+  return /\[wave-design\]/i.test(text) || /\bwave design\b/i.test(text);
+}
+
 export function resolveRepoOwnedDeliverablePath(relPath) {
   if (!relPath || path.isAbsolute(relPath)) {
     throw new Error(`Unsafe deliverable path: ${String(relPath || "")}`);
@@ -277,6 +282,8 @@ export function runLocalExecutorCli(argv) {
   const contQaAgent = agentId === contQaAgentId;
   const contEvalAgent = agentId === contEvalAgentId;
   const integrationAgent = agentId === integrationAgentId;
+  const designAgent = isDesignAgentPrompt(rawPrompt);
+  const implementationMarkersRequired = /\[wave-proof\]/i.test(rawPrompt);
   const ownedComponents = extractOwnedComponents(rawPrompt);
   const assignedPrompt = extractAssignedPrompt(rawPrompt);
   const ownedPaths = extractFileOwnershipPaths(assignedPrompt);
@@ -304,6 +311,21 @@ export function runLocalExecutorCli(argv) {
       console.log(
         "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=local-executor-no-deliverables",
       );
+    } else if (designAgent) {
+      console.log(
+        "[wave-design] state=ready-for-implementation decisions=1 assumptions=1 open_questions=0 detail=local-executor-no-deliverables",
+      );
+      if (implementationMarkersRequired) {
+        console.log(
+          "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-no-deliverables",
+        );
+        console.log("[wave-doc-delta] state=none detail=local-executor-no-deliverables");
+        for (const component of ownedComponents) {
+          console.log(
+            `[wave-component] component=${component.componentId} level=${component.level || "repo-landed"} state=met detail=local-executor-no-deliverables`,
+          );
+        }
+      }
     } else if (agentId === documentationAgentId) {
       console.log("[wave-doc-closure] state=no-change detail=local-executor-no-deliverables");
     } else if (agentId) {
@@ -348,6 +370,21 @@ export function runLocalExecutorCli(argv) {
     console.log(
       "[wave-integration] state=ready-for-doc-closure claims=0 conflicts=0 blockers=0 detail=local-executor-smoke",
     );
+  } else if (designAgent) {
+    console.log(
+      "[wave-design] state=ready-for-implementation decisions=2 assumptions=1 open_questions=0 detail=local-executor-smoke",
+    );
+    if (implementationMarkersRequired) {
+      console.log(
+        "[wave-proof] completion=contract durability=none proof=unit state=met detail=local-executor-smoke",
+      );
+      console.log("[wave-doc-delta] state=owned detail=local-executor-smoke");
+      for (const component of ownedComponents) {
+        console.log(
+          `[wave-component] component=${component.componentId} level=${component.level || "repo-landed"} state=met detail=local-executor-smoke`,
+        );
+      }
+    }
   } else if (agentId === documentationAgentId) {
     console.log("[wave-doc-closure] state=no-change detail=local-executor-smoke");
   } else if (agentId) {

@@ -20,7 +20,7 @@ It is not just a prompt file. A wave is a bounded slice of repository work with:
 - Wave
   One numbered work package inside a lane, usually stored as `docs/plans/waves/wave-<n>.md`.
 - Agent
-  One role inside the wave, such as implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, or deploy.
+  One role inside the wave, such as design, implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, or deploy.
 - Attempt
   One execution pass of a wave. A wave can have multiple attempts due to retries or fallback.
 - Closure
@@ -89,7 +89,7 @@ Inside each agent block, the important sections are:
 
 ## Standard Roles
 
-The starter runtime ships with three default closure roles plus up to two optional review specialists. A wave may override the role ids, but the closure semantics stay the same:
+The starter runtime ships with three default closure roles plus optional specialists. A wave may override the role ids, but the closure semantics stay the same:
 
 - `A8`
   Integration steward
@@ -101,6 +101,8 @@ The starter runtime ships with three default closure roles plus up to two option
   Optional `cont-EVAL` for iterative benchmark or output tuning; report-only by default, implementation-owning only when explicitly assigned non-report files
 - `A7`
   Optional security reviewer; report-only by default and used to publish a threat-model-first security review before integration closure
+- `D1` or another custom id
+  Optional design steward; report-first and docs/spec-owned by default, used to publish a design packet before code-owning implementation fans out. If the wave explicitly gives that same agent source-code ownership, it becomes a hybrid design steward that rejoins the later implementation fan-out.
 
 Implementation or specialist agents own the actual work slices. Closure roles do not replace implementation ownership; they decide whether the combined result is closure-ready. `cont-EVAL` is the one hybrid role: most waves keep it report-only, but human-authored waves may assign explicit tuning files to `E0`, in which case it must satisfy both implementation proof and eval proof.
 
@@ -109,11 +111,12 @@ Implementation or specialist agents own the actual work slices. Closure roles do
 1. Author or draft the wave.
 2. Run `wave launch --dry-run --no-dashboard`.
 3. The launcher parses the wave, resolves executors and skills, rebuilds reducer state, and materializes operator surfaces.
-4. A live run launches implementation agents first when implementation work remains.
-5. Agents write structured coordination events instead of relying on ad hoc terminal output.
-6. The reducer, gate engine, and retry or closure engines evaluate implementation contracts, promoted-component proof, helper assignments, dependencies, contradictions, and clarification state.
-7. If implementation is ready, closure runs in order: optional `cont-EVAL`, optional security review, integration, documentation, then cont-QA.
-8. The attempt is captured in per-wave traces, ledgers, inboxes, summaries, and copied artifacts.
+4. A live run launches design agents first when the wave declares them.
+5. Code-owning implementation agents start only after every design packet is `ready-for-implementation`; hybrid design stewards rejoin that implementation fan-out once the design gate clears.
+6. Agents write structured coordination events instead of relying on ad hoc terminal output.
+7. The reducer, gate engine, and retry or closure engines evaluate design readiness, implementation contracts, promoted-component proof, helper assignments, dependencies, contradictions, and clarification state.
+8. If implementation is ready, closure runs in order: optional `cont-EVAL`, optional security review, integration, documentation, then cont-QA.
+9. The attempt is captured in per-wave traces, ledgers, inboxes, summaries, and copied artifacts.
 
 ## Runtime And Operating Posture
 
@@ -170,6 +173,7 @@ That is why switching an agent between Codex, Claude, or OpenCode does not requi
 A wave is not done because an agent said so. It is done only when the runtime surfaces agree:
 
 - implementation exit contracts pass
+- if present, design packets are complete and every design worker reports `ready-for-implementation`
 - required deliverables exist and stay within ownership boundaries
 - required proof artifacts exist when the wave declares proof-first live evidence
 - required component proof and promotions pass

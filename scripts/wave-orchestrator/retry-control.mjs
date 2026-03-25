@@ -10,7 +10,11 @@ import {
   readWaveControlPlaneState,
   syncWaveControlPlaneProjections,
 } from "./control-plane.mjs";
-import { isSecurityReviewAgent } from "./role-helpers.mjs";
+import {
+  isDesignAgent,
+  isDocsOnlyDesignAgent,
+  isSecurityReviewAgent,
+} from "./role-helpers.mjs";
 import { ensureDirectory, parseNonNegativeInt } from "./shared.mjs";
 
 function uniqueAgentIds(values) {
@@ -188,7 +192,18 @@ export function resolveRetryOverrideAgentIds(waveDefinition, lanePaths, override
   );
   if (resumePhase === "implementation") {
     return agents
-      .filter((agent) => agent?.agentId && !closureAgentIds.has(agent.agentId) && !isSecurityReviewAgent(agent))
+      .filter(
+        (agent) =>
+          agent?.agentId &&
+          !closureAgentIds.has(agent.agentId) &&
+          !isSecurityReviewAgent(agent) &&
+          !isDocsOnlyDesignAgent(agent),
+      )
+      .map((agent) => agent.agentId);
+  }
+  if (resumePhase === "design") {
+    return agents
+      .filter((agent) => isDesignAgent(agent))
       .map((agent) => agent.agentId);
   }
   if (resumePhase === "integrating") {

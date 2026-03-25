@@ -17,6 +17,8 @@ import {
 import { resolveEvalTargetsAgainstCatalog } from "./evals.mjs";
 import {
   isContEvalImplementationOwningAgent,
+  isDesignAgent,
+  isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
 } from "./role-helpers.mjs";
 
@@ -199,6 +201,8 @@ export function buildExecutionPrompt({
   evalTargets = null,
   benchmarkCatalogPath = null,
   sharedPlanDocs = null,
+  designPacketPaths = null,
+  designExecutionMode = null,
   contQaAgentId = "A0",
   contEvalAgentId = "E0",
   integrationAgentId = "A8",
@@ -222,6 +226,10 @@ export function buildExecutionPrompt({
   const contEvalImplementationOwning = isContEvalImplementationOwningAgent(agent, {
     contEvalAgentId,
   });
+  const hybridDesignAgent = isImplementationOwningDesignAgent(agent);
+  const designAgent = isDesignAgent(agent);
+  const designImplementationPass = designAgent && hybridDesignAgent && designExecutionMode === "implementation-pass";
+  const designPacketPass = designAgent && !designImplementationPass;
   const resolvedEvalTargets = (() => {
     try {
       return resolveEvalTargetsAgainstCatalog(evalTargets, { benchmarkCatalogPath }).targets;
@@ -269,6 +277,22 @@ export function buildExecutionPrompt({
         "- Use `clear` only when no unresolved findings or approvals remain. Use `blocked` only when the wave must stop before integration.",
       ]
     : [];
+  const designRequirements = designAgent
+    ? [
+        designImplementationPass
+          ? "- You are in the hybrid design steward's implementation follow-through pass. Keep the design packet current, implement only your explicit owned paths, and finish with both `[wave-design]` and the normal implementation proof markers."
+          : "- You are the wave's design steward. Stay packet-first and docs/spec-owned unless the wave explicitly assigns more.",
+        "- Leave one design packet with these sections in order: `Problem`, `Constraints`, `Decisions`, `Assumptions`, `Open Questions`, `Interface Impacts`, `Validation Plan`, `Implementation Handoff`.",
+        "- Emit one final structured design marker: `[wave-design] state=<ready-for-implementation|needs-clarification|blocked> decisions=<n> assumptions=<n> open_questions=<n> detail=<short-note>`.",
+        "- Use `ready-for-implementation` only when downstream implementation owners can start without unresolved design ambiguity.",
+        "- Use `needs-clarification` when the wave should stop for a specific question or decision before coding starts.",
+        ...(hybridDesignAgent && !designImplementationPass
+          ? [
+              "- This wave also assigns you explicit implementation-owned files, but this first pass is still design-only. Do not claim implementation proof yet; the code-owning pass starts only after the design packet is ready.",
+            ]
+          : []),
+      ]
+    : [];
   const coordinationCommand = [
     "pnpm exec wave coord post",
     `--lane ${lane}`,
@@ -280,6 +304,7 @@ export function buildExecutionPrompt({
   ].join(" ");
   const implementationRequirements =
     ![contQaAgentId, documentationAgentId].includes(agent.agentId) &&
+    (!designAgent || designImplementationPass) &&
     !isSecurityReviewAgent(agent) &&
     (agent.agentId !== contEvalAgentId || contEvalImplementationOwning)
       ? [
@@ -294,7 +319,8 @@ export function buildExecutionPrompt({
           `- Route unresolved architecture, integration, durability, ops, or docs issues through \`${coordinationCommand}\`. Do not append \`[wave-gap]\` lines after the final implementation markers.`,
         ]
       : [];
-  const exitContractLines = agent.exitContract
+  const exitContractLines =
+    implementationRequirements.length > 0 && agent.exitContract
     ? [
         "Exit contract for this run:",
         `- completion: ${agent.exitContract.completion}`,
@@ -385,6 +411,7 @@ export function buildExecutionPrompt({
       : [];
   const ownedComponentLines =
     ![contQaAgentId, documentationAgentId].includes(agent.agentId) &&
+    (!designAgent || designImplementationPass) &&
     (agent.agentId !== contEvalAgentId || contEvalImplementationOwning) &&
     Array.isArray(agent.components) &&
     agent.components.length > 0
@@ -398,6 +425,7 @@ export function buildExecutionPrompt({
         ]
       : [];
   const deliverableLines =
+    (!designAgent || designImplementationPass) &&
     Array.isArray(agent.deliverables) && agent.deliverables.length > 0
       ? [
           "Deliverables required for this agent:",
@@ -405,7 +433,18 @@ export function buildExecutionPrompt({
           "",
         ]
       : [];
+  const designPacketLines =
+    !designAgent &&
+    Array.isArray(designPacketPaths) &&
+    designPacketPaths.length > 0
+      ? [
+          "Same-wave design packets to read before coding:",
+          ...designPacketPaths.map((designPacketPath) => `- ${designPacketPath}`),
+          "",
+        ]
+      : [];
   const proofArtifactLines =
+    implementationRequirements.length > 0 &&
     Array.isArray(agent.proofArtifacts) && agent.proofArtifacts.length > 0
       ? [
           "Proof artifacts required for this agent:",
@@ -473,6 +512,7 @@ export function buildExecutionPrompt({
     ...contEvalRequirements,
     ...docStewardRequirements,
     ...securityRequirements,
+    ...designRequirements,
     ...implementationRequirements,
     `- Update docs impacted by your implementation. If your work changes status, sequencing, ownership, or explicit proof expectations, update the relevant docs. If shared plan docs need changes outside your owned files, post the exact doc paths and exact delta needed for ${sharedPlanDocList} as a coordination record instead of leaving documentation drift for later cleanup.`,
     "- If the wave defines a documentation steward or other explicit owner for shared plan docs, coordinate those updates through that owner, notify them as soon as the delta is known, and stay engaged until they confirm `closed` or `no-change`. Do not treat the ownership boundary as the definition of done.",
@@ -503,6 +543,7 @@ export function buildExecutionPrompt({
     ...evalTargetLines,
     ...ownedComponentLines,
     ...deliverableLines,
+    ...designPacketLines,
     ...proofArtifactLines,
     ...skillLines,
     ...context7PromptLines,

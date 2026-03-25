@@ -188,6 +188,57 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("docs/compat-lane/plans/migration.md");
   });
 
+  it("treats hybrid design stewards as packet-first on the first pass and proof-owning on the implementation pass", () => {
+    const baseInput = {
+      lane: "main",
+      wave: 6,
+      agent: {
+        agentId: "D1",
+        title: "Design Steward",
+        slug: "6-d1",
+        prompt: "Own the design handoff and runtime follow-through.",
+        rolePromptPaths: ["docs/agents/wave-design-role.md"],
+        ownedPaths: [
+          "docs/plans/waves/design/wave-6-D1.md",
+          "src/runtime.ts",
+        ],
+        exitContract: {
+          completion: "contract",
+          durability: "durable",
+          proof: "integration",
+          docImpact: "owned",
+        },
+        components: ["runtime-core"],
+        componentTargets: {
+          "runtime-core": "repo-landed",
+        },
+        proofArtifacts: [
+          { path: "coverage/runtime.json", kind: "test-report" },
+        ],
+        deliverables: ["src/runtime.ts"],
+      },
+      orchestratorId: "main-orch",
+      messageBoardPath: "/repo/.tmp/main-wave-launcher/messageboards/wave-6.md",
+      messageBoardSnapshot: "# Wave 6 Message Board",
+    };
+
+    const designPassPrompt = buildExecutionPrompt(baseInput);
+    expect(designPassPrompt).toContain("this first pass is still design-only");
+    expect(designPassPrompt).toContain("[wave-design]");
+    expect(designPassPrompt).not.toContain("[wave-proof]");
+
+    const implementationPassPrompt = buildExecutionPrompt({
+      ...baseInput,
+      designExecutionMode: "implementation-pass",
+    });
+    expect(implementationPassPrompt).toContain("implementation follow-through pass");
+    expect(implementationPassPrompt).toContain("[wave-design]");
+    expect(implementationPassPrompt).toContain("[wave-proof]");
+    expect(implementationPassPrompt).toContain("[wave-doc-delta]");
+    expect(implementationPassPrompt).toContain("Components you own in this wave:");
+    expect(implementationPassPrompt).toContain("Proof artifacts required for this agent:");
+  });
+
   it("describes scoped Context7 access and injected external docs when present", () => {
     const prompt = buildExecutionPrompt({
       lane: "main",

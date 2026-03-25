@@ -1,6 +1,6 @@
 # Current State
 
-- The starter workspace in this source repo reflects the `0.8.4` package release surface.
+- The published package is `0.8.5`, and that release now includes the optional pre-implementation `design` worker role plus the `role-design` and `tui-design` starter bundles.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
@@ -26,6 +26,7 @@
   - lane config can attach skills by base, role, runtime, and deploy kind
   - wave agents can add explicit `### Skills`
   - runtime projections are generated for Codex, Claude, OpenCode, and local execution
+  - the starter surface includes `skills/role-design/`, `skills/tui-design/`, `roles.designRolePromptPath`, and `executors.profiles.design-pass`
 - The runtime now includes:
   - a canonical authority set built from wave definitions, coordination JSONL logs, and control-plane JSONL events
   - immutable attempt-scoped result envelopes for structured role outcomes under `.tmp/<lane>-wave-launcher/results/wave-<n>/attempt-<a>/<agent>.json`
@@ -49,6 +50,8 @@
   - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for local-first, best-effort reporting to the Railway-hosted analysis plane
   - reducer-driven live state snapshots plus persisted machine-readable shadow diffs for helper-assignment, blocker, contradiction, closure, and retry slices
   - reducer-authoritative helper-assignment blocking, retry target selection, and resume planning, with live gate and closure reads now driven from validated result envelopes
+  - optional design agents that publish validated design packets under `docs/plans/waves/design/wave-<n>-<agent>.md`, gate implementation through `designGate`, and run before code-owning implementation agents
+  - hybrid design stewards that stay docs-first by default but can explicitly own source-code slices, rejoin the implementation fan-out after the design pass, and satisfy both the design packet contract and normal implementation proof
   - hermetic replay that reconstructs contradiction-driven blockers from bundled control-plane events
   - contradiction replay for non-promoted traces that no longer depends on copied component-matrix parsing
   - consistent `requireComponentPromotionsFromWave` threshold handling across both component-promotion proof validation and component-matrix current-level validation
@@ -75,6 +78,7 @@
   - open capability-targeted requests become explicit helper assignments
   - helper assignments are written into coordination state, the ledger, summaries, and traces
   - helper assignments remain blocking until the linked follow-up resolves
+- Waves with a `design` worker role now run that design pass before code-owning implementation starts; implementation resumes only after every design packet is `ready-for-implementation`.
 - Closure now runs in staged order through the wave's effective closure roles: implementation and proof, then optional `cont-EVAL`, then optional security review, then integration, then documentation, then `cont-QA`. Starter defaults remain `E0`, security reviewer, `A8`, `A9`, and `A0` when a wave does not override them.
 - `E0` is hybrid: planner-generated waves keep it report-only, while hand-authored waves may assign explicit tuning files and thereby make `E0` participate in implementation proof gating.
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.

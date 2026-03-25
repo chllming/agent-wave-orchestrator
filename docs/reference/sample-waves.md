@@ -1,11 +1,11 @@
 ---
 title: "Sample Waves"
-summary: "Showcase-first sample waves that demonstrate the current 0.8.4 Wave surface."
+summary: "Showcase-first sample waves that demonstrate the shipped 0.8.5 authored surface, including the optional design-role path."
 ---
 
 # Sample Waves
 
-This guide points to showcase-first sample waves that demonstrate the current `0.8.4` authored Wave surface.
+This guide points to showcase-first sample waves that demonstrate the shipped `0.8.5` authored Wave surface.
 
 The examples are intentionally denser than typical production waves. Their job is to teach the current authoring and runtime surface quickly, not to be the smallest possible launch-ready files.
 
@@ -15,7 +15,10 @@ The examples are intentionally denser than typical production waves. Their job i
   Shows what a good `repo-landed` outcome looks like when one promoted component only closes honestly if desired-state records, reconcile-loop substrate, and cluster-view surfaces land together. It emphasizes maturity discipline, explicit deliverables, and shared-plan closure without drifting into `pilot-live` claims.
 
 - [Full modern sample wave](../plans/examples/wave-example-live-proof.md)
-  Shows the combined `0.8.4` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
+  Shows the combined `0.8.5` authored surface in one file: closure roles, `E0`, optional security review, delegated and pinned benchmark targets, richer executor config, `### Skills`, `### Capabilities`, `### Deliverables`, `### Exit contract`, `### Proof artifacts`, sticky retry, deploy environments, and proof-first live-wave structure.
+
+- [Optional design-steward handoff wave](../plans/examples/wave-example-design-handoff.md)
+  Shows the shipped design-role surface: one pre-implementation design steward publishes a design packet, downstream implementation owners read that packet before coding, and normal closure roles still decide final completion. For terminal or operator-surface work, pair that shape with explicit `tui-design` in the design steward's `### Skills`. For the hybrid variant, explicitly give that same design agent implementation-owned paths and the normal implementation contract sections.
 
 ## What These Examples Teach
 
@@ -35,10 +38,11 @@ The examples are intentionally denser than typical production waves. Their job i
 - sticky retry for proof-bearing owners
 - deploy environments and provider-skill examples
 - infra and deploy-verifier specialist slices
+- optional pre-implementation design packets and design-to-implementation handoff
 
 ## Feature Coverage Map
 
-Together these samples cover the main surfaces added or hardened for `0.8.4`:
+Together these samples cover the main surfaces added or hardened through `0.8.5`:
 
 - repo-landed maturity discipline and anti-overclaim framing
 - explicit shared-plan closure for future-wave safety
@@ -56,6 +60,7 @@ Together these samples cover the main surfaces added or hardened for `0.8.4`:
 - proof-first live-wave prompts
 - deploy environments and deploy-kind-aware skills
 - integration, documentation, and cont-QA closure-role structure
+- optional `design` worker role and `design-pass` executor profile
 
 ## When To Copy Literally Vs Adapt
 
@@ -76,6 +81,7 @@ Adapt more aggressively when:
 ## How This Example Maps To Other Docs
 
 - Use [docs/guides/planner.md](../guides/planner.md) for the planner-generated baseline, then use these samples to see how a human would enrich the generated draft for either repo-landed or proof-first work.
+- Use [Optional design-steward handoff wave](../plans/examples/wave-example-design-handoff.md) when the wave should start with a reusable design packet before implementation begins.
 - Use [docs/evals/README.md](../evals/README.md) with the full modern sample when you need to see delegated and pinned benchmark targets in a real wave.
 - Use [docs/reference/live-proof-waves.md](./live-proof-waves.md) with the full modern sample when you need proof-first authoring for `pilot-live` and above.
 - Use [docs/plans/wave-orchestrator.md](../plans/wave-orchestrator.md) for the operational runbook that explains how the launcher interprets these sections.
@@ -83,9 +89,10 @@ Adapt more aggressively when:
 ## Suggested Reading Order
 
 1. Start with [High-fidelity repo-landed rollout wave](../plans/examples/wave-example-rollout-fidelity.md) if you want the clearest example of good closure-ready wave fidelity for a repo-only outcome.
-2. Read [Full modern sample wave](../plans/examples/wave-example-live-proof.md) if you want the denser proof-first and eval-heavy surface.
-3. Read [docs/evals/README.md](../evals/README.md) if you want more background on benchmark target selection.
-4. Read [docs/reference/live-proof-waves.md](./live-proof-waves.md) if you want more detail on proof-first `pilot-live` authoring.
+2. Read [Full modern sample wave](../plans/examples/wave-example-live-proof.md) if you want the denser proof-first and eval-heavy `0.8.5` surface.
+3. Read [Optional design-steward handoff wave](../plans/examples/wave-example-design-handoff.md) if the task needs a design packet before implementation fan-out.
+4. Read [docs/evals/README.md](../evals/README.md) if you want more background on benchmark target selection.
+5. Read [docs/reference/live-proof-waves.md](./live-proof-waves.md) if you want more detail on proof-first `pilot-live` authoring.
 
 ## Why These Examples Live In `docs/plans/examples/`
 

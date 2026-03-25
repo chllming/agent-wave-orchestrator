@@ -9,6 +9,7 @@ export const DEFAULT_SKILLS_DIR = "skills";
 export const SKILL_ID_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
 export const SUPPORTED_SKILL_RUNTIMES = ["codex", "claude", "opencode", "local"];
 export const SUPPORTED_SKILL_ROLES = [
+  "design",
   "implementation",
   "integration",
   "documentation",

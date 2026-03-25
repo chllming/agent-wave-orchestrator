@@ -28,6 +28,7 @@ export const DEFAULT_INTEGRATION_ROLE_PROMPT_PATH = "docs/agents/wave-integratio
 export const DEFAULT_DOCUMENTATION_ROLE_PROMPT_PATH =
   "docs/agents/wave-documentation-role.md";
 export const DEFAULT_SECURITY_ROLE_PROMPT_PATH = "docs/agents/wave-security-role.md";
+export const DEFAULT_DESIGN_ROLE_PROMPT_PATH = "docs/agents/wave-design-role.md";
 export const DEFAULT_TERMINALS_PATH = ".vscode/terminals.json";
 export const DEFAULT_DOCS_DIR = "docs";
 export const DEFAULT_STATE_ROOT = ".tmp";
@@ -347,6 +348,10 @@ function normalizeRoles(rawRoles = {}) {
     securityRolePromptPath: normalizeRepoRelativePath(
       rawRoles.securityRolePromptPath || DEFAULT_SECURITY_ROLE_PROMPT_PATH,
       "roles.securityRolePromptPath",
+    ),
+    designRolePromptPath: normalizeRepoRelativePath(
+      rawRoles.designRolePromptPath || DEFAULT_DESIGN_ROLE_PROMPT_PATH,
+      "roles.designRolePromptPath",
     ),
   };
 }

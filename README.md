@@ -28,16 +28,18 @@ The framework does three things:
 1. Define shared docs plus `docs/plans/waves/wave-<n>.md` files, or generate them with `wave draft`.
 2. Run `wave launch --dry-run` to validate the wave and materialize prompts, shared summaries, inboxes, dashboards, and executor previews before any live execution.
 3. During live execution, implementation agents write claims, evidence, requests, and decisions into the canonical coordination log instead of relying on ad hoc terminal narration.
-4. The reducer and derived-state engines materialize blackboard projections from the canonical authority set: rolling board, shared summary, per-agent inboxes, ledger, docs queue, dependency views, and integration summaries. Helper-assignment blocking, retry target selection, and resume planning read from reducer state during live runs.
-5. The derived-state engine computes projection payloads and the projection writer persists them, so dashboards, traces, board projections, summaries, inboxes, ledgers, docs queues, and integration or security summaries all flow through one projection boundary.
-6. Live closure is result-envelope-first. Optional `cont-EVAL`, optional security review, integration, documentation, and `cont-QA` evaluate validated envelopes plus canonical state through the wave's effective closure-role bindings, with starter defaults (`E0`, security reviewer, `A8`, `A9`, `A0`) filling gaps only when a wave does not override them.
+4. Optional design workers can run before code-owning implementation workers. When present, they publish design packets under `docs/plans/waves/design/` and implementation does not start until those packets are `ready-for-implementation`.
+5. Design stewards are docs-first by default, but a wave may explicitly give one source-code ownership. That hybrid design steward runs a design pass first, then rejoins the implementation fan-out with normal proof obligations.
+6. The reducer and derived-state engines materialize blackboard projections from the canonical authority set: rolling board, shared summary, per-agent inboxes, ledger, docs queue, dependency views, and integration summaries. Helper-assignment blocking, retry target selection, and resume planning read from reducer state during live runs.
+7. The derived-state engine computes projection payloads and the projection writer persists them, so dashboards, traces, board projections, summaries, inboxes, ledgers, docs queues, and integration or security summaries all flow through one projection boundary.
+8. Live closure is result-envelope-first. Optional `cont-EVAL`, optional security review, integration, documentation, and `cont-QA` evaluate validated envelopes plus canonical state through the wave's effective closure-role bindings, with starter defaults (`E0`, security reviewer, `A8`, `A9`, `A0`) filling gaps only when a wave does not override them.
 
 ## Runtime Modules
 
 - `launcher.mjs`
   Thin orchestrator: parses args, acquires the launcher lock, and sequences the engines.
 - `implementation-engine.mjs`
-  Selects the implementation fan-out for a wave or retry attempt.
+  Selects the design-first or implementation fan-out for a wave or retry attempt.
 - `derived-state-engine.mjs`
   Computes shared summary, inboxes, assignments, dependency views, ledger, docs queue, and integration/security projection payloads from canonical state.
 - `gate-engine.mjs`
@@ -101,18 +103,18 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.4`
-- Release tag: [`v0.8.4`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.4)
+- `@chllming/wave-orchestration@0.8.5`
+- Release tag: [`v0.8.5`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.5)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.4`:
+Highlights in `0.8.5`:
 
-- Hermetic contradiction replay no longer depends on component-matrix parsing when the trace does not declare promoted components.
-- `requireComponentPromotionsFromWave` now gates both component-promotion proof validation and component-matrix current-level validation consistently in live and replay paths.
-- Projection persistence is now centralized under `projection-writer.mjs`, while `derived-state-engine.mjs` stays compute-only.
-- The migration guide now includes explicit upgrade guidance for `0.8.3`, `0.8.0`-`0.8.2`, `0.6.x`-`0.7.x`, and older starter repos instead of only a narrow point upgrade.
-- Release docs, sample waves, current-state notes, and npm publishing instructions now point at the `0.8.4` surface.
+- The optional `design` worker role is now part of the shipped release surface, including `docs/agents/wave-design-role.md`, `skills/role-design/`, and `skills/tui-design/`.
+- Design stewards are docs-first by default, but waves can now explicitly assign code ownership and get a hybrid two-pass flow: design packet first, implementation follow-through second.
+- Gates, retry or resume planning, reducer state, prompts, local-executor smoke behavior, and result envelopes now all agree on that hybrid design-steward contract.
+- The migration guide is now a practical upgrade document for fresh adoption plus upgrades from `0.8.3`, `0.8.4`, `0.8.0`-`0.8.4`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier.
+- Release docs, sample waves, current-state notes, and publishing instructions now point at the `0.8.5` surface.
 
 Requirements:
 
@@ -140,6 +142,15 @@ pnpm exec wave init --adopt-existing
 ```
 
 Fresh init also seeds a starter `skills/` library plus `docs/evals/benchmark-catalog.json`. The launcher projects those skill bundles into Codex, Claude, OpenCode, and local executor overlays after the final runtime for each agent is resolved, and waves that include `cont-EVAL` can declare `## Eval targets` against that catalog.
+
+The starter surface includes:
+
+- `docs/agents/wave-design-role.md`
+- `skills/role-design/`
+- `skills/tui-design/` for terminal and operator-surface design work
+- `wave.config.json` defaults for `roles.designRolePromptPath`, `skills.byRole.design`, and the `design-pass` executor profile
+
+Interactive `wave draft` scaffolds the docs-first design-steward path. If you want a hybrid design steward, author that wave explicitly or use an agentic planner payload that gives the same design agent implementation-owned paths plus the normal implementation contract sections.
 
 When runtime launch commands detect a newer npmjs release, Wave prints a non-blocking update notice on stderr. The fast path is `pnpm exec wave self-update`, which updates the dependency, prints the changelog delta, and then records the workspace upgrade report.
 
@@ -213,8 +224,10 @@ codex mcp list
 - [docs/concepts/runtime-agnostic-orchestration.md](./docs/concepts/runtime-agnostic-orchestration.md): how one orchestration substrate spans Claude, Codex, OpenCode, and local execution
 - [docs/concepts/context7-vs-skills.md](./docs/concepts/context7-vs-skills.md): compiled context, external truth, and repo-owned operating knowledge
 - [docs/guides/planner.md](./docs/guides/planner.md): `wave project` and `wave draft` workflow
+- [docs/agents/wave-design-role.md](./docs/agents/wave-design-role.md): standing prompt for the optional pre-implementation design steward
 - [docs/guides/terminal-surfaces.md](./docs/guides/terminal-surfaces.md): tmux, VS Code terminal registry, and dry-run surfaces
 - [docs/reference/sample-waves.md](./docs/reference/sample-waves.md): showcase-first authored waves, including a high-fidelity repo-landed rollout example
+- [docs/plans/examples/wave-example-design-handoff.md](./docs/plans/examples/wave-example-design-handoff.md): optional design-steward example that hands a validated design packet to downstream implementation owners
 - [docs/plans/examples/wave-example-rollout-fidelity.md](./docs/plans/examples/wave-example-rollout-fidelity.md): concrete example of what good wave fidelity looks like for a narrow, closure-ready outcome
 - [docs/reference/cli-reference.md](./docs/reference/cli-reference.md): complete CLI syntax for all commands and flags
 - [docs/plans/end-state-architecture.md](./docs/plans/end-state-architecture.md): canonical runtime architecture, engine boundaries, and artifact ownership

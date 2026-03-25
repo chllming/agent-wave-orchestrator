@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.8.5 - 2026-03-25
+
+### Added
+
+- Shipped the optional `design` worker role as a first-class release surface instead of a main-branch-only addition, including the standing prompt in `docs/agents/wave-design-role.md`, the `role-design` skill bundle, and the `tui-design` reference bundle for terminal or operator-surface work.
+- Added support for hybrid design stewards: design agents stay docs-first by default, but waves can now explicitly give them implementation ownership so the same agent runs a design pass first and then rejoins the implementation fan-out with normal proof obligations.
+- Added regression coverage for hybrid design validation, prompt shaping, local-executor marker emission, reducer task splitting, and post-design implementation fan-out.
+
+### Changed
+
+- Updated README, current-state notes, planner and authoring guides, sample-wave docs, skills reference, and architecture docs so they all describe the shipped `0.8.5` surface instead of distinguishing `0.8.4` from unpublished main-branch behavior.
+- Rewrote the migration guide as a practical upgrade guide for fresh adoption plus upgrades from `0.8.4`, `0.8.0`-`0.8.4`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier, with explicit repo-owned starter-surface sync guidance and concrete validation steps.
+
+### Fixed And Hardened
+
+- Design-aware validation, gates, retry or resume planning, reducer state, task materialization, and result-envelope projection now agree on the same hybrid-design contract instead of treating all design agents as permanently report-only.
+- Hybrid design prompts now switch cleanly between packet-first design work and implementation follow-through, and local-executor smoke behavior now emits both `[wave-design]` and implementation proof markers when that second pass is active.
 
 ## 0.8.4 - 2026-03-25
 

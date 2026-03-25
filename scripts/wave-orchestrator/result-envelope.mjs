@@ -7,6 +7,7 @@ import {
 } from "./shared.mjs";
 
 export const ENVELOPE_VALID_ROLES = [
+  "design",
   "implementation",
   "integration",
   "documentation",
@@ -23,6 +24,9 @@ function inferEnvelopeRole(agent, summary) {
   }
   if (summary?.integration) {
     return "integration";
+  }
+  if (summary?.design) {
+    return "design";
   }
   if (summary?.docClosure) {
     return "documentation";
@@ -205,7 +209,11 @@ export function buildAgentResultEnvelope(agent, summary, options = {}) {
     facts,
   };
 
-  if (role === "implementation") {
+  if (
+    role === "implementation" ||
+    safeSummary.docDelta ||
+    Array.isArray(safeSummary.components)
+  ) {
     const docDelta = safeSummary.docDelta || {};
     const components = Array.isArray(safeSummary.components)
       ? safeSummary.components.map((component) => ({
@@ -222,6 +230,17 @@ export function buildAgentResultEnvelope(agent, summary, options = {}) {
         detail: docDelta.detail || null,
       },
       components,
+    };
+  }
+
+  if (role === "design") {
+    const design = safeSummary.design || {};
+    envelope.design = {
+      state: design.state || null,
+      decisions: design.decisions || 0,
+      assumptions: design.assumptions || 0,
+      openQuestions: design.openQuestions || 0,
+      detail: design.detail || null,
     };
   }
 
@@ -392,6 +411,16 @@ export function projectLegacySummaryFromEnvelope(envelope, options = {}) {
       : [];
   }
 
+  if (envelope.design) {
+    summary.design = {
+      state: envelope.design.state || null,
+      decisions: envelope.design.decisions || 0,
+      assumptions: envelope.design.assumptions || 0,
+      openQuestions: envelope.design.openQuestions || 0,
+      detail: envelope.design.detail || null,
+    };
+  }
+
   if (envelope.documentation?.docClosure) {
     summary.docClosure = {
       state: envelope.documentation.docClosure.state || "no-change",
@@ -466,6 +495,8 @@ export function projectLegacySummaryFromEnvelope(envelope, options = {}) {
 
 function requiredRoleSection(role) {
   switch (role) {
+    case "design":
+      return "design";
     case "implementation":
       return "implementation";
     case "integration":

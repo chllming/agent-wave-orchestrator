@@ -35,6 +35,8 @@ The useful path is journey-first:
   Read [concepts/context7-vs-skills.md](./concepts/context7-vs-skills.md) for the compiled-context model: shared summary, inboxes, project defaults, skills, Context7, and runtime overlays.
 - Drafting or revising waves:
   Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then use [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) as the operator runbook.
+- Adding an optional pre-implementation design steward:
+  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.8.5` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
 - Adding a security review pass:
   Read [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) and the standing reviewer prompt in [agents/wave-security-role.md](./agents/wave-security-role.md).
 - Upgrading an existing repo:

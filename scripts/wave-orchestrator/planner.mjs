@@ -317,6 +317,9 @@ function defaultTargetLevel(template) {
 }
 
 function defaultExecutorProfile(roleKind) {
+  if (roleKind === "design") {
+    return "design-pass";
+  }
   if (roleKind === "infra" || roleKind === "deploy" || roleKind === "research") {
     return "ops-triage";
   }
@@ -327,7 +330,7 @@ function defaultExecutorProfile(roleKind) {
 }
 
 function defaultExitContract(roleKind) {
-  if (roleKind === "security") {
+  if (roleKind === "security" || roleKind === "design") {
     return null;
   }
   if (roleKind === "infra" || roleKind === "deploy") {
@@ -355,6 +358,9 @@ function defaultExitContract(roleKind) {
 }
 
 function buildDefaultValidationCommand(template, roleKind) {
+  if (roleKind === "design") {
+    return "Manual review of the design packet against the wave scope, constraints, and downstream ownership.";
+  }
   if (roleKind === "security") {
     return "Manual review of the changed security-sensitive surfaces plus required proofs.";
   }
@@ -368,6 +374,9 @@ function buildDefaultValidationCommand(template, roleKind) {
 }
 
 function buildDefaultOutputSummary(template, roleKind) {
+  if (roleKind === "design") {
+    return "Summarize the design packet, key decisions, assumptions, open questions, and exact implementation handoff.";
+  }
   if (roleKind === "security") {
     return "Summarize the threat model, findings, required approvals, requested fixes, and final security disposition.";
   }
@@ -381,6 +390,9 @@ function buildDefaultOutputSummary(template, roleKind) {
 }
 
 function buildDefaultPrimaryGoal(template, roleKind, title) {
+  if (roleKind === "design") {
+    return `Produce an implementation-ready design packet for the ${title.toLowerCase()} slice before coding starts.`;
+  }
   if (roleKind === "security") {
     return `Review the ${title.toLowerCase()} slice for security risks and route exact fixes before integration.`;
   }
@@ -1067,6 +1079,9 @@ function buildWorkerAgentSpec({
   if (roleKind === "research" && !capabilities.includes("research")) {
     capabilities.push("research");
   }
+  if (roleKind === "design" && !capabilities.includes("design")) {
+    capabilities.push("design");
+  }
   return {
     agentId,
     title,
@@ -1075,6 +1090,8 @@ function buildWorkerAgentSpec({
         ? values.rolePromptPaths
         : roleKind === "security"
           ? [lanePaths.securityRolePromptPath]
+          : roleKind === "design"
+            ? [lanePaths.designRolePromptPath]
           : [],
     skills: values.skills || [],
     executor: {
@@ -1934,6 +1951,7 @@ function normalizePlannerContext7Bundle(bundle, bundleIndex) {
 function normalizePlannerWorkerAgent(rawAgent, context) {
   const agentId = cleanText(rawAgent?.agentId) || `A${context.index + 1}`;
   const roleKind = [
+    "design",
     "implementation",
     "qa",
     "infra",
@@ -3067,12 +3085,12 @@ async function collectWorkerAgents({
     const title = cleanText(await prompt.ask(`Worker ${agentId} title`, defaults.title));
     const roleKind = await prompt.askChoice(
       `Worker ${agentId} role kind`,
-      ["implementation", "qa", "infra", "deploy", "research", "security"],
+      ["design", "implementation", "qa", "infra", "deploy", "research", "security"],
       defaultRoleKind,
     );
     const executorProfile = await prompt.askChoice(
       `Worker ${agentId} executor profile`,
-      ["implement-fast", "deep-review", "eval-tuning", "docs-pass", "ops-triage", "security-review"],
+      ["implement-fast", "design-pass", "deep-review", "eval-tuning", "docs-pass", "ops-triage", "security-review"],
       defaultExecutorProfile(roleKind),
     );
     const ownedPaths = normalizeRepoPathList(
@@ -3081,6 +3099,8 @@ async function collectWorkerAgents({
           `Worker ${agentId} owned paths (comma or | separated)`,
           roleKind === "security"
             ? `.tmp/${lane}-wave-launcher/security/wave-${waveNumber}-review.md`
+            : roleKind === "design"
+              ? `docs/plans/waves/design/wave-${waveNumber}-${agentId}.md`
             : template === "infra"
             ? "scripts/,docs/plans/"
             : template === "release"
@@ -3093,7 +3113,7 @@ async function collectWorkerAgents({
     const components = normalizeListText(
       await prompt.ask(
         `Worker ${agentId} component ids (comma or | separated)`,
-        roleKind === "security"
+        roleKind === "security" || roleKind === "design"
           ? ""
           : componentPromotions.map((promotion) => promotion.componentId).join(", "),
       ),

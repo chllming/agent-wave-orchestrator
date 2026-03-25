@@ -19,7 +19,7 @@ The live runtime is organized around explicit modules:
 - `launcher.mjs`
   Thin orchestrator for CLI parsing, launcher lock handling, wave iteration, and engine sequencing.
 - `implementation-engine.mjs`
-  Chooses initial or retry implementation fan-out.
+  Chooses initial or retry fan-out, including optional design-first passes before code-owning implementation.
 - `derived-state-engine.mjs`
   Computes shared summary, inbox, assignment, dependency, ledger, docs queue, and integration or security projection payloads from canonical state.
 - `gate-engine.mjs`
@@ -41,6 +41,7 @@ The live runtime is organized around explicit modules:
 - supports transient ad-hoc runs from `.wave/adhoc/runs/` on the same runtime substrate
 - fans a wave out into one session per `## Agent ...` section
 - supports standing role imports from `docs/agents/*.md`
+- supports optional pre-implementation design stewards that publish design packets before code-owning implementation starts
 - seeds a coordination log, generated board, compiled shared summary, and per-agent inboxes
 - derives a per-wave ledger, security summary, docs queue, integration summary, and versioned per-attempt trace bundle
 - versions the runtime JSON surfaces that operators and replay tooling consume, including manifests, dashboards, relaunch plans, assignment snapshots, dependency snapshots, and run-state
@@ -52,6 +53,7 @@ The live runtime is organized around explicit modules:
 - can retry rate-limited `codex`, `claude`, and `opencode` launches with per-agent exponential backoff via `--agent-rate-limit-*`
 - supports a file-backed human feedback queue
 - performs a closure sweep so optional `cont-EVAL`, optional security review, integration, documentation, and cont-QA gates reflect final landed state through the wave's effective closure-role bindings
+- treats design packets as a first-class pre-implementation gate when a wave declares `design` workers
 - rebuilds contradiction blockers from canonical control-plane events during replay and materializes human-blocked waves as `clarifying` plus blocked `waveState`
 
 ## Main Commands
@@ -89,7 +91,7 @@ The live runtime is organized around explicit modules:
 
 ## Configuration
 
-- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, Context7 bundle-index location, and the optional `waveControl` telemetry section. The starter config also wires the optional security reviewer prompt at `docs/agents/wave-security-role.md` and the `security-review` executor profile.
+- `wave.config.json` controls docs roots, shared plan docs, role prompts, validation thresholds, executor defaults, executor profiles, per-lane runtime policy, skill attachment policy, component-cutover matrix paths, capability-routing preferences, Context7 bundle-index location, and the optional `waveControl` telemetry section. The starter config also wires the optional security reviewer prompt at `docs/agents/wave-security-role.md`, the optional design steward prompt at `docs/agents/wave-design-role.md`, plus the `security-review` and `design-pass` executor profiles.
 - `docs/context7/bundles.json` controls allowed external library bundles and lane defaults.
 - `docs/evals/README.md` explains how to author delegated versus pinned `## Eval targets`, including the coordination-oriented benchmark families.
 - `docs/reference/live-proof-waves.md` explains how to author proof-first `pilot-live` and higher-maturity waves with `### Proof artifacts`, sticky executors, and operator command capture.
@@ -113,7 +115,7 @@ The live runtime is organized around explicit modules:
 - Starter bundles in this repo cover:
   - core Wave coordination and repo coding rules
   - runtime packs for Codex, Claude, OpenCode, and local execution
-  - role packs for implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, deploy, research, and planner work
+  - role packs for design, implementation, `cont-EVAL`, security review, integration, documentation, cont-QA, infra, deploy, research, and planner work
   - deploy and environment packs for Railway, Docker Compose, Kubernetes, SSH/manual rollout, and generic custom deploys
   - explicit provider packs for GitHub release flow and AWS norms when a wave or lane wants to attach them
 
@@ -257,6 +259,8 @@ pnpm exec wave changelog --since-installed
   Canonical append-only JSONL log of operator tasks, rerun requests, proof bundles, attempt lifecycle, contradictions, facts, and human-input events. This is the canonical lifecycle state for `wave control`. Telemetry queue lives under `control-plane/telemetry/`.
 - result envelopes: `.tmp/<lane>-wave-launcher/results/`
   Attempt-scoped immutable structured result snapshots used by reducer, gate, retry, and replay flows.
+- design packets: `docs/plans/waves/design/`
+  Repo-owned authored outputs from optional design stewards. These are not runtime state, but the validated packet path is referenced by summaries, envelopes, reducer state, and traces.
 - proof registries: `.tmp/<lane>-wave-launcher/proof/`
   Projected from control-plane state for compatibility. Operator-registered authoritative proof bundles that feed integration, cont-QA, and replay.
 - retry overrides: `.tmp/<lane>-wave-launcher/control/`
@@ -320,6 +324,12 @@ The launcher entrypoint in `scripts/wave-orchestrator/launcher.mjs` now acts as 
 - `## Deploy environments` lets the wave declare named deployment targets. The default deploy environment kind is also used for deploy-kind skill attachment.
 - Lane runtime policy can assign a default executor by role even when the wave omits `### Executor`.
 - Use `### Role prompts` for standing-role imports from `docs/agents/*.md`.
+- Optional design stewards are declared by importing `docs/agents/wave-design-role.md` on a worker that owns a design packet.
+- A design steward must own at least one design packet path, usually `docs/plans/waves/design/wave-<n>-<agentId>.md`.
+- Design stewards are docs/spec-only by default. Keep source-code ownership on implementation agents unless the wave explicitly chooses otherwise.
+- If the wave explicitly gives a design steward implementation-owned paths, that same agent becomes a hybrid design steward: it runs the packet pass first, then rejoins implementation and must satisfy the normal implementation proof contract.
+- Design stewards that own terminal UX, dashboards, or other operator-surface work should add `tui-design` in `### Skills`.
+- Design readiness requires one final structured marker: `[wave-design] state=<ready-for-implementation|needs-clarification|blocked> decisions=<n> assumptions=<n> open_questions=<n> detail=<short-note>`. Hybrid design stewards re-emit that marker during the later implementation pass so the latest envelope stays self-contained.
 - Optional security review is declared by importing `docs/agents/wave-security-role.md` on a report-owning reviewer agent. The starter planner uses a report path under `.tmp/<lane>-wave-launcher/security/` and the `security-review` executor profile.
 - A security reviewer must own at least one security report path. Any owned `.md` or `.txt` path containing `security` is accepted by the validator.
 - Security reviewers are report-only by default. They should route fixes to the owning implementation agent instead of taking over product-code ownership.

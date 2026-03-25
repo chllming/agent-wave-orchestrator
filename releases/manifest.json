@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.5",
+      "date": "2026-03-25",
+      "summary": "Shipped design-role support, hybrid design-steward execution, release-surface alignment, and a practical migration guide.",
+      "features": [
+        "The optional `design` worker role is now part of the published release surface, including the standing design prompt, `role-design`, and `tui-design` starter bundles.",
+        "Design stewards are docs-first by default, but waves can now explicitly give them implementation ownership so the same agent runs a design pass first and then rejoins implementation with normal proof obligations.",
+        "Design-aware validation, prompts, gates, retry or resume planning, reducer state, local-executor smoke behavior, and result-envelope projection now all agree on the same hybrid-design contract.",
+        "The migration guide now covers fresh adoption plus upgrades from `0.8.4`, `0.8.0`-`0.8.4`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier, including repo-owned starter-surface sync guidance and `planner-agentic` corpus notes.",
+        "Shipped package metadata, README, current-state notes, sample-wave docs, and publishing guidance now point at the `0.8.5` release surface."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.5` design-role and hybrid-design behavior.",
+        "If your repo copied starter prompts, skills, or authoring docs, sync `docs/agents/wave-design-role.md`, `skills/role-design/`, `skills/tui-design/`, `wave.config.json` design-role keys, and any local planner or runbook pages that should describe the new design-steward model.",
+        "If a repo uses hybrid design stewards, make sure each one still owns a design packet path and that any explicit implementation ownership also carries the expected exit contract, deliverables, proof artifacts, and component declarations where your lane validation requires them.",
+        "If your repo uses planner workflows and copied the planner starter corpus, keep `docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry in sync before relying on local planner docs."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.4",
       "date": "2026-03-25",
       "summary": "Contradiction replay repair, consistent component-promotion thresholds, projection-writer persistence centralization, and 0.8.4 release-surface alignment.",

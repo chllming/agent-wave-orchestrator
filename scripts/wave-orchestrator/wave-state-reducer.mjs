@@ -181,6 +181,18 @@ function derivePhase({
   const implementationTasks = (tasks || []).filter(
     (task) => task.taskType === "implementation",
   );
+  const designTasks = (tasks || []).filter(
+    (task) => task.taskType === "design",
+  );
+  const allDesignReady = designTasks.every(
+    (task) =>
+      task.closureState === "owned_slice_proven" ||
+      task.closureState === "wave_closure_ready" ||
+      task.closureState === "closed",
+  );
+  if (!allDesignReady && designTasks.length > 0) {
+    return "design";
+  }
   const allImplementationProven = implementationTasks.every(
     (task) =>
       task.closureState === "owned_slice_proven" ||
@@ -191,6 +203,9 @@ function derivePhase({
     return "running";
   }
 
+  if (gateSnapshot?.designGate && !gateSnapshot.designGate.ok) {
+    return "design";
+  }
   if (gateSnapshot?.contEvalGate && !gateSnapshot.contEvalGate.ok) {
     return "cont-eval";
   }
@@ -228,6 +243,7 @@ function deriveWaveState(phase) {
  */
 function buildProofAvailability(tasks, agentResults, controlPlaneState) {
   const byAgentId = {};
+  const byTaskId = {};
   const agentTasks = new Map();
 
   for (const task of tasks || []) {
@@ -267,6 +283,10 @@ function buildProofAvailability(tasks, agentResults, controlPlaneState) {
 
     for (const task of agentTaskList) {
       const evaluation = evaluateOwnedSliceProven(task, result);
+      byTaskId[task.taskId] = {
+        proven: evaluation.proven,
+        reason: evaluation.reason || null,
+      };
       if (!evaluation.proven) {
         ownedSliceProven = false;
       }
@@ -302,6 +322,7 @@ function buildProofAvailability(tasks, agentResults, controlPlaneState) {
 
   return {
     byAgentId,
+    byTaskId,
     allOwnedSlicesProven,
     activeProofBundles,
   };
@@ -518,20 +539,16 @@ function deriveClosureEligibility(gateSnapshot, tasks, proofAvailability) {
  */
 function applyProofAvailabilityToTasks(tasks, proofAvailability) {
   return (tasks || []).map((task) => {
-    const agentId = task.assigneeAgentId || task.ownerAgentId;
-    if (!agentId) {
-      return task;
-    }
-    const entry = proofAvailability.byAgentId?.[agentId];
+    const entry = proofAvailability.byTaskId?.[task.taskId];
     if (!entry) {
       return task;
     }
     // Forward: open -> owned_slice_proven when proven
-    if (task.closureState === "open" && entry.ownedSliceProven) {
+    if (task.closureState === "open" && entry.proven) {
       return { ...task, closureState: "owned_slice_proven", status: "proven" };
     }
     // Bidirectional: owned_slice_proven -> open when proof is invalidated
-    if (task.closureState === "owned_slice_proven" && !entry.ownedSliceProven) {
+    if (task.closureState === "owned_slice_proven" && !entry.proven) {
       return { ...task, closureState: "open", status: "in_progress" };
     }
     return task;

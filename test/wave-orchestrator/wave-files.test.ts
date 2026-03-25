@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { loadWaveConfig, resolveLaneProfile } from "../../scripts/wave-orchestrator/config.mjs";
 import { hashText, REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
 import { hashAgentPromptFingerprint } from "../../scripts/wave-orchestrator/context7.mjs";
 import {
@@ -21,6 +22,7 @@ import {
   WAVE_CONT_EVAL_ROLE_PROMPT_PATH,
   WAVE_DOCUMENTATION_ROLE_PROMPT_PATH,
   WAVE_CONT_QA_ROLE_PROMPT_PATH,
+  WAVE_DESIGN_ROLE_PROMPT_PATH,
   WAVE_INTEGRATION_ROLE_PROMPT_PATH,
   WAVE_SECURITY_ROLE_PROMPT_PATH,
 } from "../../scripts/wave-orchestrator/wave-files.mjs";
@@ -172,6 +174,139 @@ File ownership (only touch these paths):
         threshold: "No benchmark regresses beyond the accepted smoke threshold",
       },
     ]);
+  });
+
+  it("validates design agents as docs-first packet owners", () => {
+    const laneProfile = {
+      ...resolveLaneProfile(loadWaveConfig(), "main"),
+      validation: {
+        ...resolveLaneProfile(loadWaveConfig(), "main").validation,
+        requireDocumentationStewardFromWave: null,
+        requireIntegrationStewardFromWave: null,
+        requireComponentPromotionsFromWave: null,
+        requireAgentComponentsFromWave: null,
+      },
+    };
+    const wave = parseWaveContent(
+      `# Wave 2 - Design First
+
+**Commit message**: \`Docs: add design packet\`
+
+## Agent A0: cont-QA
+
+### Role prompts
+- ${WAVE_CONT_QA_ROLE_PROMPT_PATH}
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+Read docs/research/agent-context-sources.md.
+
+File ownership (only touch these paths):
+- docs/plans/waves/reviews/wave-2-cont-qa.md
+\`\`\`
+
+## Agent D1: Design Steward
+
+### Role prompts
+- ${WAVE_DESIGN_ROLE_PROMPT_PATH}
+
+### Capabilities
+- design
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+Read docs/research/agent-context-sources.md.
+
+File ownership (only touch these paths):
+- docs/plans/waves/design/wave-2-D1.md
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-2.md"),
+    );
+
+    expect(() =>
+      validateWaveDefinition({
+        ...wave,
+        agents: wave.agents.map((agent) => ({
+          ...agent,
+          executorResolved: { id: "claude", role: agent.agentId === "D1" ? "design" : "cont-qa" },
+        })),
+        componentPromotions: [],
+      }, { laneProfile }),
+    ).not.toThrow();
+  });
+
+  it("validates hybrid design stewards when they explicitly own implementation files", () => {
+    const lane = resolveLaneProfile(loadWaveConfig(), "main");
+    const laneProfile = {
+      ...lane,
+      validation: {
+        ...lane.validation,
+        requireDocumentationStewardFromWave: null,
+        requireIntegrationStewardFromWave: null,
+        requireComponentPromotionsFromWave: null,
+        requireAgentComponentsFromWave: null,
+        requireExitContractsFromWave: 1,
+      },
+    };
+    const wave = parseWaveContent(
+      `# Wave 2 - Hybrid Design
+
+**Commit message**: \`Fix: add hybrid design steward\`
+
+## Agent A0: cont-QA
+
+### Role prompts
+- ${WAVE_CONT_QA_ROLE_PROMPT_PATH}
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+Read docs/research/agent-context-sources.md.
+
+File ownership (only touch these paths):
+- docs/plans/waves/reviews/wave-2-cont-qa.md
+\`\`\`
+
+## Agent D1: Design Steward
+
+### Role prompts
+- ${WAVE_DESIGN_ROLE_PROMPT_PATH}
+
+### Capabilities
+- design
+
+### Exit contract
+- completion: contract
+- durability: durable
+- proof: integration
+- doc-impact: owned
+
+### Prompt
+\`\`\`text
+Read docs/reference/repository-guidance.md.
+Read docs/research/agent-context-sources.md.
+
+File ownership (only touch these paths):
+- docs/plans/waves/design/wave-2-D1.md
+- src/runtime.ts
+\`\`\`
+`,
+      path.join(REPO_ROOT, "docs/plans/waves/wave-2.md"),
+    );
+
+    expect(() =>
+      validateWaveDefinition({
+        ...wave,
+        agents: wave.agents.map((agent) => ({
+          ...agent,
+          executorResolved: { id: "codex", role: agent.agentId === "D1" ? "design" : "cont-qa" },
+        })),
+        componentPromotions: [],
+      }, { laneProfile }),
+    ).not.toThrow();
   });
 
   it("extracts optional deliverables separately from file ownership", () => {

@@ -43,11 +43,34 @@ When you review the generated wave, tighten the parts the planner cannot fully i
 - file ownership
 - validation commands
 - proof artifacts
+- whether the wave needs an optional pre-implementation design steward
 - `cont-EVAL` targets when needed
 - security review expectations when needed
 - explicit `### Skills` only where defaults are not enough
 
 If you want examples of denser hand-authored waves, read [docs/reference/sample-waves.md](../reference/sample-waves.md).
+
+## 2a. Add A Design Steward Only When It Actually Helps
+
+Use the optional `design` role when the wave needs a concrete handoff packet before coding starts, not just more prose.
+
+Good fits:
+
+- architecture-heavy or interface-heavy changes
+- multi-owner waves where downstream implementers need the same decisions and assumptions
+- ambiguous tasks where open questions should become explicit before code owners fan out
+
+The starter contract in `0.8.5` is:
+
+- import `docs/agents/wave-design-role.md`
+- own one packet such as `docs/plans/waves/design/wave-<n>-<agentId>.md`
+- keep that agent docs/spec-only by default
+- add explicit `### Skills` such as `tui-design` when the packet covers terminal UX, dashboards, or other operator surfaces
+- end with `[wave-design] state=<ready-for-implementation|needs-clarification|blocked> decisions=<n> assumptions=<n> open_questions=<n> detail=<short-note>`
+
+When a wave includes one or more design agents, the runtime runs them before code-owning implementation agents. Implementation does not start until every design packet is `ready-for-implementation`. `needs-clarification` and `blocked` behave like normal wave blockers.
+
+If a wave explicitly gives a design steward source-code ownership, that agent becomes a hybrid design steward. The runtime still runs its design pass first, then includes the same agent in the later implementation fan-out with normal proof obligations. Interactive `wave draft` scaffolds the docs-first default; use manual edits or an agentic planner payload when you want the hybrid path.
 
 ## 3. Choose The Execution Posture
 
@@ -115,6 +138,7 @@ Useful flags:
 
 A wave is not done when an implementation agent says it is done. Closure depends on the canonical authority set, typed result state, and the combined runtime projections:
 
+- if present, design packets are complete and `ready-for-implementation` before code-owning work starts
 - implementation contracts pass
 - required deliverables exist
 - proof artifacts exist when the wave requires them

@@ -2521,6 +2521,105 @@ describe("selectInitialWaveRuns", () => {
       "A0",
     ]);
   });
+
+  it("runs design agents before implementation agents when present", () => {
+    const lanePaths = makeLanePaths(makeTempDir());
+    const designStatusPath = path.join(makeTempDir(), "wave-0-d1.status");
+    const implementationStatusPath = path.join(makeTempDir(), "wave-0-a1.status");
+    const runs = [
+      {
+        agent: {
+          agentId: "D1",
+          title: "Design Steward",
+          rolePromptPaths: ["docs/agents/wave-design-role.md"],
+        },
+        statusPath: designStatusPath,
+        logPath: path.join(path.dirname(designStatusPath), "wave-0-d1.log"),
+      },
+      {
+        agent: { agentId: "A1", title: "Implementation" },
+        statusPath: implementationStatusPath,
+        logPath: path.join(path.dirname(implementationStatusPath), "wave-0-a1.log"),
+      },
+      { agent: { agentId: "A8", title: "Integration" } },
+      { agent: { agentId: "A9", title: "Docs" } },
+      { agent: { agentId: "A0", title: "cont-QA" } },
+    ];
+
+    expect(selectInitialWaveRuns(runs, lanePaths).map((run) => run.agent.agentId)).toEqual([
+      "D1",
+    ]);
+  });
+
+  it("includes hybrid design stewards in the post-design implementation fan-out", () => {
+    const lanePaths = makeLanePaths(makeTempDir());
+    const reportDir = path.join(
+      process.cwd(),
+      `.tmp/test-design-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    );
+    tempDirs.push(reportDir);
+    const reportPath = path.relative(process.cwd(), path.join(reportDir, "wave-0-D1.md"));
+    const reportAbsPath = path.join(process.cwd(), reportPath);
+    fs.mkdirSync(path.dirname(reportAbsPath), { recursive: true });
+    fs.writeFileSync(reportAbsPath, "# Design Packet\n", "utf8");
+
+    const designAgent = {
+      agentId: "D1",
+      title: "Design Steward",
+      rolePromptPaths: ["docs/agents/wave-design-role.md"],
+      ownedPaths: [reportPath, "src/runtime.ts"],
+      prompt: "Design and implement the runtime follow-through.",
+      exitContract: {
+        completion: "contract",
+        durability: "durable",
+        proof: "integration",
+        docImpact: "owned",
+      },
+    };
+    const designStatusPath = path.join(makeTempDir(), "wave-0-d1.status");
+    const designLogPath = path.join(path.dirname(designStatusPath), "wave-0-d1.log");
+    fs.writeFileSync(
+      designStatusPath,
+      JSON.stringify({ code: 0, promptHash: hashAgentPromptFingerprint(designAgent) }, null, 2),
+      "utf8",
+    );
+    writeAgentExecutionSummary(designStatusPath, {
+      agentId: "D1",
+      reportPath,
+      logPath: designLogPath,
+      design: {
+        state: "ready-for-implementation",
+        decisions: 2,
+        assumptions: 1,
+        openQuestions: 0,
+        detail: "packet-ready",
+      },
+    });
+    fs.writeFileSync(designLogPath, "", "utf8");
+
+    const implementationStatusPath = path.join(makeTempDir(), "wave-0-a1.status");
+    const implementationLogPath = path.join(path.dirname(implementationStatusPath), "wave-0-a1.log");
+    const runs = [
+      {
+        agent: designAgent,
+        statusPath: designStatusPath,
+        logPath: designLogPath,
+      },
+      {
+        agent: { agentId: "A1", title: "Implementation", prompt: "Implement runtime." },
+        statusPath: implementationStatusPath,
+        logPath: implementationLogPath,
+      },
+      { agent: { agentId: "A8", title: "Integration" } },
+      { agent: { agentId: "A9", title: "Docs" } },
+      { agent: { agentId: "A0", title: "cont-QA" } },
+    ];
+
+    expect(selectInitialWaveRuns(runs, lanePaths).map((run) => run.agent.agentId)).toEqual([
+      "D1",
+      "A1",
+    ]);
+  });
 });
 
 describe("readWaveComponentGate", () => {

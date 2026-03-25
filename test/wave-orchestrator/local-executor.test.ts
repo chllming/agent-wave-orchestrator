@@ -202,6 +202,94 @@ File ownership (only touch these paths):
     ).toBe(true);
   });
 
+  it("emits design markers for design packets", () => {
+    const promptFile = registerTempPath(
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
+    );
+    const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}/wave-0-design.md`;
+    registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
+
+    fs.writeFileSync(
+      promptFile,
+      `You are the Wave executor running Wave 0 / Agent D1: Design Steward.
+
+Assigned implementation prompt:
+\`\`\`text
+You are the wave design steward for the current wave.
+
+Deliverables required for this agent:
+- ${deliverable}
+
+Emit one final structured design marker:
+[wave-design] state=<ready-for-implementation|needs-clarification|blocked> decisions=<n> assumptions=<n> open_questions=<n> detail=<short-note>
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const logs = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+
+    runLocalExecutorCli(["--prompt-file", promptFile]);
+
+    expect(
+      logs.some((line) =>
+        line.includes(
+          "[wave-design] state=ready-for-implementation decisions=2 assumptions=1 open_questions=0",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("emits proof markers for hybrid design stewards in the implementation pass", () => {
+    const promptFile = registerTempPath(
+      path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),
+    );
+    const deliverable = `.tmp/wave-local-executor-test-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}/runtime.ts`;
+    registerTempPath(path.join(REPO_ROOT, path.dirname(deliverable)));
+
+    fs.writeFileSync(
+      promptFile,
+      `You are the Wave executor running Wave 0 / Agent D1: Design Steward.
+
+Components you own in this wave:
+- runtime-core: repo-landed
+
+Emit one final structured proof marker: [wave-proof] completion=<contract|integrated|authoritative|live> durability=<none|ephemeral|durable> proof=<unit|integration|live> state=<met|gap> detail=<short-note>
+Emit one final structured design marker: [wave-design] state=<ready-for-implementation|needs-clarification|blocked> decisions=<n> assumptions=<n> open_questions=<n> detail=<short-note>
+
+Assigned implementation prompt:
+\`\`\`text
+Deliverables required for this agent:
+- ${deliverable}
+\`\`\`
+`,
+      "utf8",
+    );
+
+    const logs = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+
+    runLocalExecutorCli(["--prompt-file", promptFile]);
+
+    expect(logs.some((line) => line.includes("[wave-design] state=ready-for-implementation"))).toBe(true);
+    expect(logs.some((line) => line.includes("[wave-proof] completion=contract"))).toBe(true);
+    expect(logs.some((line) => line.includes("[wave-doc-delta] state=owned"))).toBe(true);
+    expect(
+      logs.some((line) =>
+        line.includes("[wave-component] component=runtime-core level=repo-landed state=met"),
+      ),
+    ).toBe(true);
+  });
+
   it("prefers explicit deliverables over inferred file ownership", () => {
     const promptFile = registerTempPath(
       path.join(fs.mkdtempSync(path.join(os.tmpdir(), "slowfast-wave-local-")), "prompt.md"),

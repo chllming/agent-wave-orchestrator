@@ -488,4 +488,29 @@ describe("runtime configuration normalization", () => {
       },
     });
   });
+
+  it("normalizes the optional design role prompt path", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          roles: {
+            designRolePromptPath: "docs/agents/wave-design-role.md",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main");
+
+    expect(config.roles.designRolePromptPath).toBe("docs/agents/wave-design-role.md");
+    expect(lane.roles.designRolePromptPath).toBe("docs/agents/wave-design-role.md");
+  });
 });

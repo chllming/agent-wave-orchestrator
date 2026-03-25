@@ -14,7 +14,7 @@ import { readStatusCodeIfPresent } from "./dashboard-state.mjs";
 import { buildExecutorLaunchSpec } from "./executors.mjs";
 import { hashAgentPromptFingerprint, prefetchContext7ForSelection } from "./context7.mjs";
 import { killTmuxSessionIfExists } from "./terminals.mjs";
-import { resolveWaveRoleBindings } from "./role-helpers.mjs";
+import { isDesignAgent, resolveDesignReportPath, resolveWaveRoleBindings } from "./role-helpers.mjs";
 import {
   resolveAgentSkills,
   summarizeResolvedSkills,
@@ -77,6 +77,7 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
     agentRateLimitBaseDelaySeconds,
     agentRateLimitMaxDelaySeconds,
     context7Enabled,
+    designExecutionMode = null,
     dryRun = false,
   } = params;
   ensureDirectory(path.dirname(promptPath));
@@ -123,6 +124,11 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
       evalTargets: resolvedWaveDefinition.evalTargets,
       benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
       sharedPlanDocs: lanePaths.sharedPlanDocs,
+      designPacketPaths: (resolvedWaveDefinition.agents || [])
+        .filter((waveAgent) => isDesignAgent(waveAgent))
+        .map((waveAgent) => resolveDesignReportPath(waveAgent))
+        .filter(Boolean),
+      designExecutionMode,
     });
   const promptHash = hashAgentPromptFingerprint(agent);
   fs.writeFileSync(promptPath, `${prompt}\n`, "utf8");

@@ -47,6 +47,8 @@ const WAVE_EVAL_REGEX =
   /^\[wave-eval\]\s*state=(satisfied|needs-more-work|blocked)\s+targets=(\d+)\s+benchmarks=(\d+)\s+regressions=(\d+)(?:\s+target_ids=([^\s]+))?(?:\s+benchmark_ids=([^\s]+))?\s*(?:detail=(.*))?$/gim;
 const WAVE_SECURITY_REGEX =
   /^\[wave-security\]\s*state=(clear|concerns|blocked)\s+findings=(\d+)\s+approvals=(\d+)\s*(?:detail=(.*))?$/gim;
+const WAVE_DESIGN_REGEX =
+  /^\[wave-design\]\s*state=(ready-for-implementation|needs-clarification|blocked)\s+decisions=(\d+)\s+assumptions=(\d+)\s+open_questions=(\d+)\s*(?:detail=(.*))?$/gim;
 const WAVE_GATE_REGEX =
   /^\[wave-gate\]\s*architecture=(pass|concerns|blocked)\s+integration=(pass|concerns|blocked)\s+durability=(pass|concerns|blocked)\s+live=(pass|concerns|blocked)\s+docs=(pass|concerns|blocked)\s*(?:detail=(.*))?$/gim;
 const WAVE_GAP_REGEX =
@@ -64,6 +66,7 @@ const STRUCTURED_SIGNAL_KIND_BY_TAG = {
   integration: "integration",
   eval: "eval",
   security: "security",
+  design: "design",
   gate: "gate",
   gap: "gap",
   component: "component",
@@ -76,6 +79,7 @@ const STRUCTURED_SIGNAL_LINE_REGEX_BY_KIND = {
   integration: new RegExp(WAVE_INTEGRATION_REGEX.source, "i"),
   eval: new RegExp(WAVE_EVAL_REGEX.source, "i"),
   security: new RegExp(WAVE_SECURITY_REGEX.source, "i"),
+  design: new RegExp(WAVE_DESIGN_REGEX.source, "i"),
   gate: new RegExp(WAVE_GATE_REGEX.source, "i"),
   gap: new RegExp(WAVE_GAP_REGEX.source, "i"),
   component: new RegExp(WAVE_COMPONENT_REGEX.source, "i"),
@@ -89,6 +93,7 @@ function buildEmptyStructuredSignalDiagnostics() {
     integration: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
     eval: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
     security: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
+    design: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
     gate: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
     gap: { rawCount: 0, acceptedCount: 0, rejectedSamples: [] },
     component: { rawCount: 0, acceptedCount: 0, rejectedSamples: [], seenComponentIds: [] },
@@ -508,6 +513,13 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       findings: Number.parseInt(String(match[2] || "0"), 10) || 0,
       approvals: Number.parseInt(String(match[3] || "0"), 10) || 0,
       detail: cleanText(match[4]),
+    })),
+    design: findLastMatch(signalText, WAVE_DESIGN_REGEX, (match) => ({
+      state: match[1],
+      decisions: Number.parseInt(String(match[2] || "0"), 10) || 0,
+      assumptions: Number.parseInt(String(match[3] || "0"), 10) || 0,
+      openQuestions: Number.parseInt(String(match[4] || "0"), 10) || 0,
+      detail: cleanText(match[5]),
     })),
     gate: findLastMatch(signalText, WAVE_GATE_REGEX, (match) => ({
       architecture: match[1],
@@ -948,6 +960,58 @@ export function validateSecuritySummary(agent, summary) {
       (summary.security.state === "concerns"
         ? "Security review reported advisory concerns."
         : "Security review reported clear."),
+  };
+}
+
+export function validateDesignSummary(agent, summary) {
+  if (!summary?.design) {
+    return {
+      ok: false,
+      statusCode: "missing-wave-design",
+      detail: appendTerminationHint(
+        `Missing [wave-design] marker for ${agent?.agentId || "D1"}.`,
+        summary,
+      ),
+    };
+  }
+  if (!summary.reportPath) {
+    return {
+      ok: false,
+      statusCode: "missing-design-packet",
+      detail: `Missing design packet path for ${agent?.agentId || "D1"}.`,
+    };
+  }
+  if (!fs.existsSync(path.resolve(REPO_ROOT, summary.reportPath))) {
+    return {
+      ok: false,
+      statusCode: "missing-design-packet",
+      detail: `Missing design packet at ${summary.reportPath}.`,
+    };
+  }
+  if (summary.design.state === "blocked") {
+    return {
+      ok: false,
+      statusCode: "design-blocked",
+      detail:
+        summary.design.detail ||
+        `Design packet reported blocked for ${agent?.agentId || "D1"}.`,
+    };
+  }
+  if (summary.design.state === "needs-clarification") {
+    return {
+      ok: false,
+      statusCode: "design-needs-clarification",
+      detail:
+        summary.design.detail ||
+        `Design packet requested clarification for ${agent?.agentId || "D1"}.`,
+    };
+  }
+  return {
+    ok: true,
+    statusCode: "pass",
+    detail:
+      summary.design.detail ||
+      "Design packet is ready for implementation.",
   };
 }
 

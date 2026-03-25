@@ -160,6 +160,7 @@ Base:
 
 Role:
 
+- `role-design`
 - `role-implementation`
 - `role-integration`
 - `role-documentation`
@@ -175,6 +176,10 @@ Runtime:
 - `runtime-claude`
 - `runtime-opencode`
 - `runtime-local`
+
+Design reference:
+
+- `tui-design`
 
 Provider:
 
@@ -197,6 +202,8 @@ Provider skills are configured by deploy kind, but the shipped manifests further
 5. Register the bundle in `wave.config.json` if it should auto-attach.
 6. Add meaningful `evalCases[]`.
 7. Run `node scripts/wave.mjs doctor --json`.
+
+For terminal or operator-surface design work, keep `role-design` as the packet contract and add `tui-design` explicitly in the wave's `### Skills`.
 
 ## Further Reading
 

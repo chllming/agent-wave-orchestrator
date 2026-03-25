@@ -184,6 +184,85 @@ describe("buildAgentResultEnvelope", () => {
     });
   });
 
+  it("extracts correct fields from a design summary", () => {
+    const envelope = buildAgentResultEnvelope(
+      { agentId: "D1", role: "design" },
+      {
+        agentId: "D1",
+        design: {
+          state: "ready-for-implementation",
+          decisions: 4,
+          assumptions: 2,
+          openQuestions: 1,
+          detail: "packet-ready",
+        },
+      },
+    );
+
+    expect(envelope.role).toBe("design");
+    expect(envelope.design).toEqual({
+      state: "ready-for-implementation",
+      decisions: 4,
+      assumptions: 2,
+      openQuestions: 1,
+      detail: "packet-ready",
+    });
+  });
+
+  it("keeps implementation proof fields on hybrid design envelopes", () => {
+    const envelope = buildAgentResultEnvelope(
+      { agentId: "D1", role: "design" },
+      {
+        agentId: "D1",
+        design: {
+          state: "ready-for-implementation",
+          decisions: 2,
+          assumptions: 1,
+          openQuestions: 0,
+          detail: "packet-ready",
+        },
+        proof: {
+          completion: "contract",
+          durability: "durable",
+          proof: "integration",
+          state: "met",
+          detail: "implementation-landed",
+        },
+        docDelta: {
+          state: "owned",
+          paths: ["docs/current-state.md"],
+          detail: "updated docs",
+        },
+        components: [
+          {
+            componentId: "runtime-core",
+            level: "repo-landed",
+            state: "met",
+            detail: "runtime-core landed",
+          },
+        ],
+      },
+    );
+
+    expect(envelope.role).toBe("design");
+    expect(envelope.design?.state).toBe("ready-for-implementation");
+    expect(envelope.implementation).toEqual({
+      docDelta: {
+        state: "owned",
+        paths: ["docs/current-state.md"],
+        detail: "updated docs",
+      },
+      components: [
+        {
+          componentId: "runtime-core",
+          level: "repo-landed",
+          state: "met",
+          detail: "runtime-core landed",
+        },
+      ],
+    });
+  });
+
   it("returns safe defaults from null summary", () => {
     const envelope = buildAgentResultEnvelope(null, null);
 

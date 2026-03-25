@@ -6,6 +6,8 @@ If you want the full author-to-launch workflow, start with [author-and-run-waves
 
 It reduces repeated setup questions, stores project defaults, and generates wave specs plus markdown that already fit the launcher.
 
+The published `0.8.5` package already includes the optional `design` worker role for pre-implementation design packets. This guide calls out where that affects drafting.
+
 ## What Ships Today
 
 - `wave project setup`
@@ -14,6 +16,7 @@ It reduces repeated setup questions, stores project defaults, and generates wave
 - agentic `wave draft --agentic --task "..."`
 - planner run review via `wave draft --show-run <run-id>`
 - explicit materialization via `wave draft --apply-run <run-id>`
+- worker role kinds including optional `design`
 - persistent project memory in `.wave/project-profile.json`
 - transient planner packets in `.wave/planner/runs/<run-id>/`
 - planner-run Context7 injection via `planner.agentic.context7Bundle`
@@ -95,6 +98,24 @@ Supported templates today:
 - `infra`
 - `release`
 
+Supported worker role kinds today:
+
+- `design`
+- `implementation`
+- `qa`
+- `infra`
+- `deploy`
+- `research`
+- `security`
+
+The interactive draft flow now offers `design` as a first-class worker role. Agentic planner payloads also accept `workerAgents[].roleKind = "design"`.
+
+`design` uses the `design-pass` executor profile by default and scaffolds the docs-first packet path before coding starts. The normal starter packet path is:
+
+- `docs/plans/waves/design/wave-<n>-<agentId>.md`
+
+If you want a hybrid design steward, keep the same design packet path but explicitly add implementation-owned paths and the normal implementation contract sections in the authored wave or agentic planner payload. Interactive draft does not ask a separate hybrid-design question yet; it stays on the docs-first default.
+
 Interactive draft writes canonical waves immediately:
 
 - `docs/plans/waves/specs/wave-<n>.json`
@@ -125,6 +146,7 @@ The draft flow asks for structured inputs such as:
 - deploy environments in scope
 - component promotions and target levels
 - worker count and worker roles
+- whether a wave needs a pre-implementation design steward
 - executor profiles
 - file ownership
 - Context7 defaults and per-agent bundles
@@ -132,6 +154,27 @@ The draft flow asks for structured inputs such as:
 - exit contracts
 
 That gives you a wave that is much closer to launch-ready than a blank markdown template.
+
+## When To Use `design`
+
+Use a design worker when the wave is heavy on:
+
+- architecture or sequencing decisions
+- interface or contract changes across multiple owners
+- ambiguous requirements that should become explicit assumptions and open questions
+- decision-lineage that downstream implementers should not have to rediscover
+
+Do not use a design worker just because the wave is large. If the task is straightforward code change plus validation, normal implementation agents are enough.
+
+A design worker should usually:
+
+- import `docs/agents/wave-design-role.md`
+- own one design packet under `docs/plans/waves/design/`
+- stay docs/spec-only unless the wave explicitly assigns code ownership
+- add `tui-design` in `### Skills` when the packet owns terminal UX, dashboards, or other operator surfaces
+- emit a final `[wave-design] state=<ready-for-implementation|needs-clarification|blocked> ...` marker
+
+If the wave does explicitly assign code ownership, the same design agent becomes a hybrid design steward: it runs the design pass first, then rejoins implementation with the normal implementation proof contract while still keeping the packet current and re-emitting `[wave-design]`.
 
 ## Planner And Skills
 
@@ -169,6 +212,7 @@ If you want concrete authored examples after the planner baseline, see [docs/ref
 - Treat `### Deliverables` and `### Proof artifacts` as part of the plan contract, not optional polish.
 - Keep `docs/context7/planner-agent/` in sync with the selected planning cache slice before publishing the planner bundle to Context7.
 - Add explicit `### Skills` only when the lane, role, runtime, and deploy-kind defaults are not enough.
+- Use `design` when you need a reusable handoff packet; keep straightforward implementation slices on `implementation`.
 - Use the component matrix as a planning contract, not just a reporting surface.
 - Prefer updating the project profile when the same answers recur across waves.
 - Use [docs/reference/sample-waves.md](../reference/sample-waves.md) when you want examples of denser human-authored waves that combine multiple modern surfaces such as `cont-EVAL`, delegated benchmark families, or proof-first live validation.

@@ -23,7 +23,8 @@
     "contEvalRolePromptPath": "docs/agents/wave-cont-eval-role.md",
     "integrationRolePromptPath": "docs/agents/wave-integration-role.md",
     "documentationRolePromptPath": "docs/agents/wave-documentation-role.md",
-    "securityRolePromptPath": "docs/agents/wave-security-role.md"
+    "securityRolePromptPath": "docs/agents/wave-security-role.md",
+    "designRolePromptPath": "docs/agents/wave-design-role.md"
   },
   "executors": {
     "default": "codex",
@@ -58,6 +59,17 @@
         "budget": {
           "turns": 8,
           "minutes": 20
+        }
+      },
+      "design-pass": {
+        "id": "claude",
+        "tags": ["design", "review"],
+        "budget": {
+          "turns": 10,
+          "minutes": 30
+        },
+        "claude": {
+          "allowedTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"]
         }
       },
       "planning-readonly": {
@@ -112,6 +124,7 @@
     "dir": "skills",
     "base": ["wave-core", "repo-coding-rules"],
     "byRole": {
+      "design": ["role-design"],
       "implementation": ["role-implementation"],
       "integration": ["role-integration"],
       "documentation": ["role-documentation"],
@@ -199,6 +212,7 @@
           "opencode": 2
         },
         "defaultExecutorByRole": {
+          "design": "claude",
           "implementation": "codex",
           "integration": "claude",
           "documentation": "claude",

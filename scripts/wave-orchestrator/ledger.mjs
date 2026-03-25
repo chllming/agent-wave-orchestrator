@@ -6,6 +6,7 @@ import {
 } from "./config.mjs";
 import {
   validateContEvalSummary,
+  validateDesignSummary,
   validateDocumentationClosureSummary,
   validateContQaSummary,
   validateImplementationSummary,
@@ -13,6 +14,8 @@ import {
 } from "./agent-state.mjs";
 import {
   isContEvalImplementationOwningAgent,
+  isDesignAgent,
+  isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
 } from "./role-helpers.mjs";
 import { openClarificationLinkedRequests } from "./coordination-store.mjs";
@@ -54,6 +57,7 @@ export function buildSeedWaveLedger({
 }) {
   const tasks = [];
   for (const agent of wave.agents) {
+    const hybridDesignAgent = isImplementationOwningDesignAgent(agent);
     const kind =
       agent.agentId === contQaAgentId
         ? "cont-qa"
@@ -63,35 +67,46 @@ export function buildSeedWaveLedger({
           ? "integration"
         : agent.agentId === documentationAgentId
             ? "documentation"
+            : isDesignAgent(agent)
+              ? "design"
             : isSecurityReviewAgent(agent)
               ? "security"
-            : "implementation";
-    tasks.push({
-      id: taskId(kind, agent.agentId),
-      title: `${agent.agentId}: ${agent.title}`,
-      owner: agent.agentId,
-      kind,
-      dependsOn: [],
-      state: "planned",
-      proofState: "pending",
-      docState: "pending",
-      infraState: "n/a",
-      priority:
-        kind === "implementation" ? "normal" : kind === "integration" ? "high" : "high",
-      artifactRefs: agent.ownedPaths || [],
-      runtime: agent.executorResolved
-        ? {
-            executorId: agent.executorResolved.id,
-            role: agent.executorResolved.role,
-            profile: agent.executorResolved.profile,
-            selectedBy: agent.executorResolved.selectedBy,
-            retryPolicy: agent.executorResolved.retryPolicy || null,
-            allowFallbackOnRetry: agent.executorResolved.allowFallbackOnRetry !== false,
-            fallbacks: agent.executorResolved.fallbacks || [],
-            fallbackUsed: agent.executorResolved.fallbackUsed === true,
-          }
-        : null,
-    });
+              : "implementation";
+    const runtime = agent.executorResolved
+      ? {
+          executorId: agent.executorResolved.id,
+          role: agent.executorResolved.role,
+          profile: agent.executorResolved.profile,
+          selectedBy: agent.executorResolved.selectedBy,
+          retryPolicy: agent.executorResolved.retryPolicy || null,
+          allowFallbackOnRetry: agent.executorResolved.allowFallbackOnRetry !== false,
+          fallbacks: agent.executorResolved.fallbacks || [],
+          fallbackUsed: agent.executorResolved.fallbackUsed === true,
+        }
+      : null;
+    const pushTask = (taskKind) => {
+      tasks.push({
+        id: taskId(taskKind, agent.agentId),
+        title: `${agent.agentId}: ${agent.title}`,
+        owner: agent.agentId,
+        kind: taskKind,
+        dependsOn: [],
+        state: "planned",
+        proofState: "pending",
+        docState: "pending",
+        infraState: "n/a",
+        priority:
+          taskKind === "implementation" ? "normal" : taskKind === "integration" ? "high" : "high",
+        artifactRefs: agent.ownedPaths || [],
+        runtime,
+      });
+    };
+    if (hybridDesignAgent && kind === "design") {
+      pushTask("design");
+      pushTask("implementation");
+      continue;
+    }
+    pushTask(kind);
   }
   for (const promotion of wave.componentPromotions || []) {
     tasks.push({
@@ -163,6 +178,11 @@ function derivePhase({
     return blockingHelperTasks.some((task) => task.state === "blocked") ? "blocked" : "running";
   }
   const implementationTasks = tasks.filter((task) => task.kind === "implementation");
+  const designTasks = tasks.filter((task) => task.kind === "design");
+  const allDesignDone = designTasks.every((task) => task.state === "done");
+  if (!allDesignDone && designTasks.length > 0) {
+    return "design";
+  }
   const allImplementationDone = implementationTasks.every((task) => task.state === "done");
   if (!allImplementationDone) {
     return "running";
@@ -219,6 +239,15 @@ export function deriveWaveLedger({
         state: taskStateFromValidation(validation),
         proofState: validation.ok ? "met" : "gap",
         docState: summary?.docDelta?.state || "pending",
+      };
+    }
+    if (task.kind === "design" && agent) {
+      const validation = validateDesignSummary(agent, summary);
+      return {
+        ...task,
+        state: taskStateFromValidation(validation),
+        proofState: validation.ok ? "met" : "gap",
+        docState: validation.ok ? "met" : "gap",
       };
     }
     if (task.kind === "documentation" && agent) {

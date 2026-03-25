@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.8.6 - 2026-03-25
+
+### Added
+
+- Added canonical wave and per-agent signal projections under `.tmp/<lane>-wave-launcher/signals/`, plus the `signal-hygiene` starter skill for long-running agents that should wait on versioned wake signals instead of exiting after a one-shot pass.
+- Added seeded operator wrappers `scripts/wave-status.sh` and `scripts/wave-watch.sh` as thin readers over `wave control status --json`, including `--agent <id>` targeting and `--until-change` polling for external automation.
+- Added [docs/guides/signal-wrappers.md](./docs/guides/signal-wrappers.md), a dedicated operator guide for signal snapshots, wrapper exit codes, and the ack-loop contract used by long-running agents and the resident orchestrator.
+
+### Changed
+
+- Updated the shipped package metadata, README, current-state notes, migration guide, terminal and CLI docs, architecture docs, sample-wave docs, and npm publishing instructions to advertise `0.8.6` as the current release surface.
+- Documented the long-running signal model explicitly: prompt-level signal-state plus ack-path injection, versioned signal snapshots for both waves and agents, and wrapper-driven monitoring for external operator scripts.
+
+### Fixed And Hardened
+
+- Agent signal materialization now treats wave-level `completed` and `failed` as terminal, so stale answered feedback or pending coordination tasks cannot keep long-running agents in a non-terminal wait state after the wave has already closed.
+- Resident orchestrator signal versions now bump when only `targetAgentIds` change, so reroutes that keep the same signal kind still wake long-running residents and watchers correctly.
+- Wrapper exit semantics now treat `failed` as terminal with exit code `40`, so external monitors and `signal-hygiene` loops stop waiting when the wave fails instead of hanging on the generic active path.
+
+### Testing And Validation
+
+- Added regression coverage for terminal signal precedence, resident reroute versioning, and terminal-failure wrapper exits.
+- Re-ran the full Vitest suite, `wave doctor --json`, and `wave launch --lane main --dry-run --no-dashboard`.
+
 ## 0.8.5 - 2026-03-25
 
 ### Added

@@ -18,6 +18,7 @@ Exit codes:
   0   completed
   20  input required
   30  watched signal changed while the wave remained active
+  40  failed
 EOF
 }
 
@@ -153,6 +154,9 @@ const signal = String(snapshot?.signal || "").trim().toLowerCase();
 if (signal === "completed") {
   process.exit(0);
 }
+if (signal === "failed") {
+  process.exit(40);
+}
 if (signal === "feedback-requested") {
   process.exit(20);
 }
@@ -168,8 +172,8 @@ if exit_code_for_payload "$payload"; then
   exit 0
 else
   status=$?
-  if [ "$status" -eq 20 ]; then
-    exit 20
+  if [ "$status" -eq 20 ] || [ "$status" -eq 40 ]; then
+    exit "$status"
   fi
 fi
 
@@ -186,8 +190,8 @@ while true; do
     exit 0
   else
     status=$?
-    if [ "$status" -eq 20 ]; then
-      exit 20
+    if [ "$status" -eq 20 ] || [ "$status" -eq 40 ]; then
+      exit "$status"
     fi
   fi
   if [ "$mode" = "until-change" ]; then

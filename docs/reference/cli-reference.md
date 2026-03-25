@@ -111,6 +111,8 @@ The JSON payload now includes:
 - `signals.agents`
   Versioned per-agent signal state, including `shouldWake` plus any observed ack metadata.
 
+Starter repos also include `scripts/wave-status.sh` and `scripts/wave-watch.sh` as thin readers over this JSON payload. They use exit `0` for completed, `20` for input-required, `40` for failed, and `30` from `wave-watch.sh --until-change` when the signal changed but the wave stayed active. For the full wrapper contract, read [../guides/signal-wrappers.md](../guides/signal-wrappers.md).
+
 ### wave control telemetry
 
 Inspect and deliver the local Wave Control event queue.
@@ -551,7 +553,7 @@ Interactive draft currently offers worker role kinds:
 - `research`
 - `security`
 
-Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.8.5` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
+Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.8.6` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
 
 ## Ad-Hoc Task Commands
 

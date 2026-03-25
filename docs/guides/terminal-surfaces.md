@@ -83,11 +83,13 @@ Important flags:
 Starter repos now include two thin helper scripts:
 
 - `scripts/wave-status.sh`
-  Reads `wave control status --json`, prints a single machine-friendly line, and exits `0` for completed, `10` for waiting/running, and `20` for input-required.
+  Reads `wave control status --json`, prints a single machine-friendly line, and exits `0` for completed, `10` for waiting/running, `20` for input-required, and `40` for failed.
 - `scripts/wave-watch.sh`
-  Polls the same status JSON until the watched signal version changes. `--until-change` exits `30` when the signal changed but the wave is still active.
+  Polls the same status JSON until the watched signal version changes. `--until-change` exits `30` when the signal changed but the wave is still active, and both follow mode and until-change mode terminate immediately with `40` on failed terminal signals.
 
 Both wrappers are convenience readers only. The canonical surface is the versioned signal projection under `.tmp/<lane>-wave-launcher/signals/`.
+
+For the full wrapper contract, long-running-agent ack loop, and external automation patterns, read [signal-wrappers.md](./signal-wrappers.md).
 
 ## Suggested Defaults
 

@@ -6,7 +6,7 @@ If you want the full author-to-launch workflow, start with [author-and-run-waves
 
 It reduces repeated setup questions, stores project defaults, and generates wave specs plus markdown that already fit the launcher.
 
-The published `0.8.5` package already includes the optional `design` worker role for pre-implementation design packets. This guide calls out where that affects drafting.
+The published `0.8.6` package already includes the optional `design` worker role for pre-implementation design packets. This guide calls out where that affects drafting.
 
 ## What Ships Today
 

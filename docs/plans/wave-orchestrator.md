@@ -77,6 +77,8 @@ The live runtime is organized around explicit modules:
 - `pnpm exec wave feedback list --lane main --pending`
 - `pnpm exec wave control status --lane main --wave 0 --json`
 - `pnpm exec wave control status --lane main --wave 0 --agent A1 --json`
+- `scripts/wave-status.sh --lane main --wave 0 --agent A1`
+- `scripts/wave-watch.sh --lane main --wave 0 --agent A1 --until-change --refresh-ms 500`
 - `pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run`
 - `pnpm exec wave control task create --lane main --wave 0 --agent A1 --kind blocker --summary "Need repository decision"`
 - `pnpm exec wave control task act reassign --lane main --wave 0 --id <task-id> --to A2`
@@ -164,6 +166,7 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 - `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists.
 - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles in the same control-plane log and projects compatible proof registries under `.tmp/<lane>-wave-launcher/proof/`.
 - `wave control telemetry status|flush` inspects and delivers the local Wave Control event queue. Pass `--no-telemetry` on `wave launch` to disable event publication for a single run.
+- `scripts/wave-status.sh` and `scripts/wave-watch.sh` are thin wrapper readers over `wave control status --json` for shell automation and long-running watcher loops. Use [guides/signal-wrappers.md](../guides/signal-wrappers.md) for the exit-code and ack-loop contract.
 - `wave coord render` regenerates the markdown board projection from the canonical coordination log.
 - `wave coord inbox` writes the compiled shared summary plus the selected agent inbox.
 

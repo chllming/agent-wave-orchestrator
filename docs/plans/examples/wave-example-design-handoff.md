@@ -1,6 +1,6 @@
 # Wave 12 - Optional Design Steward Handoff
 
-This is a showcase-first sample wave for the shipped `design` worker role in `0.8.5`.
+This is a showcase-first sample wave for the shipped `design` worker role in `0.8.6`.
 
 This example demonstrates the docs-first design-steward path where a design packet is published before code-owning implementation begins.
 

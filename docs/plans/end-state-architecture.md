@@ -1,6 +1,6 @@
 # End-State Architecture
 
-This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.8.5` surface now follows.
+This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.8.6` surface now follows.
 
 The thesis is unchanged: bounded waves, closure roles, proof artifacts, selective rerun, and delivery discipline. What changes is the internal authority model. The launcher stops being the decision engine and becomes a thin orchestrator that reads decisions from canonical state, sequences the engines, and delegates process work to the session supervisor.
 
@@ -41,10 +41,10 @@ The system uses **Model B: canonical authority set**, not a single event log. Th
 | Source | Kind | Authority Over |
 |--------|------|----------------|
 | Wave definitions (`docs/plans/waves/`) | Parsed declarations, read-only after parse | Goals, agent roles, component promotions, exit contracts, proof artifact requirements, eval targets, skill bindings |
-| Control-plane event log (`.tmp/<lane>-wave-launcher/control-plane/wave-<N>.jsonl`) | Append-only JSONL | Lifecycle state: tasks, attempts, proof bundles, rerun requests, gates, contradictions, facts, human inputs, wave runs, agent runs, artifacts, benchmarks, verifications, reviews |
+| Control-plane event log (`.tmp/<lane>-wave-launcher/control-plane/wave-<N>.jsonl`) | Append-only JSONL | Lifecycle state: tasks, attempts, proof bundles, rerun requests, gates, contradictions, facts, human inputs, wave runs, agent runs, signal updates, artifacts, benchmarks, verifications, reviews |
 | Coordination log (`.tmp/<lane>-wave-launcher/coordination/wave-<N>.jsonl`) | Append-only JSONL | Conversational/workflow state: requests, acks, claims, evidence, decisions, blockers, handoffs, clarifications, human feedback, escalations, orchestrator guidance, integration summaries |
 
-**Everything else is a projection.** Shared summaries, dashboards, inboxes, proof registries, retry overrides, relaunch plans, assignment snapshots, dependency snapshots, ledgers, docs queues, security summaries, integration summaries, markdown boards, and trace bundles are all derived from these three canonical sources plus immutable agent result envelopes.
+**Everything else is a projection.** Shared summaries, dashboards, inboxes, signal snapshots, proof registries, retry overrides, relaunch plans, assignment snapshots, dependency snapshots, ledgers, docs queues, security summaries, integration summaries, markdown boards, and trace bundles are all derived from these three canonical sources plus immutable agent result envelopes.
 
 The reducer consumes all three canonical sources plus result envelopes to rebuild state. No other input is read for decision-making.
 
@@ -153,7 +153,7 @@ wave-state-reducer.mjs     Rebuilds full wave state from canonical authority set
 
 The supervisor is the only module that interacts with the outside world: launching processes, managing terminals, and monitoring sessions. It reads decisions from phase engines and executes them. It is the only module that writes observed lifecycle events.
 
-The projection writer is the single module responsible for projection writes. Workflow-owned compatibility state, clarification triage, and canonical coordination/control-plane mutations stay in their own modules.
+`projection-writer.mjs` owns the operator-facing projection writes family: dashboards, traces, summaries, inboxes, ledgers, docs queues, board projections, and assignment or dependency snapshots. `signals.mjs` owns the separate versioned signal projections used by long-running agents and operator wrappers. Workflow-owned compatibility state, clarification triage, and canonical coordination/control-plane mutations stay in their own modules.
 
 ```
 session-supervisor.mjs     Launches and monitors agent sessions
@@ -188,6 +188,16 @@ projection-writer.mjs      Writes projection outputs
                            Rule:    never reads its own outputs,
                                     always writes atomically,
                                     labels every artifact with its class
+
+signals.mjs                Writes versioned signal projections
+                           Inputs:  materialized control status for a wave,
+                                    logical-agent state, feedback state
+                           Outputs: wave-level signal snapshot,
+                                    per-agent signal snapshots,
+                                    resident-orchestrator signal snapshot
+                           Rule:    versions snapshots only when the normalized
+                                    wake payload changes and tracks ack state
+                                    for long-running watcher loops
 ```
 
 ### Layer 4 — Launcher Orchestrator
@@ -564,6 +574,8 @@ Projections materialized from Class 1 and Class 2 sources. Can be deleted and re
 | Run state | `.tmp/<lane>-wave-launcher/run-state.json` | JSON |
 | Quality metrics | `.tmp/<lane>-wave-launcher/traces/wave-<N>/attempt-<A>/quality.json` | JSON |
 | Reducer snapshot | `.tmp/<lane>-wave-launcher/reducer/wave-<N>.json` | JSON |
+| Wave signal snapshot | `.tmp/<lane>-wave-launcher/signals/wave-<N>.json` | JSON |
+| Agent signal snapshot | `.tmp/<lane>-wave-launcher/signals/wave-<N>/<agentId>.json` | JSON |
 
 ### Class 4 — Human-Facing Projections
 

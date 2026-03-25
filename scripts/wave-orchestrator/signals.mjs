@@ -213,6 +213,9 @@ export function waveSignalExitCode(signalSnapshot) {
   if (signal === "completed") {
     return 0;
   }
+  if (signal === "failed") {
+    return 40;
+  }
   if (signal === "feedback-requested") {
     return 20;
   }
@@ -269,6 +272,7 @@ function buildAgentComparable(snapshot) {
     signal: snapshot.signal,
     reason: snapshot.reason,
     attempt: snapshot.attempt,
+    targetAgentIds: normalizeArray(snapshot.targetAgentIds),
     logicalState: snapshot.logicalState,
     selectedForRerun: snapshot.selectedForRerun,
     selectedForActiveAttempt: snapshot.selectedForActiveAttempt,
@@ -468,7 +472,17 @@ function buildAgentSignalCore(lanePaths, wave, statusPayload, logicalAgent) {
   let signal = "stable";
   let status = "waiting";
   let reason = "No new actionable signal.";
-  if (pendingFeedback.length > 0) {
+  if (terminal === "completed") {
+    signal = "completed";
+    status = "completed";
+    reason = `Wave ${wave.wave} completed.`;
+  } else if (terminal === "failed") {
+    signal = "failed";
+    status = "failed";
+    reason =
+      normalizeString(logicalAgent.reason) ||
+      `Wave ${wave.wave} entered a terminal failure state.`;
+  } else if (pendingFeedback.length > 0) {
     signal = "feedback-requested";
     status = "blocked";
     reason = normalizeString(pendingFeedback[0]?.question) || "Human feedback is pending.";
@@ -484,11 +498,7 @@ function buildAgentSignalCore(lanePaths, wave, statusPayload, logicalAgent) {
       ? "blocked"
       : "running";
     reason = normalizeString(coordinationAction.title) || "Targeted coordination action is pending.";
-  } else if (terminal === "completed") {
-    signal = "completed";
-    status = "completed";
-    reason = `Wave ${wave.wave} completed.`;
-  } else if (terminal === "failed" || logicalAgent.state === "needs-rerun") {
+  } else if (logicalAgent.state === "needs-rerun") {
     signal = "failed";
     status = "failed";
     reason =

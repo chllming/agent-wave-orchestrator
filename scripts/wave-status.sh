@@ -17,6 +17,7 @@ Exit codes:
   0   completed
   10  waiting or running
   20  input required
+  40  failed
 EOF
 }
 
@@ -188,6 +189,9 @@ console.log(
 );
 if (String(effective.signal || "").trim().toLowerCase() === "completed") {
   process.exit(0);
+}
+if (String(effective.signal || "").trim().toLowerCase() === "failed") {
+  process.exit(40);
 }
 if (String(effective.signal || "").trim().toLowerCase() === "feedback-requested") {
   process.exit(20);

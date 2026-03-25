@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.8.5` surface.
+This page is the practical repo-upgrade guide for the current `0.8.6` surface.
 
 Use it when you are:
 
@@ -10,21 +10,20 @@ Use it when you are:
 
 For the completed internal architecture cutover record, see [architecture-hardening-migration.md](./architecture-hardening-migration.md). That document is historical. This one is the operator-facing upgrade checklist.
 
-## What `0.8.5` Changes
+## What `0.8.6` Changes
 
-`0.8.5` ships a new authored and runtime surface, not just a patch-level hardening change.
+`0.8.6` keeps the `0.8.5` design-role surface and adds a new signal-driven operator and long-running-agent model.
 
 The biggest additions are:
 
-- the optional `design` worker role is now part of the published package surface
-- starter design bundles now ship in `docs/agents/wave-design-role.md`, `skills/role-design/`, and `skills/tui-design/`
-- design stewards are docs-first by default, but a wave may explicitly give one implementation ownership
-- hybrid design stewards now run in two phases:
-  - design packet first
-  - implementation follow-through second
-- gates, retry or resume planning, reducer state, prompts, local smoke execution, and result envelopes now all agree on that hybrid-design contract
+- the optional `design` worker role remains part of the published package surface
+- starter design bundles still ship in `docs/agents/wave-design-role.md`, `skills/role-design/`, and `skills/tui-design/`
+- starter signal bundles now also ship in `skills/signal-hygiene/`, `scripts/wave-status.sh`, and `scripts/wave-watch.sh`
+- long-running agents and resident orchestrators now receive prompt-visible signal-state and signal-ack paths
+- canonical versioned wave and agent signal snapshots now live under `.tmp/<lane>-wave-launcher/signals/`
+- wrapper and signal semantics now treat `completed` and `failed` as truly terminal, with wrapper exit `40` for failed terminal state
 
-There are no new top-level CLI commands for `0.8.5`.
+There are no new top-level CLI commands for `0.8.6`. The wrapper scripts are starter utilities layered over `wave control status --json`, not a new top-level CLI family.
 
 ## Upgrade Contract
 
@@ -39,6 +38,9 @@ Treat these as package-owned starter surface unless your repo intentionally copi
 
 - `docs/agents/*.md`
 - `skills/*`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
+- `docs/guides/signal-wrappers.md`
 - `docs/plans/current-state.md`
 - `docs/plans/end-state-architecture.md`
 - `docs/plans/wave-orchestrator.md`
@@ -73,7 +75,7 @@ pnpm exec wave upgrade
 
 ### 3. Sync repo-owned starter surface only if you copied it
 
-The most common sync set for `0.8.5` is:
+The most common sync set for `0.8.6` is:
 
 - `docs/agents/wave-launcher-role.md`
 - `docs/agents/wave-orchestrator-role.md`
@@ -82,17 +84,25 @@ The most common sync set for `0.8.5` is:
 - `skills/wave-core/`
 - `skills/role-planner/`
 - `skills/role-design/`
-- `skills/tui-design/` when your repo wants the terminal or operator-surface design reference
+- `skills/tui-design/`
+- `skills/signal-hygiene/`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
+- `docs/guides/author-and-run-waves.md`
+- `docs/guides/planner.md`
+- `docs/guides/terminal-surfaces.md`
+- `docs/guides/signal-wrappers.md`
 - `docs/context7/planner-agent/`
 - `docs/reference/wave-planning-lessons.md`
+- `docs/reference/cli-reference.md`
+- `docs/reference/skills.md`
+- `docs/reference/sample-waves.md`
 - `docs/plans/current-state.md`
 - `docs/plans/end-state-architecture.md`
 - `docs/plans/wave-orchestrator.md`
 - `docs/plans/migration.md`
-- `docs/reference/skills.md`
-- `docs/reference/sample-waves.md`
 
-If your repo copied starter `wave.config.json` defaults, also sync the design-role entries:
+If your repo copied starter `wave.config.json` defaults, also sync:
 
 - `roles.designRolePromptPath`
 - `skills.byRole.design`
@@ -106,29 +116,62 @@ Run these from the repo root:
 pnpm exec wave doctor --json
 pnpm exec wave launch --lane main --dry-run --no-dashboard
 pnpm exec wave control status --lane main --wave 0 --json
+scripts/wave-status.sh --lane main --wave 0
+scripts/wave-watch.sh --lane main --wave 0 --until-change --refresh-ms 500
 pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 ```
 
 Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a tmux-backed dashboard after the upgrade.
 
-## `0.8.5` Design-Steward Model
+## `0.8.6` Release Model
 
-This is the main new behavior in the current `0.8.5` surface.
+The current `0.8.6` surface is two changes together:
 
-### Docs-first design stewards
+- the shipped `design` worker role and hybrid design-steward flow introduced in `0.8.5`
+- the signal-driven long-running-agent and wrapper model introduced in `0.8.6`
 
-Default design stewards:
+### Signal-driven waiting and wrapper model
+
+This is the main new behavior in `0.8.6`.
+
+Starter repos now include:
+
+- `skills/signal-hygiene/`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
+
+Use that model when:
+
+- an external shell loop or CI job should wait for a wave or agent to change state
+- a non-resident agent is intentionally long-running and should wake only on orchestrator-written signal changes
+- a resident orchestrator should explicitly acknowledge that it observed a reroute, answered feedback, or terminal transition
+
+The contract is:
+
+- the runtime publishes versioned signal snapshots under `.tmp/<lane>-wave-launcher/signals/`
+- long-running watchers receive a signal-state path and signal-ack path in the prompt
+- the watcher writes the ack file immediately after it observes a new signal version
+- wrapper exit codes are now:
+  - `0` completed
+  - `10` still active or waiting
+  - `20` input required
+  - `30` signal changed while still active from `wave-watch.sh --until-change`
+  - `40` failed
+
+If your repo copied operator docs, shell automation, or starter scripts, this is the main sync set to apply from `0.8.6`.
+
+### `0.8.5` design-steward model
+
+Docs-first design stewards:
 
 - import `docs/agents/wave-design-role.md`
 - own at least one packet path such as `docs/plans/waves/design/wave-<n>-<agentId>.md`
 - stay docs or spec-first
 - finish with `[wave-design] state=<ready-for-implementation|needs-clarification|blocked> ...`
 
-### Hybrid design stewards
-
 If the wave explicitly assigns non-packet ownership to a design agent, that agent becomes a hybrid design steward.
 
-The runtime now treats that as:
+The runtime treats that as:
 
 1. a design pass first
 2. then the same agent rejoins implementation with normal proof obligations
@@ -143,18 +186,86 @@ For a hybrid design steward, make sure the wave still includes:
 
 The second pass must still re-emit `[wave-design]`, and it must also satisfy the normal implementation proof, doc-delta, and component-marker contract.
 
-### Planner note
-
-The interactive `wave draft` flow now supports `design` as a worker role and scaffolds the docs-first default path.
-
-If you want a hybrid design steward today, the safest authoring paths are:
-
-- edit the drafted wave manually
-- or use an agentic planner payload that already declares the design agent's explicit implementation ownership
+The interactive `wave draft` flow supports `design` as a worker role and scaffolds the docs-first default path. If you want a hybrid design steward today, the safest authoring paths are manual edits or an agentic planner payload that already declares the design agent's explicit implementation ownership.
 
 ## Version-Specific Upgrade Guidance
 
-## Upgrading From `0.8.3` To `0.8.5`
+## Upgrading From `0.8.5` To `0.8.6`
+
+This is the smallest upgrade, but it changes the live wait-loop contract for external automation and intentionally long-running agents.
+
+### What changed
+
+- versioned signal snapshots are now published under `.tmp/<lane>-wave-launcher/signals/`
+- starter repos now include `skills/signal-hygiene/`, `scripts/wave-status.sh`, and `scripts/wave-watch.sh`
+- the runtime injects signal-state plus signal-ack paths into long-running agent and resident-orchestrator prompts
+- `completed` and `failed` now override stale feedback or coordination wakeups in agent signal state
+- wrapper scripts now treat `failed` as terminal with exit `40`
+
+### Required repo changes
+
+Usually none if the repo did not copy starter scripts, operator docs, or skill bundles.
+
+### Strongly recommended sync
+
+If the repo copied starter surface, sync:
+
+- `skills/signal-hygiene/`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
+- `docs/guides/signal-wrappers.md`
+- `docs/guides/terminal-surfaces.md`
+- `docs/reference/cli-reference.md`
+- `docs/reference/skills.md`
+- `docs/plans/current-state.md`
+- `docs/plans/end-state-architecture.md`
+- `docs/plans/wave-orchestrator.md`
+
+### Validation focus
+
+- confirm any existing shell automation treats wrapper exit `40` as terminal failure
+- if the repo uses long-running watchers, confirm they can write the ack file where the prompt tells them to
+- reroute one targeted feedback or coordination request and confirm the resident signal version changes even when the signal kind stays the same
+
+## Upgrading From `0.8.4` To `0.8.6`
+
+### What changed
+
+- `0.8.5` added the optional `design` worker role plus the `role-design` and `tui-design` starter bundles
+- design stewards can now be docs-first or explicit hybrid design stewards
+- `0.8.6` adds signal-driven waiting, `signal-hygiene`, and the seeded wrapper scripts
+
+### Required repo changes
+
+None if your repo does not use design stewards, long-running watcher agents, or copied starter scripts.
+
+### Strongly recommended sync
+
+If your repo copied starter prompts, skills, or authoring docs, sync:
+
+- `docs/agents/wave-design-role.md`
+- `skills/role-design/`
+- `skills/tui-design/`
+- `skills/signal-hygiene/`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
+- `docs/guides/author-and-run-waves.md`
+- `docs/guides/signal-wrappers.md`
+- `docs/guides/planner.md`
+- `docs/reference/skills.md`
+- `docs/reference/sample-waves.md`
+
+If your repo copied starter config defaults, also sync the `designRolePromptPath`, `skills.byRole.design`, and `design-pass` profile entries.
+
+### Validation focus
+
+- the design packet path resolves inside the repo
+- design runs before implementation
+- implementation does not start until every design packet is `ready-for-implementation`
+- hybrid design stewards rejoin implementation when they explicitly own code
+- long-running prompts receive signal-state and ack paths when the repo uses the new waiting model
+
+## Upgrading From `0.8.3` To `0.8.6`
 
 This is the most common one-step package upgrade path.
 
@@ -162,11 +273,12 @@ This is the most common one-step package upgrade path.
 
 - `0.8.4` tightened contradiction replay, component-promotion threshold handling, and projection persistence boundaries
 - `0.8.5` ships the `design` worker role, the `role-design` and `tui-design` starter bundles, and the hybrid design-steward runtime model as part of the published package
+- `0.8.6` adds versioned signal snapshots, `signal-hygiene`, prompt-injected signal ack loops, and the seeded operator wrappers
 - current operator and planner docs now describe the shipped surface directly instead of splitting behavior between a published package and newer `main`-only additions
 
 ### Required repo changes
 
-Usually none if the repo does not copy starter prompts, skills, or planning docs.
+Usually none if the repo does not copy starter prompts, skills, planning docs, or wrapper scripts.
 
 ### Strongly recommended sync
 
@@ -175,7 +287,11 @@ If the repo copied starter surface, sync:
 - `docs/agents/wave-design-role.md`
 - `skills/role-design/`
 - `skills/tui-design/`
+- `skills/signal-hygiene/`
+- `scripts/wave-status.sh`
+- `scripts/wave-watch.sh`
 - `docs/guides/author-and-run-waves.md`
+- `docs/guides/signal-wrappers.md`
 - `docs/guides/planner.md`
 - `docs/reference/skills.md`
 - `docs/reference/sample-waves.md`
@@ -194,49 +310,11 @@ If the repo copied starter `wave.config.json` defaults, also sync:
 - confirm contradiction-blocked replay cases still compare cleanly if the repo keeps replay fixtures
 - if the repo uses design stewards, confirm packet-only design waves still block implementation until `ready-for-implementation`
 - if the repo uses hybrid design stewards, confirm the same agent rejoins implementation only when the authored wave explicitly gives it code ownership
+- if the repo uses long-running agents or shell automation, confirm the new wrapper exit contract and ack-loop semantics before relying on an older polling script
 
-## Upgrading From `0.8.4` To `0.8.5`
+## Upgrading From `0.8.0`-`0.8.4` To `0.8.6`
 
-This is the smallest upgrade that still changes authored behavior.
-
-### What changed
-
-- the optional `design` worker role is now part of the published package surface
-- `role-design` and `tui-design` starter bundles now ship with the release
-- design stewards can now be docs-first or explicit hybrid design stewards
-- prompts, gates, retry or resume planning, reducer state, and local smoke execution now honor that hybrid-design contract consistently
-
-### Required repo changes
-
-None if your repo does not use design stewards.
-
-### Strongly recommended sync
-
-If your repo copied starter prompts, skills, or authoring docs, sync:
-
-- `docs/agents/wave-design-role.md`
-- `skills/role-design/`
-- `skills/tui-design/`
-- `docs/guides/author-and-run-waves.md`
-- `docs/guides/planner.md`
-- `docs/reference/skills.md`
-- `docs/reference/sample-waves.md`
-
-If your repo copied starter config defaults, also sync the `designRolePromptPath`, `skills.byRole.design`, and `design-pass` profile entries.
-
-### Validation focus
-
-If the repo uses design stewards, dry-run at least one wave that proves:
-
-- the design packet path resolves inside the repo
-- design runs before implementation
-- implementation does not start until every design packet is `ready-for-implementation`
-- hybrid design stewards rejoin implementation when they explicitly own code
-- downstream implementation prompts read the same-wave design packet context
-
-## Upgrading From `0.8.0`-`0.8.4` To `0.8.5`
-
-Treat this as one move to the current `0.8.5` surface.
+Treat this as one move to the current `0.8.6` surface.
 
 ### What changed across that range
 
@@ -245,6 +323,7 @@ Treat this as one move to the current `0.8.5` surface.
 - contradiction replay and component-threshold handling were tightened
 - projection persistence centralized under `projection-writer.mjs`
 - the design-role surface is now shipped instead of living only on source `main`
+- versioned signal snapshots, wrapper scripts, and long-running signal ack loops are now part of the shipped operator surface
 
 ### Required repo changes
 
@@ -257,6 +336,7 @@ If your repo copied starter docs or skills, sync:
 - current operator runbook and architecture docs
 - planner starter corpus
 - design-role starter prompt and skill bundles
+- signal-wrapper starter scripts and docs
 - any repo-local docs that still describe design as “main only” or “future”
 
 ### Validation focus
@@ -265,8 +345,9 @@ If your repo copied starter docs or skills, sync:
 - answer at least one human-feedback ticket in a test lane and confirm the linked clarification or escalation chain closes cleanly
 - replay one contradiction-blocked trace if your repo relies on replay regression coverage
 - dry-run one design-steward wave if the repo wants the new authored surface
+- if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.8.5`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.8.6`
 
 This is the main migration path for older adopted repos.
 
@@ -278,6 +359,7 @@ This is the main migration path for older adopted repos.
 - live closure depends on validated result envelopes plus canonical state
 - control-plane state, reducer state, and replay are first-class runtime surfaces
 - optional design stewards are now a supported authored shape
+- signal-driven long-running watchers are now a supported operator shape
 
 ### Required repo changes
 
@@ -292,6 +374,7 @@ This is the main migration path for older adopted repos.
    - the `planner-agentic` entry in `docs/context7/bundles.json`
 5. Review any repo-owned docs or runbooks that still describe summary-era closure, pre-control-plane retry or proof behavior, or a single overloaded evaluator role.
 6. If the repo wants design stewards, sync the design starter surface listed above and update local authoring docs accordingly.
+7. If the repo wants signal-driven long-running watchers or shell automation, sync `skills/signal-hygiene/`, `scripts/wave-status.sh`, `scripts/wave-watch.sh`, and the wrapper docs before relying on local polling scripts.
 
 ### Additional validation
 
@@ -305,7 +388,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.8.5`
+## Upgrading From `0.5.x` Or Earlier To `0.8.6`
 
 Do not treat this as a tiny patch bump.
 
@@ -314,7 +397,7 @@ Do not treat this as a tiny patch bump.
 1. Read [docs/reference/migration-0.2-to-0.5.md](../reference/migration-0.2-to-0.5.md) first if the repo still looks pre-`0.5`.
 2. Run `pnpm exec wave init --adopt-existing` on a branch so the workspace records install state without overwriting repo-owned material.
 3. Move the repo onto the `0.6.x` and later surface using the section above.
-4. Sync the planner corpus and, if needed, the design starter surface.
+4. Sync the planner corpus and, if needed, the design starter surface plus the signal-wrapper starter surface.
 5. Re-run the full validation checklist before any live executor run.
 
 ### Why
@@ -326,6 +409,7 @@ Older repos often differ in:
 - runtime config keys
 - planner starter corpus
 - proof and retry operator surfaces
+- wrapper and signal-monitoring expectations
 - generated state layout under `.tmp/`
 
 Trying to jump directly with ad hoc edits usually leaves hidden drift in prompts, docs, or config.
@@ -345,6 +429,7 @@ Trying to jump directly with ad hoc edits usually leaves hidden drift in prompts
 - `docs/plans/wave-orchestrator.md`
 - `docs/plans/end-state-architecture.md`
 - `docs/plans/migration.md`
+- `docs/guides/signal-wrappers.md`
 - `docs/reference/cli-reference.md`
 - `docs/reference/wave-control.md`
 - `docs/reference/sample-waves.md`
@@ -366,6 +451,8 @@ Use this exact sequence unless your repo has a better repo-specific smoke suite.
 pnpm exec wave doctor --json
 pnpm exec wave launch --lane main --dry-run --no-dashboard
 pnpm exec wave control status --lane main --wave 0 --json
+scripts/wave-status.sh --lane main --wave 0
+scripts/wave-watch.sh --lane main --wave 0 --until-change --refresh-ms 500
 pnpm exec wave coord show --lane main --wave 0 --dry-run --json
 pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 ```
@@ -394,15 +481,21 @@ For repos that depend on replay parity, replay at least:
 ### A live lane looks blocked after the bump
 
 - use `wave control status --lane <lane> --wave <n> --json`
-- confirm whether the blocker is canonical coordination, dependency, proof, human-input, or design-gate state
+- confirm whether the blocker is canonical coordination, dependency, proof, human-input, design-gate, or signal-ready state
 - do not trust generated markdown alone
+
+### External automation hangs after the upgrade
+
+- confirm your wrapper loop treats exit `40` as terminal failure
+- confirm `wave-watch.sh --until-change` expects exit `30` only for non-terminal signal changes
+- if a long-running agent never wakes, inspect its ack file under `.tmp/<lane>-wave-launcher/signals/wave-<n>/acks/`
 
 ### Replay differs from old expectations
 
 - verify whether the trace declares promoted components
 - compare `storedOutcome.gateSnapshot` against recomputed replay output before changing live policy
-- if the repo copied local replay docs, update them to the current reducer and envelope model
+- if the repo copied local replay docs, update them to the current reducer, envelope, and signal model
 
 ## Summary
 
-The current `0.8.5` surface keeps the same authority-set and phase-engine architecture, but it now ships the design-role starter surface and the hybrid design-steward runtime model as part of the published package. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, and runbooks so they describe the runtime the package now ships.
+The current `0.8.6` surface keeps the same authority-set and phase-engine architecture, but it now ships both the design-role starter surface and the signal-driven long-running-agent starter surface as part of the published package. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

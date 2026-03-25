@@ -19,6 +19,8 @@ Wave Control normalizes these entity types:
 
 - `wave_run`
 - `agent_run`
+- `wave_signal`
+- `agent_signal`
 - `coordination_record`
 - `task`
 - `attempt`

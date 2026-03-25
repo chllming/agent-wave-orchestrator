@@ -206,7 +206,7 @@ Provider skills are configured by deploy kind, but the shipped manifests further
 
 For terminal or operator-surface design work, keep `role-design` as the packet contract and add `tui-design` explicitly in the wave's `### Skills`.
 
-For long-running watcher agents, add `signal-hygiene` explicitly in the wave's `### Skills`. Do not attach it to normal one-shot implementation agents.
+For long-running watcher agents, add `signal-hygiene` explicitly in the wave's `### Skills`. Do not attach it to normal one-shot implementation agents. For the wrapper and ack-loop contract, read [../docs/guides/signal-wrappers.md](../docs/guides/signal-wrappers.md).
 
 ## Further Reading
 

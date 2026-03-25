@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.6",
+      "date": "2026-03-25",
+      "summary": "Signal-hygiene starter surface, versioned signal wrappers, terminal watcher hardening, and 0.8.6 release-surface alignment.",
+      "features": [
+        "Versioned wave and agent signal snapshots now ship as part of the operator surface under `.tmp/<lane>-wave-launcher/signals/`, with resident-orchestrator and long-running-agent ack loops built on the same model.",
+        "Starter repos now include `skills/signal-hygiene/`, `scripts/wave-status.sh`, and `scripts/wave-watch.sh` for long-running watcher agents plus shell-friendly operator automation.",
+        "Wrapper exit semantics now expose terminal failure with exit `40`, while `wave-watch.sh --until-change` still returns `30` only when a signal changed and the wave stayed active.",
+        "Agent signal materialization now treats completed and failed as terminal even when stale answered feedback or old coordination tasks still exist in the materialized status payload.",
+        "The migration guide now covers fresh adoption plus upgrades from `0.8.5`, `0.8.4`, `0.8.3`, `0.8.0`-`0.8.4`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier, including repo-owned sync guidance for `skills/signal-hygiene/`, the wrapper scripts, and the `planner-agentic` corpus."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.6` signal-hygiene, wrapper, and design-role behavior.",
+        "If your repo copied starter prompts, skills, scripts, or runbooks, sync `skills/signal-hygiene/`, `scripts/wave-status.sh`, `scripts/wave-watch.sh`, `docs/guides/signal-wrappers.md`, `docs/guides/terminal-surfaces.md`, `docs/reference/cli-reference.md`, and any local operator docs that describe waiting or failure handling.",
+        "If your repo uses planner workflows and copied the planner starter corpus, keep `docs/agents/wave-planner-role.md`, `skills/role-planner/`, `docs/context7/planner-agent/`, `docs/reference/wave-planning-lessons.md`, and the `planner-agentic` bundle entry in sync before relying on local planner docs.",
+        "If your repo uses long-running watcher agents or shell automation, update local loops so wrapper exit `40` is treated as terminal failure and confirm watchers can write their signal ack files under `.tmp/<lane>-wave-launcher/signals/`."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.5",
       "date": "2026-03-25",
       "summary": "Shipped design-role support, hybrid design-steward execution, release-surface alignment, and a practical migration guide.",

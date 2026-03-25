@@ -18,6 +18,11 @@ function writeJson(filePath: string, payload: unknown) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function writeText(filePath: string, text: string) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, text, "utf8");
+}
+
 function runWaveCli(args: string[], cwd: string) {
   return spawnSync("node", [path.join(PACKAGE_ROOT, "scripts", "wave.mjs"), ...args], {
     cwd,
@@ -142,5 +147,83 @@ describe("operator wrappers", () => {
     expect(stderr).toBe("");
     expect(exitCode).toBe(30);
     expect(stdout).toContain("signal=coordination-action");
+  });
+
+  it("treats failed signals as terminal in wave-status.sh and wave-watch.sh", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+    const mockWavePath = path.join(repoDir, "mock-wave.mjs");
+    writeText(
+      mockWavePath,
+      `const payload = {
+  lane: "main",
+  wave: 0,
+  phase: "failed",
+  signals: {
+    wave: {
+      signal: "failed",
+      lane: "main",
+      wave: 0,
+      phase: "failed",
+      status: "failed",
+      version: 3,
+      targetAgentIds: ["A1"],
+    },
+    agents: [
+      {
+        agentId: "A1",
+        signal: "failed",
+        lane: "main",
+        wave: 0,
+        phase: "failed",
+        status: "failed",
+        version: 3,
+        shouldWake: true,
+      },
+    ],
+  },
+};
+process.stdout.write(JSON.stringify(payload));
+`,
+    );
+
+    const env = {
+      ...process.env,
+      WAVE_WRAPPER_ENTRY: mockWavePath,
+      WAVE_SKIP_UPDATE_CHECK: "1",
+    };
+    const statusResult = spawnSync(
+      "bash",
+      [path.join(PACKAGE_ROOT, "scripts", "wave-status.sh"), "--wave", "0", "--agent", "A1"],
+      {
+        cwd: repoDir,
+        encoding: "utf8",
+        env,
+      },
+    );
+    expect(statusResult.status).toBe(40);
+    expect(statusResult.stdout).toContain("signal=failed");
+
+    const watchResult = spawnSync(
+      "bash",
+      [
+        path.join(PACKAGE_ROOT, "scripts", "wave-watch.sh"),
+        "--wave",
+        "0",
+        "--agent",
+        "A1",
+        "--follow",
+        "--refresh-ms",
+        "100",
+      ],
+      {
+        cwd: repoDir,
+        encoding: "utf8",
+        env,
+        timeout: 2000,
+      },
+    );
+    expect(watchResult.status).toBe(40);
+    expect(watchResult.stdout).toContain("signal=failed");
   });
 });

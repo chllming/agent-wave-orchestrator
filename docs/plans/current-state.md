@@ -1,6 +1,6 @@
 # Current State
 
-- The published package is `0.8.5`, and that release now includes the optional pre-implementation `design` worker role plus the `role-design` and `tui-design` starter bundles.
+- The published package is `0.8.6`, and that release now includes the optional pre-implementation `design` worker role, the `role-design`, `tui-design`, and `signal-hygiene` starter bundles, plus the seeded signal-wrapper scripts for long-running-agent and operator wait loops.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
@@ -44,9 +44,9 @@
   - orchestrator-first clarification triage plus human escalation artifacts
   - answered human-feedback responses that reconcile canonical coordination state, helper assignments, and safe continuation intent even when the launcher is no longer active
   - optional `--resident-orchestrator` support for a long-running, non-owning orchestrator session during live waves
-  - seeded operator wrappers `scripts/wave-status.sh` and `scripts/wave-watch.sh` that expose machine-friendly wait, completion, and input-required status by reading `wave control status --json`
+  - seeded operator wrappers `scripts/wave-status.sh` and `scripts/wave-watch.sh` that expose machine-friendly wait, completion, failure, and input-required status by reading `wave control status --json`
   - persisted relaunch plans under `.tmp/<lane>-wave-launcher/status/` so targeted retry intent can survive a launcher restart
-  - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, contradictions, facts, human-input workflow, and observed `wave_run`, `attempt`, and `agent_run` lifecycle events as append-only JSONL; `wave control` materializes state from this log
+  - a canonical control-plane event log under `.tmp/<lane>-wave-launcher/control-plane/` that records operator tasks, rerun requests, proof bundles, contradictions, facts, human-input workflow, observed `wave_run`, `attempt`, and `agent_run` lifecycle events, plus `wave_signal` and `agent_signal` update events as append-only JSONL; `wave control` materializes state from this log
   - operator-applied retry overrides projected to `.tmp/<lane>-wave-launcher/control/` for compatibility with selected reruns, explicit reuse selectors, reuse clearing or preservation, and explicit resume targets
   - authoritative proof registries projected to `.tmp/<lane>-wave-launcher/proof/` for compatibility, while preserving proof bundle lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure
   - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for local-first, best-effort reporting to the Railway-hosted analysis plane
@@ -82,6 +82,7 @@
   - helper assignments remain blocking until the linked follow-up resolves
 - Waves with a `design` worker role now run that design pass before code-owning implementation starts; implementation resumes only after every design packet is `ready-for-implementation`.
 - Long-running non-resident agents can opt into `signal-hygiene` through explicit `### Skills`; that skill makes them wait on signal-version changes, acknowledge a new version through an ack file, and only then resume work.
+- Terminal signal state now dominates stale answered feedback or coordination wakeups, so `completed` and `failed` actually stop long-running watcher loops instead of leaving them on a non-terminal signal.
 - Closure now runs in staged order through the wave's effective closure roles: implementation and proof, then optional `cont-EVAL`, then optional security review, then integration, then documentation, then `cont-QA`. Starter defaults remain `E0`, security reviewer, `A8`, `A9`, and `A0` when a wave does not override them.
 - `E0` is hybrid: planner-generated waves keep it report-only, while hand-authored waves may assign explicit tuning files and thereby make `E0` participate in implementation proof gating.
 - Live closure is strict: `cont-EVAL` must prove the declared eval contract with exact target and benchmark ids, and `cont-QA` must provide both final verdict and final gate artifacts. Legacy evaluator-era shapes remain replay-only compatibility inputs.

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   agentSignalAckPath,
+  buildSignalProjectionSet,
   syncWaveSignalProjections,
   waveSignalPath,
 } from "../../scripts/wave-orchestrator/signals.mjs";
@@ -160,6 +161,143 @@ describe("signal projections", () => {
       signal: "feedback-answered",
       version: 2,
       shouldWake: true,
+    });
+  });
+
+  it("lets terminal wave state override stale answered feedback and coordination actions for agents", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = { wave: 4 };
+    const projections = buildSignalProjectionSet({
+      lanePaths,
+      wave,
+      statusPayload: {
+        lane: "main",
+        wave: 4,
+        phase: "completed",
+        logicalAgents: [
+          {
+            agentId: "A1",
+            state: "blocked",
+            reason: "Old reason that should not override completion",
+            selectedForRerun: false,
+            selectedForActiveAttempt: false,
+          },
+        ],
+        tasks: [
+          {
+            taskId: "task-1",
+            taskType: "request",
+            state: "open",
+            ownerAgentId: "A1",
+            assigneeAgentId: "A1",
+            title: "Old coordination action",
+          },
+        ],
+        feedbackRequests: [
+          {
+            id: "feedback-1",
+            agentId: "A1",
+            status: "answered",
+            question: "Old question",
+            responseText: "Already answered.",
+          },
+        ],
+      },
+      includeResident: false,
+    });
+
+    expect(projections.agents[0]).toMatchObject({
+      agentId: "A1",
+      signal: "completed",
+      status: "completed",
+      reason: "Wave 4 completed.",
+    });
+  });
+
+  it("bumps the resident signal version when only target agents reroute", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const wave = { wave: 5 };
+    const first = syncWaveSignalProjections({
+      lanePaths,
+      wave,
+      statusPayload: {
+        lane: "main",
+        wave: 5,
+        phase: "running",
+        blockingEdge: {
+          kind: "human-input",
+          id: "feedback-1",
+          agentId: "A1",
+          detail: "Need rollout window",
+        },
+        logicalAgents: [
+          { agentId: "A1", state: "blocked", selectedForRerun: false, selectedForActiveAttempt: false },
+          { agentId: "A2", state: "planned", selectedForRerun: false, selectedForActiveAttempt: false },
+        ],
+        tasks: [],
+        feedbackRequests: [
+          {
+            id: "feedback-1",
+            agentId: "A1",
+            status: "pending",
+            question: "Need rollout window",
+            responseText: "",
+          },
+        ],
+        selectionSource: "none",
+        rerunRequest: null,
+        relaunchPlan: null,
+        activeAttempt: null,
+      },
+      includeResident: true,
+    });
+
+    const rerouted = syncWaveSignalProjections({
+      lanePaths,
+      wave,
+      statusPayload: {
+        lane: "main",
+        wave: 5,
+        phase: "running",
+        blockingEdge: {
+          kind: "human-input",
+          id: "feedback-1",
+          agentId: "A2",
+          detail: "Need rollout window",
+        },
+        logicalAgents: [
+          { agentId: "A1", state: "planned", selectedForRerun: false, selectedForActiveAttempt: false },
+          { agentId: "A2", state: "blocked", selectedForRerun: false, selectedForActiveAttempt: false },
+        ],
+        tasks: [],
+        feedbackRequests: [
+          {
+            id: "feedback-1",
+            agentId: "A2",
+            status: "pending",
+            question: "Need rollout window",
+            responseText: "",
+          },
+        ],
+        selectionSource: "none",
+        rerunRequest: null,
+        relaunchPlan: null,
+        activeAttempt: null,
+      },
+      includeResident: true,
+    });
+
+    expect(first.resident?.snapshot).toMatchObject({
+      signal: "feedback-requested",
+      version: 1,
+      targetAgentIds: ["A1"],
+    });
+    expect(rerouted.resident?.snapshot).toMatchObject({
+      signal: "feedback-requested",
+      version: 2,
+      targetAgentIds: ["A2"],
     });
   });
 });

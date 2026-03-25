@@ -103,18 +103,18 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.5`
-- Release tag: [`v0.8.5`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.5)
+- `@chllming/wave-orchestration@0.8.6`
+- Release tag: [`v0.8.6`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.6)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.5`:
+Highlights in `0.8.6`:
 
-- The optional `design` worker role is now part of the shipped release surface, including `docs/agents/wave-design-role.md`, `skills/role-design/`, and `skills/tui-design/`.
-- Design stewards are docs-first by default, but waves can now explicitly assign code ownership and get a hybrid two-pass flow: design packet first, implementation follow-through second.
-- Gates, retry or resume planning, reducer state, prompts, local-executor smoke behavior, and result envelopes now all agree on that hybrid design-steward contract.
-- The migration guide is now a practical upgrade document for fresh adoption plus upgrades from `0.8.3`, `0.8.4`, `0.8.0`-`0.8.4`, `0.6.x`-`0.7.x`, and `0.5.x` or earlier.
-- Release docs, sample waves, current-state notes, and publishing instructions now point at the `0.8.5` surface.
+- The shipped starter surface now includes `skills/signal-hygiene/` plus seeded `scripts/wave-status.sh` and `scripts/wave-watch.sh` wrappers for long-running-agent and operator wait loops.
+- Long-running agents and resident orchestrators now get prompt-level signal-state and signal-ack paths, so wakeups are edge-triggered by versioned signal changes instead of relying on terminal injection.
+- Versioned wave or agent signal snapshots are now a first-class operator surface under `.tmp/<lane>-wave-launcher/signals/`, with failure treated as terminal in both the runtime and the wrapper exit contract.
+- `0.8.5` design-role and hybrid design-steward behavior remains part of the shipped release surface, and the current migration guide now covers the new signal-wrapper model on top of that design-first runtime.
+- Release docs, current-state notes, and publishing instructions now point at the `0.8.6` surface.
 
 Requirements:
 
@@ -148,9 +148,13 @@ The starter surface includes:
 - `docs/agents/wave-design-role.md`
 - `skills/role-design/`
 - `skills/tui-design/` for terminal and operator-surface design work
+- `skills/signal-hygiene/` for intentionally long-running watcher agents
+- `scripts/wave-status.sh` and `scripts/wave-watch.sh` for external wait loops
 - `wave.config.json` defaults for `roles.designRolePromptPath`, `skills.byRole.design`, and the `design-pass` executor profile
 
 Interactive `wave draft` scaffolds the docs-first design-steward path. If you want a hybrid design steward, author that wave explicitly or use an agentic planner payload that gives the same design agent implementation-owned paths plus the normal implementation contract sections.
+
+If a non-resident agent should stay alive and react only to orchestrator-written signal changes, add `signal-hygiene` explicitly in `### Skills`. That bundle uses the prompt-injected signal-state and ack paths instead of inventing a second wakeup surface. For shell automation and the wrapper contract, see [docs/guides/signal-wrappers.md](./docs/guides/signal-wrappers.md).
 
 When runtime launch commands detect a newer npmjs release, Wave prints a non-blocking update notice on stderr. The fast path is `pnpm exec wave self-update`, which updates the dependency, prints the changelog delta, and then records the workspace upgrade report.
 
@@ -226,6 +230,7 @@ codex mcp list
 - [docs/guides/planner.md](./docs/guides/planner.md): `wave project` and `wave draft` workflow
 - [docs/agents/wave-design-role.md](./docs/agents/wave-design-role.md): standing prompt for the optional pre-implementation design steward
 - [docs/guides/terminal-surfaces.md](./docs/guides/terminal-surfaces.md): tmux, VS Code terminal registry, and dry-run surfaces
+- [docs/guides/signal-wrappers.md](./docs/guides/signal-wrappers.md): versioned signal snapshots, wrapper scripts, and long-running-agent ack loops
 - [docs/reference/sample-waves.md](./docs/reference/sample-waves.md): showcase-first authored waves, including a high-fidelity repo-landed rollout example
 - [docs/plans/examples/wave-example-design-handoff.md](./docs/plans/examples/wave-example-design-handoff.md): optional design-steward example that hands a validated design packet to downstream implementation owners
 - [docs/plans/examples/wave-example-rollout-fidelity.md](./docs/plans/examples/wave-example-rollout-fidelity.md): concrete example of what good wave fidelity looks like for a narrow, closure-ready outcome

@@ -160,6 +160,44 @@ function appendParsedStructuredSignalCandidates(lines, candidates, { requireAll 
   candidates.push(...parsedCandidates);
 }
 
+function collectEmbeddedStructuredSignalTexts(value, texts) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectEmbeddedStructuredSignalTexts(item, texts);
+    }
+    return;
+  }
+  if (typeof value.text === "string") {
+    texts.push(value.text);
+  }
+  if (typeof value.aggregated_output === "string") {
+    texts.push(value.aggregated_output);
+  }
+  for (const nestedValue of Object.values(value)) {
+    if (nestedValue && typeof nestedValue === "object") {
+      collectEmbeddedStructuredSignalTexts(nestedValue, texts);
+    }
+  }
+}
+
+function extractEmbeddedStructuredSignalTextsFromJsonLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || !/^[{\[]/.test(trimmed)) {
+    return [];
+  }
+  try {
+    const payload = JSON.parse(trimmed);
+    const texts = [];
+    collectEmbeddedStructuredSignalTexts(payload, texts);
+    return texts.filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function collectStructuredSignalCandidates(text) {
   if (!text) {
     return [];
@@ -167,6 +205,10 @@ function collectStructuredSignalCandidates(text) {
   const candidates = [];
   let fenceLines = null;
   for (const rawLine of String(text || "").split(/\r?\n/)) {
+    const embeddedTexts = extractEmbeddedStructuredSignalTextsFromJsonLine(rawLine);
+    for (const embeddedText of embeddedTexts) {
+      candidates.push(...collectStructuredSignalCandidates(embeddedText));
+    }
     const trimmed = rawLine.trim();
     if (/^```/.test(trimmed)) {
       if (fenceLines === null) {

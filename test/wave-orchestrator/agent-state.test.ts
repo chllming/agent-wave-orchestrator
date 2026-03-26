@@ -189,6 +189,63 @@ describe("buildAgentExecutionSummary", () => {
     });
   });
 
+  it("parses structured markers embedded inside JSON log lines", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "a2-json.log");
+    fs.writeFileSync(
+      logPath,
+      [
+        JSON.stringify({
+          type: "message",
+          payload: {
+            text: "[wave-proof] completion=integrated durability=durable proof=integration state=met detail=json-proof",
+          },
+        }),
+        JSON.stringify({
+          aggregated_output:
+            "[wave-doc-delta] state=owned paths=docs/plans/example.md detail=json-doc-delta\n[wave-component] component=runtime-render-snapshot level=contract-frozen state=met detail=json-component",
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const summary = buildAgentExecutionSummary({
+      agent: { agentId: "A2" },
+      statusRecord: { code: 0, promptHash: "hash" },
+      logPath,
+    });
+
+    expect(summary.proof).toMatchObject({
+      completion: "integrated",
+      durability: "durable",
+      proof: "integration",
+      state: "met",
+      detail: "json-proof",
+    });
+    expect(summary.docDelta).toMatchObject({
+      state: "owned",
+      paths: ["docs/plans/example.md"],
+      detail: "json-doc-delta",
+    });
+    expect(summary.components).toEqual([
+      {
+        componentId: "runtime-render-snapshot",
+        level: "contract-frozen",
+        state: "met",
+        detail: "json-component",
+      },
+    ]);
+    expect(summary.structuredSignalDiagnostics).toMatchObject({
+      proof: { rawCount: 1, acceptedCount: 1 },
+      docDelta: { rawCount: 1, acceptedCount: 1 },
+      component: {
+        rawCount: 1,
+        acceptedCount: 1,
+        seenComponentIds: ["runtime-render-snapshot"],
+      },
+    });
+  });
+
   it("parses cont-EVAL target_ids and benchmark_ids from the final eval marker", () => {
     const dir = makeTempDir();
     const logPath = path.join(dir, "e0.log");

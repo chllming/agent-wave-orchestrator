@@ -16,7 +16,7 @@
       "manualSteps": [
         "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.7` routing, blocker-severity, signal-wrapper, and stable-session behavior.",
         "If your repo copied starter scripts or operator docs, sync `scripts/wave-status.sh`, `scripts/wave-watch.sh`, `docs/guides/signal-wrappers.md`, `docs/guides/terminal-surfaces.md`, `docs/reference/cli-reference.md`, and any local tmux/session runbooks that still assume run-tagged session names.",
-        "If your repo copied planner or routing guidance, sync `docs/guides/planner.md`, `docs/reference/wave-planning-lessons.md`, `docs/plans/wave-orchestrator.md`, and any local helper-assignment policy docs so they describe capability-specific same-wave routing evidence instead of generic prior completion.",
+        "If your repo copied planner or routing guidance, sync `docs/guides/planner.md`, `docs/reference/wave-planning-lessons.md`, `docs/plans/wave-orchestrator.md`, the `planner-agentic` bundle entry in `docs/context7/bundles.json`, and any local helper-assignment policy docs so they describe capability-specific same-wave routing evidence instead of generic prior completion.",
         "If your repo relies on advisory `budget.turns` as if it were a hard ceiling, move that limit to the runtime-specific executor config (`claude.maxTurns` or `opencode.steps`) before you depend on deterministic turn enforcement."
       ],
       "breaking": false

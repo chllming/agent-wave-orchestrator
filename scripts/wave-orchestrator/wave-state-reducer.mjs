@@ -23,7 +23,10 @@ import {
 import { buildHumanInputRequests } from "./human-input-workflow.mjs";
 import { projectLegacySummaryFromEnvelope } from "./result-envelope.mjs";
 import { buildRequestAssignments } from "./routing-state.mjs";
-import { resolveSecurityReviewReportPath } from "./role-helpers.mjs";
+import {
+  resolveDesignReportPath,
+  resolveSecurityReviewReportPath,
+} from "./role-helpers.mjs";
 
 const REDUCER_VERSION = 2;
 
@@ -36,6 +39,10 @@ function resolveReducerReportPath(waveDefinition, agent) {
   }
   if (agent.agentId === (waveDefinition.contEvalAgentId || "E0")) {
     return waveDefinition.contEvalReportPath || null;
+  }
+  const designReportPath = resolveDesignReportPath(agent);
+  if (designReportPath) {
+    return designReportPath;
   }
   return resolveSecurityReviewReportPath(agent);
 }

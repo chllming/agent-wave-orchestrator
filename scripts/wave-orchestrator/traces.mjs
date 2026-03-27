@@ -10,6 +10,8 @@ import {
 import { readControlPlaneEvents } from "./control-plane.mjs";
 import {
   isContEvalReportOnlyAgent,
+  resolveDesignReportPath,
+  isDesignAgent,
   isSecurityReviewAgent,
   resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
@@ -702,6 +704,11 @@ function resolveRunSummaryPayload(wave, run) {
       ? path.resolve(REPO_ROOT, wave.contQaReportPath || wave.evaluatorReportPath)
       : run.agent?.agentId === (wave?.contEvalAgentId || "E0") && wave?.contEvalReportPath
         ? path.resolve(REPO_ROOT, wave.contEvalReportPath)
+        : isDesignAgent(run.agent)
+          ? (() => {
+              const designReportPath = resolveDesignReportPath(run.agent);
+              return designReportPath ? path.resolve(REPO_ROOT, designReportPath) : null;
+            })()
         : isSecurityReviewAgent(run.agent)
           ? (() => {
               const securityReportPath = resolveSecurityReviewReportPath(run.agent);

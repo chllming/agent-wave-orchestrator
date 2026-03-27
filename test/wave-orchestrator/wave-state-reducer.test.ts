@@ -1,4 +1,8 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
+import { buildAgentResultEnvelope } from "../../scripts/wave-orchestrator/result-envelope.mjs";
 import { reduceWaveState } from "../../scripts/wave-orchestrator/wave-state-reducer.mjs";
 
 function makeWaveDefinition(overrides = {}) {
@@ -252,6 +256,55 @@ describe("reduceWaveState", () => {
       expect(state.tasks.find((task) => task.taskType === "design")?.closureState).toBe("owned_slice_proven");
       expect(state.tasks.find((task) => task.taskType === "implementation")?.closureState).toBe("open");
       expect(state.phase).toBe("running");
+    });
+
+    it("preserves design packet paths when rebuilding state from result envelopes", () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wave-reducer-design-"));
+      try {
+        const designPacketAbsPath = path.join(dir, "wave-3-D1.md");
+        fs.writeFileSync(designPacketAbsPath, "# Design Packet\n", "utf8");
+        const designPacketPath = path.relative(process.cwd(), designPacketAbsPath);
+        const designAgent = {
+          agentId: "D1",
+          title: "Design Steward",
+          rolePromptPaths: ["docs/agents/wave-design-role.md"],
+          ownedPaths: [designPacketPath],
+        };
+        const state = reduceWaveState({
+          waveDefinition: {
+            wave: 3,
+            agents: [
+              designAgent,
+              {
+                agentId: "A0",
+                title: "Cont-QA",
+                ownedPaths: [],
+              },
+            ],
+            componentPromotions: [],
+          },
+          agentEnvelopes: {
+            D1: buildAgentResultEnvelope(designAgent, {
+              agentId: "D1",
+              design: {
+                state: "ready-for-implementation",
+                decisions: 2,
+                assumptions: 1,
+                openQuestions: 0,
+                detail: "packet-ready",
+              },
+            }),
+          },
+        });
+
+        expect(state.gateSnapshot.designGate).toMatchObject({
+          ok: true,
+          statusCode: "pass",
+        });
+        expect(state.retryTargetSet.agentIds).not.toContain("D1");
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 

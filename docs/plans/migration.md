@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.8.8` surface.
+This page is the practical repo-upgrade guide for the current `0.8.9` surface.
 
 Use it when you are:
 
@@ -10,20 +10,20 @@ Use it when you are:
 
 For the completed internal architecture cutover record, see [architecture-hardening-migration.md](./architecture-hardening-migration.md). That document is historical. This one is the operator-facing upgrade checklist.
 
-## What `0.8.8` Changes
+## What `0.8.9` Changes
 
-The current `0.8.8` surface keeps the `0.8.7` policy-consistency and stable per-wave session reuse hardening, and now also packages the operator recommendations guide and install-state alignment follow-up in the release itself.
+The current `0.8.9` surface keeps the `0.8.8` packaged operator-guidance alignment and adds a focused repair for design-pass replay and post-design transition handling.
 
 The practical changes are:
 
-- generic `budget.turns` stays advisory metadata unless the runtime-specific ceiling is set explicitly with `claude.maxTurns` or `opencode.steps`
-- capability-targeted helper routing now treats demonstrated same-wave success as capability-specific evidence; unrelated completed work no longer makes an agent the preferred helper owner
-- advisory or stale clarification and human-input records remain visible in coordination history and reducer blocker views, but they no longer reopen `clarifying` or blocked reducer state by themselves
-- wave-agent and resident-orchestrator tmux sessions now reuse stable per-wave session names, so relaunches and stale launcher exits stop accumulating extra tmux sessions for the same wave
+- reducer snapshots now preserve design packet report paths when they rebuild summaries from result envelopes
+- blocked design passes now stop at the design gate instead of being surfaced later as downstream implementation envelope failures
+- trace bundle summary reconstruction now also resolves design packet report paths, so copied design summaries stay aligned when they are rebuilt from logs
+- the current release surface and tracked install-state fixtures now all move together on `0.8.9`
 
-If your repo copied starter docs, shell automation, or operator runbooks, these are the areas most likely to need a sync before the `0.8.8` package cut.
+If your repo copied starter docs, shell automation, or operator runbooks, these are the areas most likely to need a sync before the `0.8.9` package cut.
 
-For a practical `0.8.8` operating stance after the upgrade, read [../guides/recommendations-0.8.8.md](../guides/recommendations-0.8.8.md).
+For a practical `0.8.9` operating stance after the upgrade, read [../guides/recommendations-0.8.9.md](../guides/recommendations-0.8.9.md).
 
 ## What `0.8.6` Changes
 
@@ -138,14 +138,14 @@ pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 
 Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a tmux-backed dashboard after the upgrade.
 
-## `0.8.8` Release Model
+## `0.8.9` Release Model
 
-The current `0.8.8` surface is three changes together:
+The current `0.8.9` surface is three changes together:
 
 - the shipped `design` worker role and hybrid design-steward flow introduced in `0.8.5`
 - the signal-driven long-running-agent and wrapper model introduced in `0.8.6`
 - the policy-consistency, targeted-recovery, capability-specific routing, and stable per-wave session reuse hardening introduced in `0.8.7`
-- the packaged recommendations guide and install-state alignment follow-up released in `0.8.8`
+- the packaged recommendations guide and install-state alignment follow-up released in `0.8.9`
 
 ### Signal-driven waiting and wrapper model
 
@@ -329,9 +329,9 @@ If the repo copied starter `wave.config.json` defaults, also sync:
 - if the repo uses hybrid design stewards, confirm the same agent rejoins implementation only when the authored wave explicitly gives it code ownership
 - if the repo uses long-running agents or shell automation, confirm the new wrapper exit contract and ack-loop semantics before relying on an older polling script
 
-## Upgrading From `0.8.3` To `0.8.8`
+## Upgrading From `0.8.3` To `0.8.9`
 
-Treat this as one move to the current `0.8.8` surface.
+Treat this as one move to the current `0.8.9` surface.
 
 ### What changed across that range
 
@@ -364,7 +364,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.8.8`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.8.9`
 
 This is the main migration path for older adopted repos.
 
@@ -405,7 +405,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.8.8`
+## Upgrading From `0.5.x` Or Earlier To `0.8.9`
 
 Do not treat this as a tiny patch bump.
 
@@ -515,4 +515,4 @@ For repos that depend on replay parity, replay at least:
 
 ## Summary
 
-The current `0.8.8` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.
+The current `0.8.9` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

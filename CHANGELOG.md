@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.8.9 - 2026-03-27
+
+### Changed
+
+- The current release surface now points consistently at `0.8.9`, including the README, current-state notes, migration guide, release manifest, tracked install-state fixtures, and the versioned recommendations guide `docs/guides/recommendations-0.8.9.md`.
+
+### Fixed And Hardened
+
+- Reducer snapshots now preserve design packet report paths when rebuilding summaries from result envelopes, so `designGate` no longer reopens as `missing-design-packet` after a successful design pass.
+- Launcher transitions after design-only passes now stop on the actual design-gate blocker instead of falling through to a misleading downstream implementation `missing-result-envelope` failure.
+- Trace bundle summary reconstruction now also resolves design packet report paths, so copied trace summaries stay aligned when design summaries are rebuilt from logs.
+
+### Testing And Validation
+
+- `pnpm exec vitest run --config vitest.config.ts test/wave-orchestrator/wave-state-reducer.test.ts test/wave-orchestrator/launcher.test.ts test/wave-orchestrator/traces.test.ts`
+- `pnpm test`
+- `node scripts/wave.mjs doctor --json`
+- `node scripts/wave.mjs launch --lane main --dry-run --no-dashboard`
+
 ## 0.8.8 - 2026-03-27
 
 ### Changed

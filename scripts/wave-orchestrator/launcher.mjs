@@ -500,6 +500,49 @@ function buildGateSnapshot(params) {
   });
 }
 
+export function resolvePostDesignPassTransition({
+  waveNumber,
+  designGate,
+  remainingImplementationRuns,
+  currentRuns,
+  fallbackLogPath = null,
+}) {
+  const nextRuns = Array.isArray(remainingImplementationRuns) ? remainingImplementationRuns : [];
+  if (designGate?.ok && nextRuns.length > 0) {
+    const nextAgentIds = nextRuns.map((run) => run.agent.agentId);
+    return {
+      kind: "continue-implementation",
+      nextRuns,
+      attemptDetail: `Design pass complete; continuing with implementation agents ${nextAgentIds.join(", ")}.`,
+      eventMessage: `Design pass complete; launching implementation agents next: ${nextAgentIds.join(", ")}.`,
+      coordinationDetails: `next_agents=${nextAgentIds.join(",")}`,
+    };
+  }
+  if (!designGate?.ok) {
+    const currentAgentIds = (Array.isArray(currentRuns) ? currentRuns : []).map((run) => run.agent.agentId);
+    const blockedAgentId = designGate?.agentId || currentAgentIds[0] || null;
+    const detail =
+      designGate?.detail ||
+      `Design gate blocked wave ${waveNumber}; implementation did not start.`;
+    return {
+      kind: "blocked",
+      failure: {
+        agentId: blockedAgentId,
+        statusCode: designGate?.statusCode || "design-gate-blocked",
+        detail,
+        logPath: designGate?.logPath || fallbackLogPath,
+      },
+      eventMessage: `Design gate blocked wave ${waveNumber}: ${detail}`,
+      coordinationDetails:
+        `agent=${blockedAgentId || "unknown"}; reason=${designGate?.statusCode || "design-gate-blocked"}; ${detail}`,
+    };
+  }
+  return {
+    kind: "no-op",
+    nextRuns,
+  };
+}
+
 function waveGateLabel(gateName) {
   switch (gateName) {
     case "designGate":
@@ -1650,22 +1693,29 @@ export async function runLauncherCli(argv) {
                   !isClosureRoleAgentId(run.agent.agentId, roleBindings) &&
                   (!isDesignAgent(run.agent) || isImplementationOwningDesignAgent(run.agent)),
               );
-              if (designGate?.ok && remainingImplementationRuns.length > 0) {
+              const postDesignTransition = resolvePostDesignPassTransition({
+                waveNumber: wave.wave,
+                designGate,
+                remainingImplementationRuns,
+                currentRuns: runsToLaunch,
+                fallbackLogPath: path.relative(REPO_ROOT, messageBoardPath),
+              });
+              if (postDesignTransition.kind === "continue-implementation") {
                 recordAttemptState(lanePaths, wave.wave, attempt, "completed", {
                   selectedAgentIds: runsToLaunch.map((run) => run.agent.agentId),
-                  detail: `Design pass complete; continuing with implementation agents ${remainingImplementationRuns.map((run) => run.agent.agentId).join(", ")}.`,
+                  detail: postDesignTransition.attemptDetail,
                 });
                 recordCombinedEvent({
-                  message: `Design pass complete; launching implementation agents next: ${remainingImplementationRuns.map((run) => run.agent.agentId).join(", ")}.`,
+                  message: postDesignTransition.eventMessage,
                 });
                 appendCoordination({
                   event: "wave_design_ready",
                   waves: [wave.wave],
                   status: "running",
-                  details: `next_agents=${remainingImplementationRuns.map((run) => run.agent.agentId).join(",")}`,
+                  details: postDesignTransition.coordinationDetails,
                   actionRequested: "None",
                 });
-                runsToLaunch = remainingImplementationRuns;
+                runsToLaunch = postDesignTransition.nextRuns;
                 for (const run of runsToLaunch) {
                   setWaveDashboardAgent(dashboardState, run.agent.agentId, {
                     state: "pending",
@@ -1677,139 +1727,156 @@ export async function runLauncherCli(argv) {
                 traceAttempt += 1;
                 continue;
               }
-            }
-            const implementationGate = readWaveImplementationGate(wave, agentRuns);
-            if (!implementationGate.ok) {
-              failures = [
-                {
-                  agentId: implementationGate.agentId,
-                  statusCode: implementationGate.statusCode,
-                  logPath: implementationGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
-                },
-              ];
-              recordCombinedEvent({
-                level: "error",
-                agentId: implementationGate.agentId,
-                message: `Implementation exit contract blocked wave ${wave.wave}: ${implementationGate.detail}`,
-              });
-              appendCoordination({
-                event: "wave_gate_blocked",
-                waves: [wave.wave],
-                status: "blocked",
-                details: `agent=${implementationGate.agentId}; reason=${implementationGate.statusCode}; ${implementationGate.detail}`,
-                actionRequested: `Lane ${lanePaths.lane} owners should resolve the implementation contract gap before wave progression.`,
-              });
-            } else {
-              const componentGate = readWaveComponentGate(wave, agentRuns, {
-                laneProfile: lanePaths.laneProfile,
-                mode: "live",
-              });
-              if (!componentGate.ok) {
-                if (componentGate.statusCode === "shared-component-sibling-pending") {
-                  applySharedComponentWaitStateToDashboard(componentGate, dashboardState);
-                }
-                failures = [
-                  {
-                    agentId: componentGate.agentId,
-                    statusCode: componentGate.statusCode,
-                    logPath:
-                      componentGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
-                    detail: componentGate.detail,
-                    ownerAgentIds: componentGate.ownerAgentIds || [],
-                    satisfiedAgentIds: componentGate.satisfiedAgentIds || [],
-                    waitingOnAgentIds: componentGate.waitingOnAgentIds || [],
-                    failedOwnContractAgentIds: componentGate.failedOwnContractAgentIds || [],
-                  },
-                ];
+              if (postDesignTransition.kind === "blocked") {
+                failures = [postDesignTransition.failure];
                 recordCombinedEvent({
                   level: "error",
-                  agentId: componentGate.agentId,
-                  message: `Component promotion blocked wave ${wave.wave}: ${componentGate.detail}`,
+                  agentId: postDesignTransition.failure.agentId,
+                  message: postDesignTransition.eventMessage,
                 });
                 appendCoordination({
                   event: "wave_gate_blocked",
                   waves: [wave.wave],
                   status: "blocked",
-                  details: `component=${componentGate.componentId || "unknown"}; reason=${componentGate.statusCode}; ${componentGate.detail}`,
-                  actionRequested: `Lane ${lanePaths.lane} owners should close the component promotion gap before wave progression.`,
+                  details: postDesignTransition.coordinationDetails,
+                  actionRequested: `Lane ${lanePaths.lane} owners should resolve the design packet gap before implementation starts.`,
                 });
-              } else if (launchedImplementationRuns.length > 0) {
-                const reducerDecision = refreshReducerSnapshot(attempt);
-                const helperAssignmentBarrier =
-                  reducerDecision?.reducerState?.gateSnapshot?.helperAssignmentBarrier ||
-                  readWaveAssignmentBarrier(derivedState);
-                const dependencyBarrier =
-                  reducerDecision?.reducerState?.gateSnapshot?.dependencyBarrier ||
-                  readWaveDependencyBarrier(derivedState);
-                if (!helperAssignmentBarrier.ok) {
+              }
+            }
+            if (failures.length === 0) {
+              const implementationGate = readWaveImplementationGate(wave, agentRuns);
+              if (!implementationGate.ok) {
+                failures = [
+                  {
+                    agentId: implementationGate.agentId,
+                    statusCode: implementationGate.statusCode,
+                    logPath: implementationGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                  },
+                ];
+                recordCombinedEvent({
+                  level: "error",
+                  agentId: implementationGate.agentId,
+                  message: `Implementation exit contract blocked wave ${wave.wave}: ${implementationGate.detail}`,
+                });
+                appendCoordination({
+                  event: "wave_gate_blocked",
+                  waves: [wave.wave],
+                  status: "blocked",
+                  details: `agent=${implementationGate.agentId}; reason=${implementationGate.statusCode}; ${implementationGate.detail}`,
+                  actionRequested: `Lane ${lanePaths.lane} owners should resolve the implementation contract gap before wave progression.`,
+                });
+              } else {
+                const componentGate = readWaveComponentGate(wave, agentRuns, {
+                  laneProfile: lanePaths.laneProfile,
+                  mode: "live",
+                });
+                if (!componentGate.ok) {
+                  if (componentGate.statusCode === "shared-component-sibling-pending") {
+                    applySharedComponentWaitStateToDashboard(componentGate, dashboardState);
+                  }
                   failures = [
                     {
-                      agentId: null,
-                      statusCode: helperAssignmentBarrier.statusCode,
-                      logPath: path.relative(REPO_ROOT, messageBoardPath),
-                      detail: helperAssignmentBarrier.detail,
+                      agentId: componentGate.agentId,
+                      statusCode: componentGate.statusCode,
+                      logPath:
+                        componentGate.logPath || path.relative(REPO_ROOT, messageBoardPath),
+                      detail: componentGate.detail,
+                      ownerAgentIds: componentGate.ownerAgentIds || [],
+                      satisfiedAgentIds: componentGate.satisfiedAgentIds || [],
+                      waitingOnAgentIds: componentGate.waitingOnAgentIds || [],
+                      failedOwnContractAgentIds: componentGate.failedOwnContractAgentIds || [],
                     },
                   ];
                   recordCombinedEvent({
                     level: "error",
-                    message: `Helper assignment barrier blocked wave ${wave.wave}: ${helperAssignmentBarrier.detail}`,
+                    agentId: componentGate.agentId,
+                    message: `Component promotion blocked wave ${wave.wave}: ${componentGate.detail}`,
                   });
                   appendCoordination({
                     event: "wave_gate_blocked",
                     waves: [wave.wave],
                     status: "blocked",
-                    details: `reason=${helperAssignmentBarrier.statusCode}; ${helperAssignmentBarrier.detail}`,
-                    actionRequested: `Lane ${lanePaths.lane} owners should resolve helper assignments before closure.`,
+                    details: `component=${componentGate.componentId || "unknown"}; reason=${componentGate.statusCode}; ${componentGate.detail}`,
+                    actionRequested: `Lane ${lanePaths.lane} owners should close the component promotion gap before wave progression.`,
                   });
-                } else if (!dependencyBarrier.ok) {
-                  failures = [
-                    {
-                      agentId: null,
-                      statusCode: dependencyBarrier.statusCode,
-                      logPath: path.relative(REPO_ROOT, messageBoardPath),
-                      detail: dependencyBarrier.detail,
-                    },
-                  ];
-                  recordCombinedEvent({
-                    level: "error",
-                    message: `Dependency barrier blocked wave ${wave.wave}: ${dependencyBarrier.detail}`,
-                  });
-                  appendCoordination({
-                    event: "wave_gate_blocked",
-                    waves: [wave.wave],
-                    status: "blocked",
-                    details: `reason=${dependencyBarrier.statusCode}; ${dependencyBarrier.detail}`,
-                    actionRequested: `Lane ${lanePaths.lane} owners should resolve required dependency tickets before closure.`,
-                  });
+                } else if (launchedImplementationRuns.length > 0) {
+                  const reducerDecision = refreshReducerSnapshot(attempt);
+                  const helperAssignmentBarrier =
+                    reducerDecision?.reducerState?.gateSnapshot?.helperAssignmentBarrier ||
+                    readWaveAssignmentBarrier(derivedState);
+                  const dependencyBarrier =
+                    reducerDecision?.reducerState?.gateSnapshot?.dependencyBarrier ||
+                    readWaveDependencyBarrier(derivedState);
+                  if (!helperAssignmentBarrier.ok) {
+                    failures = [
+                      {
+                        agentId: null,
+                        statusCode: helperAssignmentBarrier.statusCode,
+                        logPath: path.relative(REPO_ROOT, messageBoardPath),
+                        detail: helperAssignmentBarrier.detail,
+                      },
+                    ];
+                    recordCombinedEvent({
+                      level: "error",
+                      message: `Helper assignment barrier blocked wave ${wave.wave}: ${helperAssignmentBarrier.detail}`,
+                    });
+                    appendCoordination({
+                      event: "wave_gate_blocked",
+                      waves: [wave.wave],
+                      status: "blocked",
+                      details: `reason=${helperAssignmentBarrier.statusCode}; ${helperAssignmentBarrier.detail}`,
+                      actionRequested: `Lane ${lanePaths.lane} owners should resolve helper assignments before closure.`,
+                    });
+                  } else if (!dependencyBarrier.ok) {
+                    failures = [
+                      {
+                        agentId: null,
+                        statusCode: dependencyBarrier.statusCode,
+                        logPath: path.relative(REPO_ROOT, messageBoardPath),
+                        detail: dependencyBarrier.detail,
+                      },
+                    ];
+                    recordCombinedEvent({
+                      level: "error",
+                      message: `Dependency barrier blocked wave ${wave.wave}: ${dependencyBarrier.detail}`,
+                    });
+                    appendCoordination({
+                      event: "wave_gate_blocked",
+                      waves: [wave.wave],
+                      status: "blocked",
+                      details: `reason=${dependencyBarrier.statusCode}; ${dependencyBarrier.detail}`,
+                      actionRequested: `Lane ${lanePaths.lane} owners should resolve required dependency tickets before closure.`,
+                    });
+                  } else {
+                    recordCombinedEvent({
+                      message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
+                    });
+                    const closureResult = await runClosureSweepPhase({
+                      lanePaths,
+                      wave,
+                      closureRuns: agentRuns.filter((run) =>
+                        isClosureRoleAgentId(run.agent.agentId, roleBindings),
+                      ),
+                      coordinationLogPath: derivedState.coordinationLogPath,
+                      refreshDerivedState,
+                      dashboardState,
+                      recordCombinedEvent,
+                      flushDashboards,
+                      options,
+                      feedbackStateByRequestId,
+                      appendCoordination,
+                    });
+                    failures = closureResult.failures;
+                    timedOut = timedOut || closureResult.timedOut;
+                    materializeAgentExecutionSummaries(wave, agentRuns);
+                    failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
+                    refreshDerivedState(attempt);
+                  }
                 } else {
                   recordCombinedEvent({
-                    message: `Implementation pass complete; running closure sweep for ${wave.wave}.`,
+                    message: "Implementation exit contracts and component promotions are satisfied.",
                   });
-                  const closureResult = await runClosureSweepPhase({
-                    lanePaths,
-                    wave,
-                    closureRuns: agentRuns.filter((run) =>
-                      isClosureRoleAgentId(run.agent.agentId, roleBindings),
-                    ),
-                    coordinationLogPath: derivedState.coordinationLogPath,
-                    refreshDerivedState,
-                    dashboardState,
-                    recordCombinedEvent,
-                    flushDashboards,
-                    options,
-                    feedbackStateByRequestId,
-                    appendCoordination,
-                  });
-                  failures = closureResult.failures;
-                  timedOut = timedOut || closureResult.timedOut;
-                  materializeAgentExecutionSummaries(wave, agentRuns);
-                  failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
-                  refreshDerivedState(attempt);
                 }
-              } else {
-                recordCombinedEvent({
-                  message: "Implementation exit contracts and component promotions are satisfied.",
-                });
               }
             }
           }

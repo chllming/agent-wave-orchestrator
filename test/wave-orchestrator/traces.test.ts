@@ -1330,6 +1330,98 @@ describe("trace bundles", () => {
     expect(validation.errors.some((error) => error.includes("summary"))).toBe(true);
   });
 
+  it("rebuilds design summaries in trace bundles with the design packet path", () => {
+    const dir = makeTempDir();
+    const sourceDir = path.join(dir, "source");
+    const componentMatrixJsonPath = path.join(sourceDir, "component-cutover-matrix.json");
+    const componentMatrixDocPath = path.join(sourceDir, "component-cutover-matrix.md");
+    const lanePaths = makeLanePaths(dir, componentMatrixJsonPath, componentMatrixDocPath);
+    const designPacketAbsPath = path.join(sourceDir, "docs", "plans", "waves", "design", "wave-0-D1.md");
+    const designPacketPath = path.relative(process.cwd(), designPacketAbsPath);
+    const promptPath = path.join(sourceDir, "prompts", "wave-0-d1.prompt.md");
+    const logPath = path.join(sourceDir, "logs", "wave-0-d1.log");
+    const statusPath = path.join(sourceDir, "status", "wave-0-d1.status");
+    const inboxPath = path.join(sourceDir, "inboxes", "D1.md");
+    const sharedSummaryPath = path.join(sourceDir, "shared-summary.md");
+    const coordinationLogPath = path.join(sourceDir, "coordination.raw.jsonl");
+
+    writeJson(componentMatrixJsonPath, { components: [] });
+    writeText(componentMatrixDocPath, "# Component Cutover Matrix\n");
+    writeText(designPacketAbsPath, "# Design Packet\n");
+    writeText(promptPath, "# Prompt D1\n");
+    writeText(
+      logPath,
+      "[wave-design] state=ready-for-implementation decisions=2 assumptions=1 open_questions=0 detail=packet-ready\n",
+    );
+    writeText(inboxPath, "# Inbox D1\n");
+    writeText(sharedSummaryPath, "# Shared summary\n");
+    writeText(coordinationLogPath, "");
+    makeStatus(statusPath, 0);
+
+    const wave = {
+      wave: 0,
+      agents: [
+        {
+          agentId: "D1",
+          title: "Design Steward",
+          rolePromptPaths: ["docs/agents/wave-design-role.md"],
+          ownedPaths: [designPacketPath],
+        },
+      ],
+      componentPromotions: [],
+    };
+    const traceDir = writeTraceBundle({
+      tracesDir: lanePaths.tracesDir,
+      lanePaths,
+      launcherOptions: {
+        timeoutMinutes: 60,
+        maxRetriesPerWave: 2,
+        dryRun: false,
+      },
+      wave,
+      attempt: 1,
+      manifest: {
+        generatedAt: "2026-03-27T00:00:00.000Z",
+        source: "docs/**/*",
+        docs: [],
+        waves: [wave],
+      },
+      coordinationLogPath,
+      coordinationState: {},
+      ledger: {
+        wave: 0,
+        phase: "design",
+        attempt: 1,
+      },
+      docsQueue: { items: [] },
+      integrationSummary: null,
+      integrationMarkdownPath: null,
+      agentRuns: [
+        {
+          agent: {
+            ...wave.agents[0],
+            executorResolved: { role: "design", id: "codex" },
+          },
+          promptPath,
+          logPath,
+          statusPath,
+          inboxPath,
+          sharedSummaryPath,
+          lastLaunchAttempt: 1,
+        },
+      ],
+      quality: {},
+      structuredSignals: {},
+      gateSnapshot: null,
+    });
+
+    const summary = JSON.parse(
+      fs.readFileSync(path.join(traceDir, "summaries", "D1.summary.json"), "utf8"),
+    );
+    expect(summary.reportPath).toBe(designPacketPath);
+    expect(summary.design?.state).toBe("ready-for-implementation");
+  });
+
   it("marks v1 bundles as legacy best-effort replay instead of hermetic", () => {
     const dir = makeTempDir();
     const tracesDir = path.join(dir, "traces");

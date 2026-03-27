@@ -103,18 +103,17 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.8`
-- Release tag: [`v0.8.8`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.8)
+- `@chllming/wave-orchestration@0.8.9`
+- Release tag: [`v0.8.9`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.9)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.8`:
+Highlights in `0.8.9`:
 
-- The shipped starter surface now includes `skills/signal-hygiene/` plus seeded `scripts/wave-status.sh` and `scripts/wave-watch.sh` wrappers for long-running-agent and operator wait loops.
-- Long-running agents and resident orchestrators now get prompt-level signal-state and signal-ack paths, so wakeups are edge-triggered by versioned signal changes instead of relying on terminal injection.
-- Versioned wave or agent signal snapshots are now a first-class operator surface under `.tmp/<lane>-wave-launcher/signals/`, with failure treated as terminal in both the runtime and the wrapper exit contract.
-- `0.8.5` design-role and hybrid design-steward behavior remains part of the shipped release surface, and the current release line keeps the `0.8.7` capability-specific same-wave helper routing, blocker-severity consistency, and stable per-wave tmux session reuse hardening.
-- Release docs, current-state notes, migration guidance, publishing instructions, and the packaged operator recommendations guide now point at the `0.8.8` surface.
+- Reducer snapshots now preserve design packet report paths when they rebuild summaries from result envelopes, so successful design passes no longer get replayed as `missing-design-packet`.
+- Launcher transitions after design-only passes now stop on the real design-gate failure and record a design-specific blocker instead of falling through to a misleading downstream implementation `missing-result-envelope` error.
+- Trace bundle summary reconstruction now also preserves design packet report paths, so copied summary artifacts stay aligned when a trace has to rebuild a design summary from logs.
+- Release docs, current-state notes, migration guidance, publishing instructions, the packaged operator recommendations guide, and the tracked install-state fixtures now all point at the `0.8.9` surface.
 
 Requirements:
 

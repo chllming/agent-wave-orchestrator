@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CODEX_SANDBOX_MODE } from "../../scripts/wave-orchestrator/config.mjs";
 import { buildCodexExecInvocation } from "../../scripts/wave-orchestrator/executors.mjs";
+import { resolvePostDesignPassTransition } from "../../scripts/wave-orchestrator/launcher.mjs";
 import {
   readWaveComponentGate,
   readWaveComponentMatrixGate,
@@ -2706,6 +2707,40 @@ describe("selectInitialWaveRuns", () => {
       "D1",
       "A1",
     ]);
+  });
+
+  it("surfaces blocked design passes before implementation-gate failures", () => {
+    const transition = resolvePostDesignPassTransition({
+      waveNumber: 18,
+      designGate: {
+        ok: false,
+        agentId: "D1",
+        statusCode: "missing-design-packet",
+        detail: "Missing design packet path for D1.",
+        logPath: "logs/wave-18-d1.log",
+      },
+      remainingImplementationRuns: [
+        {
+          agent: { agentId: "A1" },
+        },
+      ],
+      currentRuns: [
+        {
+          agent: { agentId: "D1" },
+        },
+      ],
+      fallbackLogPath: "messageboards/wave-18.md",
+    });
+
+    expect(transition).toMatchObject({
+      kind: "blocked",
+      failure: {
+        agentId: "D1",
+        statusCode: "missing-design-packet",
+        detail: "Missing design packet path for D1.",
+        logPath: "logs/wave-18-d1.log",
+      },
+    });
   });
 });
 

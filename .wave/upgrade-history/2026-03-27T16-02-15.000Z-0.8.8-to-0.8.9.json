@@ -1,0 +1,35 @@
+{
+  "packageName": "@chllming/wave-orchestration",
+  "previousVersion": "0.8.8",
+  "currentVersion": "0.8.9",
+  "generatedAt": "2026-03-27T16:02:15.000Z",
+  "initMode": "adopt-existing",
+  "releases": [
+    {
+      "version": "0.8.9",
+      "date": "2026-03-27",
+      "summary": "Design-gate report-path preservation, accurate post-design failure reporting, trace-summary alignment, and 0.8.9 release-surface sync.",
+      "features": [
+        "Reducer snapshots now preserve design packet report paths when rebuilding summaries from result envelopes, so `designGate` no longer reopens as `missing-design-packet` after a successful design pass.",
+        "Launcher transitions after design-only passes now stop on the actual design-gate blocker and record a design-specific blocker instead of falling through to a misleading downstream implementation `missing-result-envelope` error.",
+        "Trace bundle summary reconstruction now also resolves design packet report paths, so copied trace summaries stay aligned when design summaries are rebuilt from logs.",
+        "README, current-state notes, migration guidance, release manifest, tracked install-state fixtures, and the versioned recommendations guide now all point at the `0.8.9` package surface.",
+        "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.9` release surface.",
+        "If your repo copied current-surface docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, and `docs/guides/recommendations-0.8.9.md` so local guidance matches the packaged release.",
+        "If your repo copied trace or replay helpers around design packets, sync the updated reducer, launcher, and trace-summary reconstruction behavior before relying on rebuilt design summaries in replay tooling."
+      ],
+      "breaking": false
+    }
+  ],
+  "doctor": {
+    "ok": true,
+    "workspaceRoot": "/home/coder/wave-orchestration",
+    "packageName": "@chllming/wave-orchestration",
+    "packageVersion": "0.8.9",
+    "errors": [],
+    "warnings": []
+  }
+}

@@ -43,6 +43,8 @@ The useful path is journey-first:
   Read [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) and the standing reviewer prompt in [agents/wave-security-role.md](./agents/wave-security-role.md).
 - Upgrading an existing repo:
   Read [plans/migration.md](./plans/migration.md), then review the release notes in [../CHANGELOG.md](../CHANGELOG.md) before running `pnpm exec wave upgrade`.
+- Want the practical `0.8.7` operating stance:
+  Read [guides/recommendations-0.8.7.md](./guides/recommendations-0.8.7.md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
 - Want the concrete runtime module map:
   Read [plans/end-state-architecture.md](./plans/end-state-architecture.md) for the engine-by-engine architecture and artifact ownership model.
 - Want the CLI surface map:

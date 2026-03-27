@@ -1,0 +1,35 @@
+{
+  "packageName": "@chllming/wave-orchestration",
+  "previousVersion": "0.8.6",
+  "currentVersion": "0.8.7",
+  "generatedAt": "2026-03-27T08:20:00.000Z",
+  "initMode": "adopt-existing",
+  "releases": [
+    {
+      "version": "0.8.7",
+      "date": "2026-03-27",
+      "summary": "Policy-consistency hardening, capability-specific same-wave routing, stable per-wave tmux session reuse, and 0.8.7 release-surface alignment.",
+      "features": [
+        "Generic `budget.turns` is now treated consistently as advisory metadata unless a runtime-specific ceiling such as `claude.maxTurns` or `opencode.steps` is declared; `budget.minutes` remains the primary attempt budget.",
+        "Open coordination can stay visible as `soft`, `stale`, or `advisory` without automatically reopening hard blocking state, and operators can now use `defer`, `mark-advisory`, `mark-stale`, and `resolve-policy` instead of editing runtime files by hand.",
+        "Recoverable execution failures such as timeout, max-turn, rate-limit, and missing-status outcomes now prefer targeted rerun or resume paths plus bounded repair work instead of broad wave failure when proof-critical blockers are not present.",
+        "Capability-targeted helper routing now prefers demonstrated same-wave success for the requested capability before falling back to the least-busy matching capability owner.",
+        "Wave-agent and resident-orchestrator tmux sessions now reuse stable per-wave session names instead of appending a run tag, so stale launcher exits stop accumulating extra sessions for the same wave."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.7` routing, blocker-severity, signal-wrapper, and stable-session behavior.",
+        "If your repo copied planner or routing guidance, sync `docs/guides/planner.md`, `docs/reference/wave-planning-lessons.md`, `docs/plans/wave-orchestrator.md`, the `planner-agentic` bundle entry in `docs/context7/bundles.json`, and any local helper-assignment policy docs.",
+        "Read `docs/guides/recommendations-0.8.7.md` before relying on advisory blocker states or generic turn budgets in a repo-owned policy guide."
+      ],
+      "breaking": false
+    }
+  ],
+  "doctor": {
+    "ok": true,
+    "workspaceRoot": "/home/coder/wave-orchestration",
+    "packageName": "@chllming/wave-orchestration",
+    "packageVersion": "0.8.7",
+    "errors": [],
+    "warnings": []
+  }
+}

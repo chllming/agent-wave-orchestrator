@@ -74,6 +74,7 @@ Practical guidance:
 - prefer `budget.minutes` for normal synthesis, integration, and closure work
 - use generic `budget.turns` as a planning hint, not a hard failure trigger
 - only set `claude.maxTurns` or `opencode.steps` when you deliberately want a hard ceiling for that runtime
+- see [../../guides/recommendations-0.8.7.md](../../guides/recommendations-0.8.7.md) for the recommended `0.8.7` operating stance that combines advisory turn budgets with softer non-proof coordination states
 
 ## Runtime Pages
 

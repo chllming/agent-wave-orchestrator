@@ -23,6 +23,8 @@ The practical changes are:
 
 If your repo copied starter docs, shell automation, or operator runbooks, these are the areas most likely to need a sync before the `0.8.7` package cut.
 
+For a practical `0.8.7` operating stance after the upgrade, read [../guides/recommendations-0.8.7.md](../guides/recommendations-0.8.7.md).
+
 ## What `0.8.6` Changes
 
 `0.8.6` keeps the `0.8.5` design-role surface and adds a new signal-driven operator and long-running-agent model.

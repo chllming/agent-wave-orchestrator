@@ -8,6 +8,9 @@ const repoRoot = process.cwd();
 describe("release surface alignment", () => {
   it("keeps package metadata, README, changelog, and release manifest on the same version", () => {
     const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+    const installState = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, ".wave", "install-state.json"), "utf8"),
+    );
     const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
     const changelog = fs.readFileSync(path.join(repoRoot, "CHANGELOG.md"), "utf8");
     const manifest = JSON.parse(
@@ -15,6 +18,7 @@ describe("release surface alignment", () => {
     );
 
     const version = packageJson.version;
+    expect(installState.installedVersion).toBe(version);
     expect(manifest.releases[0]?.version).toBe(version);
     expect(readme).toContain(`@chllming/wave-orchestration@${version}`);
     expect(readme).toContain(
@@ -111,6 +115,22 @@ describe("release surface alignment", () => {
     expect(migrationGuide).toContain(`## Upgrading From \`0.6.x\` Or \`0.7.x\` To \`${packageJson.version}\``);
     expect(migrationGuide).toContain("wave dashboard --lane <lane> --attach current");
     expect(JSON.stringify(manifest.releases[0])).toContain("planner-agentic");
+  });
+
+  it("documents the 0.8.7 operating recommendations for softer states and advisory turns", () => {
+    const guide = fs.readFileSync(
+      path.join(repoRoot, "docs", "guides", "recommendations-0.8.7.md"),
+      "utf8",
+    );
+    const docsReadme = fs.readFileSync(path.join(repoRoot, "docs", "README.md"), "utf8");
+
+    expect(guide).toContain("budget.minutes");
+    expect(guide).toContain("budget.turns");
+    expect(guide).toContain("mark-advisory");
+    expect(guide).toContain("mark-stale");
+    expect(guide).toContain("resolve-policy");
+    expect(guide).toContain("targeted recovery");
+    expect(docsReadme).toContain("guides/recommendations-0.8.7.md");
   });
 
   it("documents fresh-launch relaunch-plan reset behavior", () => {

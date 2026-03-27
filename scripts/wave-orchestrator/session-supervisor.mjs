@@ -647,7 +647,7 @@ export function launchWaveDashboardSession(lanePaths, { sessionName, dashboardPa
     `node ${shellQuote(path.join(PACKAGE_ROOT, "scripts", "wave-dashboard.mjs"))} --dashboard-file ${shellQuote(
       dashboardPath,
     )}${messageBoardArg} --lane ${shellQuote(lanePaths.lane)} --watch`,
-    "exec bash -l",
+    "exit $?",
   ].join("; ");
   runTmux(
     lanePaths,

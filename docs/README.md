@@ -36,7 +36,7 @@ The useful path is journey-first:
 - Drafting or revising waves:
   Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then use [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) as the operator runbook.
 - Adding an optional pre-implementation design steward:
-  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.8.6` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
+  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.8.7` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
 - Want signal-driven automation or long-running watcher loops:
   Read [guides/signal-wrappers.md](./guides/signal-wrappers.md). It covers the seeded `wave-status.sh` and `wave-watch.sh` wrappers, the versioned signal snapshot files, and the ack-loop contract behind `signal-hygiene`.
 - Adding a security review pass:

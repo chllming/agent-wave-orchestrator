@@ -4,6 +4,7 @@ import {
   appendCoordinationRecord,
   clarificationClosureCondition,
   clarificationLinkedRequests,
+  coordinationRecordBlocksWave,
   isOpenCoordinationStatus,
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
@@ -467,14 +468,14 @@ export function triageClarificationRequests({
   ensureDirectory(lanePaths.feedbackTriageDir);
   const triagePath = triageLogPath(lanePaths, wave.wave);
   const openClarifications = (coordinationState?.clarifications || []).filter((record) =>
-    isOpenCoordinationStatus(record.status),
+    coordinationRecordBlocksWave(record),
   );
   let changed = false;
 
   for (const record of openClarifications) {
     const linkedRequests = clarificationLinkedRequests(coordinationState, record.id);
     const openLinkedRequests = linkedRequests.filter((entry) =>
-      isOpenCoordinationStatus(entry.status),
+      coordinationRecordBlocksWave(entry),
     );
     const openAckPendingLinkedRequests = openLinkedRequests.filter(
       (entry) => entry.status === "open",
@@ -487,7 +488,7 @@ export function triageClarificationRequests({
     const openEscalations = (coordinationState?.humanEscalations || []).filter(
       (entry) =>
         entry.closureCondition === clarificationClosureCondition(record.id) &&
-        isOpenCoordinationStatus(entry.status),
+        coordinationRecordBlocksWave(entry),
     );
     if (resolvedLinkedRequest || resolvedEscalation) {
       if (openEscalations.length > 0) {

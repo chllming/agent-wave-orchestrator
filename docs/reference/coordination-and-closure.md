@@ -108,14 +108,31 @@ Wave treats these coordination statuses as open:
 - `acknowledged`
 - `in_progress`
 
-It treats these as non-blocking:
+It treats these statuses as closed:
 
 - `resolved`
 - `closed`
 - `superseded`
 - `cancelled`
 
-That means a targeted helper request keeps blocking until the request leaves the open set in coordination state.
+But "open" and "blocking" are now different questions.
+
+Open records can carry a blocker severity:
+
+- `hard`
+- `soft`
+- `stale`
+- `advisory`
+- `proof-critical`
+- `closure-critical`
+
+Practical rule:
+
+- `proof-critical`, `closure-critical`, and hard required barriers still stop the wave outright
+- `soft` blockers stay visible and may still drive repair work or retry targeting
+- `stale` and `advisory` records remain in coordination history without owning the active blocking edge
+
+That means a targeted helper request only blocks while it remains open *and* still has blocking severity in coordination state.
 
 This page is documenting runtime semantics first. The important contract is that closure follows the durable coordination state, not that a particular human or agent used one exact command path to mutate it.
 
@@ -181,7 +198,7 @@ What happens next:
 - that assignment is written into the assignment snapshot
 - the shared summary and A8 inbox now show the open helper work
 
-`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into blocking task edges; plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner. When a launcher attempt is already running, status scopes the top-level blocking edge to that active attempt instead of letting stale relaunch metadata or unrelated closure tasks dominate the wave-level view.
+`wave control task list` and `wave control task get` surface both blocking and informative coordination kinds. `wave control status` only turns `request`, `blocker`, `clarification-request`, `human-feedback`, and `human-escalation` into candidate blocking task edges, and then only if the current record still has `blocking=true` plus a blocking severity. Plain `handoff`, `evidence`, `claim`, and `decision` records stay visible without falsely blocking the owner. When a launcher attempt is already running, status scopes the top-level blocking edge to that active attempt instead of letting stale relaunch metadata or unrelated closure tasks dominate the wave-level view.
 
 ### Step 3: Why A1 Can Be Done But The Wave Is Still Blocked
 
@@ -253,15 +270,19 @@ Important implication:
 
 - even if code is landed, an open clarification chain can still block the wave
 - a routed clarification that stays `open` past the acknowledgement policy can be rerouted during the same live attempt instead of waiting for a full retry cycle
-- operators can now inspect and intervene through one command surface:
+- operators can now inspect and intervene through one command surface, including downgrade or policy-close actions when the remaining issue is no longer proof-critical:
 
 ```bash
 pnpm exec wave control status --lane main --wave 10 --agent A7 --json
 pnpm exec wave control task act reassign --lane main --wave 10 --id clarify-a7-rollout --to A1
+pnpm exec wave control task act mark-stale --lane main --wave 10 --id clarify-a7-rollout
+pnpm exec wave control task act mark-advisory --lane main --wave 10 --id request-clarify-a7-rollout
+pnpm exec wave control task act defer --lane main --wave 10 --id blocker-doc-follow-up
+pnpm exec wave control task act resolve-policy --lane main --wave 10 --id clarify-a7-rollout --detail "Policy already covered in the published rollout guide."
 pnpm exec wave control task act resolve --lane main --wave 10 --id escalation-clarify-a7-rollout --detail "Published command surface covers this question."
 ```
 
-That keeps clarification routing, dismissal, escalation, and human-answer handling inside the canonical coordination state instead of forcing ad hoc file edits.
+That keeps clarification routing, downgrade, dismissal, escalation, policy closure, and human-answer handling inside the canonical coordination state instead of forcing ad hoc file edits.
 
 When the operator answers through the feedback queue directly, the answer path now repairs the same canonical state:
 

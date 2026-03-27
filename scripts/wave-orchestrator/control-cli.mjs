@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { appendCoordinationRecord, clarificationClosureCondition, clarificationLinkedRequests, isOpenCoordinationStatus, readMaterializedCoordinationState, updateSeedRecords } from "./coordination-store.mjs";
+import {
+  appendCoordinationRecord,
+  clarificationClosureCondition,
+  clarificationLinkedRequests,
+  isOpenCoordinationStatus,
+  readMaterializedCoordinationState,
+  updateSeedRecords,
+} from "./coordination-store.mjs";
 import { answerFeedbackRequest, createFeedbackRequest } from "./feedback.mjs";
 import { readWaveHumanFeedbackRequests } from "./coordination.mjs";
 import { readWaveLedger } from "./ledger.mjs";
@@ -18,6 +25,7 @@ import {
   REPO_ROOT,
   sanitizeAdhocRunId,
   sanitizeLaneName,
+  toIsoTimestamp,
 } from "./shared.mjs";
 import {
   appendWaveControlEvent,
@@ -50,7 +58,7 @@ function printUsage() {
   wave control task create --lane <lane> --wave <n> --agent <id> --kind <request|blocker|clarification|handoff|evidence|claim|decision|human-input> --summary <text> [options]
   wave control task list --lane <lane> --wave <n> [--agent <id>] [--json]
   wave control task get --lane <lane> --wave <n> --id <task-id> [--json]
-  wave control task act <start|resolve|dismiss|cancel|reassign|answer|escalate> --lane <lane> --wave <n> --id <task-id> [options]
+  wave control task act <start|resolve|dismiss|cancel|reassign|answer|escalate|defer|mark-advisory|mark-stale|resolve-policy> --lane <lane> --wave <n> --id <task-id> [options]
 
   wave control rerun request --lane <lane> --wave <n> [--agent <id> ...] [--resume-cursor <cursor>] [--reuse-attempt <id> ...] [--reuse-proof <id> ...] [--reuse-derived-summaries <true|false>] [--invalidate-component <id> ...] [--clear-reuse <id> ...] [--preserve-reuse <id> ...] [--requested-by <name>] [--reason <text>] [--json]
   wave control rerun get --lane <lane> --wave <n> [--json]
@@ -94,6 +102,8 @@ function parseArgs(argv) {
     detail: "",
     targets: [],
     priority: "normal",
+    blocking: null,
+    blockerSeverity: "",
     dependsOn: [],
     artifactRefs: [],
     status: "open",
@@ -155,6 +165,10 @@ function parseArgs(argv) {
       options.targets.push(String(args[++i] || "").trim());
     } else if (arg === "--priority") {
       options.priority = String(args[++i] || "").trim();
+    } else if (arg === "--blocking") {
+      options.blocking = normalizeBooleanish(args[++i], true);
+    } else if (arg === "--severity") {
+      options.blockerSeverity = String(args[++i] || "").trim();
     } else if (arg === "--depends-on") {
       options.dependsOn.push(String(args[++i] || "").trim());
     } else if (arg === "--artifact") {
@@ -264,7 +278,10 @@ const BLOCKING_TASK_TYPES = new Set([
 ]);
 
 function taskBlocksAgent(task) {
-  return BLOCKING_TASK_TYPES.has(String(task?.taskType || "").trim().toLowerCase());
+  return (
+    BLOCKING_TASK_TYPES.has(String(task?.taskType || "").trim().toLowerCase()) &&
+    task?.blocking !== false
+  );
 }
 
 function assignmentRelevantToAgent(assignment, agentId = "") {
@@ -462,7 +479,9 @@ function buildBlockingEdge({
       selectionTargetsAgent(task.assigneeAgentId, attemptSelection)
     );
   });
-  const pendingHuman = scopedTasks.find((task) => task.state === "input-required");
+  const pendingHuman = scopedTasks.find(
+    (task) => task.state === "input-required" && task.blocking !== false,
+  );
   if (pendingHuman) {
     return {
       kind: "human-input",
@@ -472,7 +491,10 @@ function buildBlockingEdge({
     };
   }
   const escalation = scopedTasks.find(
-    (task) => task.taskType === "escalation" && ["open", "working"].includes(task.state),
+    (task) =>
+      task.taskType === "escalation" &&
+      task.blocking !== false &&
+      ["open", "working"].includes(task.state),
   );
   if (escalation) {
     return {
@@ -483,7 +505,10 @@ function buildBlockingEdge({
     };
   }
   const clarification = scopedTasks.find(
-    (task) => task.taskType === "clarification" && ["open", "working"].includes(task.state),
+    (task) =>
+      task.taskType === "clarification" &&
+      task.blocking !== false &&
+      ["open", "working"].includes(task.state),
   );
   if (clarification) {
     return {
@@ -564,7 +589,10 @@ function buildBlockingEdge({
     };
   }
   const blocker = scopedTasks.find(
-    (task) => task.taskType === "blocker" && ["open", "working"].includes(task.state),
+    (task) =>
+      task.taskType === "blocker" &&
+      task.blocking !== false &&
+      ["open", "working"].includes(task.state),
   );
   if (blocker) {
     return {
@@ -575,7 +603,10 @@ function buildBlockingEdge({
     };
   }
   const request = scopedTasks.find(
-    (task) => task.taskType === "request" && ["open", "working"].includes(task.state),
+    (task) =>
+      task.taskType === "request" &&
+      task.blocking !== false &&
+      ["open", "working"].includes(task.state),
   );
   if (request) {
     return {
@@ -738,7 +769,9 @@ function printStatus(payload) {
 function appendCoordinationStatusUpdate(logPath, record, status, options = {}) {
   return appendCoordinationRecord(logPath, {
     ...record,
+    ...(options.patch || {}),
     status,
+    updatedAt: options.updatedAt || toIsoTimestamp(),
     summary: options.summary || record.summary,
     detail: options.detail || record.detail,
     source: options.source || "operator",
@@ -822,6 +855,73 @@ function appendTaskCoordinationEvent(logPath, lanePaths, wave, record, action, o
       status: "open",
       source: "operator",
     });
+  }
+  if (action === "defer") {
+    return appendCoordinationStatusUpdate(logPath, record, record.status, {
+      detail:
+        options.detail ||
+        `${record.summary || record.id} deferred by operator; keep visible but do not block wave progression.`,
+      patch: {
+        blocking: false,
+        blockerSeverity: "soft",
+      },
+    });
+  }
+  if (action === "mark-advisory") {
+    return appendCoordinationStatusUpdate(logPath, record, record.status, {
+      detail:
+        options.detail ||
+        `${record.summary || record.id} marked advisory by operator; keep visible without blocking closure.`,
+      patch: {
+        blocking: false,
+        blockerSeverity: "advisory",
+      },
+    });
+  }
+  if (action === "mark-stale") {
+    return appendCoordinationStatusUpdate(logPath, record, record.status, {
+      detail:
+        options.detail ||
+        `${record.summary || record.id} marked stale by operator; historical context preserved without blocking.`,
+      patch: {
+        blocking: false,
+        blockerSeverity: "stale",
+      },
+    });
+  }
+  if (action === "resolve-policy") {
+    const resolvedRecord = appendCoordinationStatusUpdate(logPath, record, "resolved", {
+      detail: options.detail || `Resolved by operator policy: ${record.summary || record.id}.`,
+      patch: {
+        blocking: false,
+        blockerSeverity: "advisory",
+      },
+    });
+    const policyRecord = appendCoordinationRecord(logPath, {
+      id: `policy-${record.id}`,
+      lane: lanePaths.lane,
+      wave: wave.wave,
+      agentId: options.agent || "operator",
+      kind: "resolved-by-policy",
+      targets: record.targets,
+      priority: record.priority,
+      artifactRefs: record.artifactRefs,
+      dependsOn: Array.from(new Set([record.id, ...(record.dependsOn || [])])),
+      closureCondition:
+        record.kind === "clarification-request"
+          ? clarificationClosureCondition(record.id)
+          : record.closureCondition || "",
+      summary: record.summary,
+      detail: options.detail || `Operator resolved ${record.id} by policy.`,
+      status: "resolved",
+      source: "operator",
+      blocking: false,
+      blockerSeverity: "advisory",
+    });
+    return {
+      resolvedRecord,
+      policyRecord,
+    };
   }
   throw new Error(`Unsupported task action: ${action}`);
 }
@@ -975,6 +1075,8 @@ export async function runControlCli(argv) {
         artifactRefs: options.artifactRefs,
         status: options.status,
         source: "operator",
+        ...(options.blocking !== null ? { blocking: options.blocking } : {}),
+        ...(options.blockerSeverity ? { blockerSeverity: options.blockerSeverity } : {}),
       });
       console.log(JSON.stringify(record, null, 2));
       return;
@@ -1067,14 +1169,27 @@ export async function runControlCli(argv) {
         throw new Error(`Task not found: ${options.id}`);
       }
       const updated = appendTaskCoordinationEvent(logPath, lanePaths, wave, record, action, options);
-      if (record.kind === "clarification-request" && ["resolve", "dismiss"].includes(action)) {
+      if (record.kind === "clarification-request" && ["resolve", "dismiss", "resolve-policy"].includes(action)) {
         const nextStatus = action === "resolve" ? "resolved" : "cancelled";
+        const linkedStatus = action === "resolve-policy" ? "resolved" : nextStatus;
         for (const linked of clarificationLinkedRequests(coordinationState, record.id).filter((entry) =>
           isOpenCoordinationStatus(entry.status),
         )) {
-          appendCoordinationStatusUpdate(logPath, linked, nextStatus, {
-            detail: `${action === "resolve" ? "Resolved" : "Cancelled"} via clarification ${record.id}.`,
+          appendCoordinationStatusUpdate(logPath, linked, linkedStatus, {
+            detail:
+              action === "resolve"
+                ? `Resolved via clarification ${record.id}.`
+                : action === "resolve-policy"
+                  ? `Resolved by policy via clarification ${record.id}.`
+                  : `Cancelled via clarification ${record.id}.`,
             summary: linked.summary,
+            patch:
+              action === "resolve-policy"
+                ? {
+                    blocking: false,
+                    blockerSeverity: "advisory",
+                  }
+                : undefined,
           });
         }
       }

@@ -47,6 +47,8 @@ By default the launcher can start per-wave dashboard sessions in tmux.
 
 Wave now maintains stable tmux attach targets for both the current-wave dashboard and the global dashboard on the lane socket.
 
+Wave-agent sessions and the resident orchestrator now also use stable per-wave tmux session names. A relaunch reuses the same session identity for that wave instead of creating a new run-tagged session name each time, which reduces stale session buildup after launcher crashes or interrupted retries.
+
 Use:
 
 ```bash

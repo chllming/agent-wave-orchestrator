@@ -11,6 +11,8 @@ import {
 import {
   CLARIFICATION_CLOSURE_PREFIX,
   buildCoordinationResponseMetrics,
+  coordinationBlockerSeverity,
+  coordinationRecordBlocksWave,
 } from "./coordination-store.mjs";
 import {
   DEFAULT_COORDINATION_ACK_TIMEOUT_MS,
@@ -586,6 +588,8 @@ export function buildTaskSnapshots({
     const metrics = responseMetrics.recordMetricsById.get(record.id) || {};
     const feedbackRequest = feedbackById.get(record.id) || null;
     const taskState = taskStateForCoordinationRecord(record, feedbackRequest);
+    const blocking = coordinationRecordBlocksWave(record);
+    const blockerSeverity = coordinationBlockerSeverity(record);
     tasks.push({
       taskId: record.id,
       sourceRecordId: record.id,
@@ -598,6 +602,8 @@ export function buildTaskSnapshots({
       assigneeAgentId: firstTargetAgentId(record),
       leaseOwnerAgentId:
         ["acknowledged", "in_progress"].includes(record.status) ? firstTargetAgentId(record) : null,
+      blocking,
+      blockerSeverity,
       needsHuman:
         record.kind === "human-feedback" ||
         feedbackRequest?.status === "pending" ||
@@ -627,7 +633,7 @@ export function buildTaskSnapshots({
           ? feedbackRequest?.updatedAt || record.updatedAt || record.createdAt
           : null,
       overdueAck: metrics.overdueAck === true,
-      stale: metrics.staleClarification === true,
+      stale: metrics.staleClarification === true || blockerSeverity === "stale",
       feedbackRequestId: feedbackRequest?.id || null,
       humanResponse: feedbackRequest?.responseText || null,
       humanOperator: feedbackRequest?.responseOperator || null,
@@ -648,6 +654,8 @@ export function buildTaskSnapshots({
       ownerAgentId: request.agentId || null,
       assigneeAgentId: request.agentId || null,
       leaseOwnerAgentId: null,
+      blocking: true,
+      blockerSeverity: "hard",
       needsHuman: request.status !== "answered",
       dependsOn: [],
       evidenceRefs: [],
@@ -676,6 +684,9 @@ export function buildTaskSnapshots({
 export function nextTaskDeadline(tasks) {
   const candidates = [];
   for (const task of tasks || []) {
+    if (task?.blocking === false) {
+      continue;
+    }
     for (const [kind, value] of [
       ["ack", task.ackDeadlineAt],
       ["resolve", task.resolveDeadlineAt],

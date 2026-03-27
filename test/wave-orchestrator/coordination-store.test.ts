@@ -6,6 +6,8 @@ import {
   buildCoordinationResponseMetrics,
   compileAgentInbox,
   compileSharedSummary,
+  coordinationBlockerSeverity,
+  coordinationRecordBlocksWave,
   isClarificationLinkedRequest,
   materializeCoordinationState,
   normalizeCoordinationRecord,
@@ -87,6 +89,35 @@ describe("normalizeCoordinationRecord", () => {
     });
 
     expect(record.status).toBe("resolved");
+  });
+
+  it("derives blocker severity and blocking defaults from coordination kind", () => {
+    const request = normalizeCoordinationRecord({
+      kind: "request",
+      lane: "main",
+      wave: 11,
+      agentId: "A1",
+      summary: "Need a shared-plan follow-up",
+      targets: ["agent:A9"],
+    });
+    const advisory = normalizeCoordinationRecord({
+      kind: "blocker",
+      lane: "main",
+      wave: 11,
+      agentId: "A2",
+      summary: "Historical note only",
+      blocking: false,
+    });
+
+    expect(request.blocking).toBe(true);
+    expect(request.blockerSeverity).toBe("closure-critical");
+    expect(coordinationBlockerSeverity(request)).toBe("closure-critical");
+    expect(coordinationRecordBlocksWave(request)).toBe(true);
+
+    expect(advisory.blocking).toBe(false);
+    expect(advisory.blockerSeverity).toBe("advisory");
+    expect(coordinationBlockerSeverity(advisory)).toBe("advisory");
+    expect(coordinationRecordBlocksWave(advisory)).toBe(false);
   });
 });
 
@@ -268,6 +299,61 @@ describe("compileAgentInbox", () => {
     expect(responseMetrics.overdueClarificationCount).toBe(1);
     expect(responseMetrics.overdueClarificationIds).toEqual(["clarify-runtime"]);
     expect(responseMetrics.oldestUnackedRequestAgeMs).toBe(690000);
+  });
+
+  it("ignores non-blocking coordination when computing overdue and oldest-open metrics", () => {
+    const state = materializeCoordinationState([
+      {
+        id: "advisory-request",
+        kind: "request",
+        lane: "main",
+        wave: 0,
+        agentId: "A1",
+        targets: ["agent:A9"],
+        status: "open",
+        priority: "high",
+        blocking: false,
+        blockerSeverity: "advisory",
+        artifactRefs: [],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: "2026-03-22T00:00:00.000Z",
+        updatedAt: "2026-03-22T00:00:00.000Z",
+        confidence: "medium",
+        summary: "Optional follow-up",
+        detail: "Keep visible but do not block.",
+        source: "launcher",
+      },
+      {
+        id: "blocking-request",
+        kind: "request",
+        lane: "main",
+        wave: 0,
+        agentId: "A1",
+        targets: ["agent:A9"],
+        status: "open",
+        priority: "high",
+        artifactRefs: [],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: "2026-03-22T00:10:00.000Z",
+        updatedAt: "2026-03-22T00:10:00.000Z",
+        confidence: "medium",
+        summary: "Blocking follow-up",
+        detail: "This one still needs an acknowledgement.",
+        source: "agent",
+      },
+    ]);
+
+    const responseMetrics = buildCoordinationResponseMetrics(state, {
+      nowMs: Date.parse("2026-03-22T00:20:00.000Z"),
+      ackTimeoutMs: 5 * 60 * 1000,
+      resolutionStaleMs: 10 * 60 * 1000,
+    });
+
+    expect(responseMetrics.overdueAckRecordIds).toEqual(["blocking-request"]);
+    expect(responseMetrics.overdueAckCount).toBe(1);
+    expect(responseMetrics.oldestOpenCoordinationAgeMs).toBe(10 * 60 * 1000);
   });
 
   it("renders enriched integration evidence in shared summaries and inboxes", () => {

@@ -16,6 +16,7 @@ import {
   readWaveHumanFeedbackRequests,
 } from "./coordination.mjs";
 import {
+  appendCoordinationRecord,
   buildCoordinationResponseMetrics,
 } from "./coordination-store.mjs";
 import {
@@ -122,6 +123,7 @@ import {
 import {
   clearWaveRetryOverride,
   readWaveRetryOverride,
+  writeWaveRetryOverride,
 } from "./retry-control.mjs";
 import { appendWaveControlEvent, readControlPlaneEvents } from "./control-plane.mjs";
 import { materializeContradictionsFromControlPlaneEvents } from "./contradiction-entity.mjs";
@@ -576,6 +578,100 @@ function buildFailureFromGate(gateName, gate, fallbackLogPath) {
     waitingOnAgentIds: gate?.waitingOnAgentIds || [],
     failedOwnContractAgentIds: gate?.failedOwnContractAgentIds || [],
   };
+}
+
+function normalizeFailureStatusCode(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function recoverableFailureReason(failure, summary = null) {
+  const statusCode = normalizeFailureStatusCode(failure?.statusCode);
+  if (["timeout-no-status", "timed_out", "missing-status"].includes(statusCode)) {
+    return statusCode;
+  }
+  const terminationReason = String(summary?.terminationReason || "").trim().toLowerCase();
+  if (["timeout", "max-turns", "session-missing"].includes(terminationReason)) {
+    return terminationReason;
+  }
+  const detailText = `${failure?.detail || ""} ${summary?.terminationHint || ""}`.toLowerCase();
+  if (detailText.includes("rate limit") || detailText.includes("429 too many requests")) {
+    return "rate-limit";
+  }
+  return null;
+}
+
+function annotateFailuresWithRecoveryHints(failures, agentRuns) {
+  const runsByAgentId = new Map((agentRuns || []).map((run) => [run.agent.agentId, run]));
+  return (failures || []).map((failure) => {
+    const run = failure?.agentId ? runsByAgentId.get(failure.agentId) : null;
+    const summary = run
+      ? readAgentExecutionSummary(run.statusPath, {
+          agent: run.agent,
+          statusPath: run.statusPath,
+          statusRecord: readStatusRecordIfPresent(run.statusPath),
+          logPath: fs.existsSync(run.logPath) ? run.logPath : null,
+        })
+      : null;
+    const recoveryReason = recoverableFailureReason(failure, summary);
+    return {
+      ...failure,
+      detail: failure?.detail || summary?.terminationHint || null,
+      terminationReason: summary?.terminationReason || null,
+      terminationHint: summary?.terminationHint || null,
+      observedTurnLimit:
+        Number.isFinite(Number(summary?.terminationObservedTurnLimit))
+          ? Number(summary.terminationObservedTurnLimit)
+          : null,
+      recoverable: Boolean(recoveryReason),
+      recoveryReason,
+    };
+  });
+}
+
+function failuresAreRecoverable(failures) {
+  return Array.isArray(failures) && failures.length > 0 && failures.every((failure) => failure?.recoverable);
+}
+
+function appendRepairCoordinationRequests({
+  coordinationLogPath,
+  lanePaths,
+  wave,
+  attempt,
+  runs,
+  failures,
+}) {
+  const selectedRuns = Array.isArray(runs) ? runs : [];
+  const failureByAgentId = new Map(
+    (failures || [])
+      .filter((failure) => failure?.agentId)
+      .map((failure) => [failure.agentId, failure]),
+  );
+  for (const run of selectedRuns) {
+    const agentId = run?.agent?.agentId;
+    if (!agentId) {
+      continue;
+    }
+    const failure = failureByAgentId.get(agentId) || null;
+    appendCoordinationRecord(coordinationLogPath, {
+      id: `repair-wave-${wave.wave}-attempt-${attempt}-${agentId}`,
+      lane: lanePaths.lane,
+      wave: wave.wave,
+      agentId: "launcher",
+      kind: "request",
+      targets: [`agent:${agentId}`],
+      priority: "normal",
+      summary: failure
+        ? `Repair ${agentId}: ${failure.recoveryReason || failure.statusCode}`
+        : `Repair ${agentId}: targeted follow-up`,
+      detail: failure
+        ? `Targeted recovery for ${agentId} after ${failure.recoveryReason || failure.statusCode}. ${failure.detail || "Resume the bounded follow-up work and preserve reusable proof from other agents."}`
+        : `Targeted recovery for ${agentId}. Resume the bounded follow-up work and preserve reusable proof from other agents.`,
+      status: "open",
+      source: "launcher",
+      blocking: false,
+      blockerSeverity: "soft",
+    });
+  }
 }
 
 // --- Main entry point ---
@@ -1519,6 +1615,7 @@ export async function runLauncherCli(argv) {
           }
 
           materializeAgentExecutionSummaries(wave, agentRuns);
+          failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
           refreshDerivedState(attempt);
           syncWaveSignals();
           lastLiveCoordinationRefreshAt = Date.now();
@@ -1706,6 +1803,7 @@ export async function runLauncherCli(argv) {
                   failures = closureResult.failures;
                   timedOut = timedOut || closureResult.timedOut;
                   materializeAgentExecutionSummaries(wave, agentRuns);
+                  failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
                   refreshDerivedState(attempt);
                 }
               } else {
@@ -1896,6 +1994,14 @@ export async function runLauncherCli(argv) {
                 detail: "Queued for shared component closure",
               });
             }
+            appendRepairCoordinationRequests({
+              coordinationLogPath: derivedState.coordinationLogPath,
+              lanePaths,
+              wave,
+              attempt,
+              runs: runsToLaunch,
+              failures,
+            });
             writeWaveRelaunchProjection({
               lanePaths,
               wave,
@@ -1931,6 +2037,106 @@ export async function runLauncherCli(argv) {
           }
 
           if (attempt >= options.maxRetriesPerWave + 1) {
+            const reducerDecision =
+              latestReducerSnapshot || refreshReducerSnapshot(attempt);
+            const recoveryPlan = planRetryWaveAttempt({
+              agentRuns,
+              failures,
+              derivedState,
+              lanePaths,
+              wave,
+              retryOverride: readWaveRetryOverride(lanePaths, wave.wave),
+              waveState: reducerDecision?.reducerState || null,
+            });
+            const recoverySelectedAgentIds = Array.from(
+              new Set([
+                ...((recoveryPlan.selectedRuns || []).map((run) => run.agent.agentId)),
+                ...((reducerDecision?.resumePlan?.invalidatedAgentIds || []).filter(Boolean)),
+                ...((failures || []).map((failure) => failure.agentId).filter(Boolean)),
+              ]),
+            );
+            if (failuresAreRecoverable(failures) && recoverySelectedAgentIds.length > 0) {
+              const resumeCursor =
+                reducerDecision?.resumePlan?.resumeFromPhase &&
+                reducerDecision.resumePlan.resumeFromPhase !== "completed"
+                  ? reducerDecision.resumePlan.resumeFromPhase
+                  : null;
+              const queuedRecovery = writeWaveRetryOverride(lanePaths, wave.wave, {
+                lane: lanePaths.lane,
+                wave: wave.wave,
+                selectedAgentIds: recoverySelectedAgentIds,
+                resumeCursor,
+                clearReusableAgentIds: Array.from(
+                  new Set((failures || []).map((failure) => failure.agentId).filter(Boolean)),
+                ),
+                preserveReusableAgentIds: reducerDecision?.resumePlan?.reusableAgentIds || [],
+                reuseProofBundleIds: reducerDecision?.resumePlan?.reusableProofBundleIds || [],
+                requestedBy: "launcher-recovery",
+                reason: `Auto recovery queued after recoverable execution issue(s): ${(failures || []).map((failure) => `${failure.agentId || "wave"}:${failure.recoveryReason || failure.statusCode}`).join(", ")}.`,
+                applyOnce: true,
+              });
+              appendRepairCoordinationRequests({
+                coordinationLogPath: derivedState.coordinationLogPath,
+                lanePaths,
+                wave,
+                attempt: attempt + 1,
+                runs: agentRuns.filter((run) => recoverySelectedAgentIds.includes(run.agent.agentId)),
+                failures,
+              });
+              if (recoveryPlan.selectedRuns.length > 0) {
+                writeWaveRelaunchProjection({
+                  lanePaths,
+                  wave,
+                  attempt: attempt + 1,
+                  runs: recoveryPlan.selectedRuns,
+                  failures,
+                  derivedState,
+                });
+              }
+              recordAttemptState(lanePaths, wave.wave, attempt, "failed", {
+                selectedAgentIds: runsToLaunch.map((run) => run.agent.agentId),
+                detail: failures
+                  .map((failure) => `${failure.agentId || "wave"}:${failure.recoveryReason || failure.statusCode}`)
+                  .join(", "),
+              });
+              recordWaveRunState(lanePaths, wave.wave, "blocked", {
+                attempts: attempt,
+                traceDir: completionTraceDir ? path.relative(REPO_ROOT, completionTraceDir) : null,
+                gateSnapshot: completionGateSnapshot,
+                recoverable: true,
+                rerunRequestId: queuedRecovery.requestId,
+                failures: failures.map((failure) => ({
+                  agentId: failure.agentId || null,
+                  statusCode: failure.statusCode,
+                  recoveryReason: failure.recoveryReason || null,
+                  detail: failure.detail || null,
+                })),
+              });
+              dashboardState.status = "blocked";
+              for (const failure of failures) {
+                setWaveDashboardAgent(dashboardState, failure.agentId, {
+                  state: "blocked",
+                  detail:
+                    failure.detail ||
+                    `Recoverable ${failure.recoveryReason || failure.statusCode}; targeted resume queued.`,
+                });
+              }
+              flushDashboards();
+              appendCoordination({
+                event: "wave_recovery_queued",
+                waves: [wave.wave],
+                status: "blocked",
+                details: `attempt=${attempt}/${options.maxRetriesPerWave + 1}; request=${queuedRecovery.requestId}; agents=${recoverySelectedAgentIds.join(",")}; reason=${(failures || []).map((failure) => failure.recoveryReason || failure.statusCode).join(",")}`,
+                actionRequested:
+                  `Lane ${lanePaths.lane} owners should resume the queued targeted recovery or let autonomous relaunch the selected agents.`,
+              });
+              await flushWaveControlTelemetry();
+              const error = new Error(
+                `Wave ${wave.wave} queued targeted recovery request ${queuedRecovery.requestId} after recoverable execution failures.`,
+              );
+              error.exitCode = 43;
+              throw error;
+            }
             recordAttemptState(lanePaths, wave.wave, attempt, "failed", {
               selectedAgentIds: runsToLaunch.map((run) => run.agent.agentId),
               detail: failures
@@ -2073,6 +2279,16 @@ export async function runLauncherCli(argv) {
             setWaveDashboardAgent(dashboardState, run.agent.agentId, {
               state: "pending",
               detail: "Queued for retry",
+            });
+          }
+          if (retryPlan.source !== "override") {
+            appendRepairCoordinationRequests({
+              coordinationLogPath: derivedState.coordinationLogPath,
+              lanePaths,
+              wave,
+              attempt: attempt + 1,
+              runs: runsToLaunch,
+              failures,
             });
           }
           writeWaveRelaunchProjection({

@@ -1,6 +1,9 @@
 import { materializeControlPlaneState } from "./control-plane.mjs";
 import {
   buildCoordinationResponseMetrics,
+  coordinationBlockerSeverity,
+  coordinationRecordBlocksWave,
+  coordinationRecordIsHardBlocker,
   isOpenCoordinationStatus,
   materializeCoordinationState,
   openClarificationLinkedRequests,
@@ -135,18 +138,18 @@ function derivePhase({
   clarificationBarrier,
 }) {
   const blockers = (coordinationState?.blockers || []).filter(
-    (record) =>
-      isOpenCoordinationStatus(record.status) &&
-      ["high", "urgent"].includes(record.priority),
+    (record) => coordinationRecordIsHardBlocker(record),
   );
   if (blockers.length > 0) {
     return "blocked";
   }
 
   const openClarifications = (coordinationState?.clarifications || []).filter(
-    (record) => isOpenCoordinationStatus(record.status),
+    (record) => coordinationRecordBlocksWave(record),
   );
-  const openClarificationRequests = openClarificationLinkedRequests(coordinationState);
+  const openClarificationRequests = openClarificationLinkedRequests(coordinationState).filter(
+    (record) => coordinationRecordBlocksWave(record),
+  );
   if (openClarifications.length > 0 || openClarificationRequests.length > 0) {
     return "clarifying";
   }
@@ -226,6 +229,51 @@ function derivePhase({
   }
 
   return "running";
+}
+
+function gateBlockerMetadata(gateName, gate) {
+  if (!gate || gate.ok !== false) {
+    return {
+      blocking: false,
+      blockerSeverity: "advisory",
+    };
+  }
+  if (gateName === "componentGate" && gate.statusCode === "shared-component-sibling-pending") {
+    return {
+      blocking: true,
+      blockerSeverity: "soft",
+    };
+  }
+  if (
+    ["implementationGate", "contEvalGate"].includes(gateName)
+  ) {
+    return {
+      blocking: true,
+      blockerSeverity: "proof-critical",
+    };
+  }
+  if (
+    [
+      "designGate",
+      "integrationBarrier",
+      "documentationGate",
+      "contQaGate",
+      "clarificationBarrier",
+      "helperAssignmentBarrier",
+      "dependencyBarrier",
+      "componentMatrixGate",
+      "componentGate",
+    ].includes(gateName)
+  ) {
+    return {
+      blocking: true,
+      blockerSeverity: "closure-critical",
+    };
+  }
+  return {
+    blocking: true,
+    blockerSeverity: "hard",
+  };
 }
 
 /**
@@ -338,6 +386,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
     if (!isOpenCoordinationStatus(record.status)) {
       continue;
     }
+    const blocking = coordinationRecordBlocksWave(record);
+    const blockerSeverity = coordinationBlockerSeverity(record);
     blockers.push({
       kind: "coordination-blocker",
       id: record.id,
@@ -348,6 +398,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
           ? record.targets
           : (record.agentId ? [record.agentId] : []),
       resolutionHint: record.resolutionHint || null,
+      blocking,
+      blockerSeverity,
     });
   }
 
@@ -355,6 +407,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
     if (!isOpenCoordinationStatus(record.status)) {
       continue;
     }
+    const blocking = coordinationRecordBlocksWave(record);
+    const blockerSeverity = coordinationBlockerSeverity(record);
     blockers.push({
       kind: "clarification",
       id: record.id,
@@ -365,6 +419,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
           ? record.targets
           : (record.agentId ? [record.agentId] : []),
       resolutionHint: "Resolve clarification before proceeding.",
+      blocking,
+      blockerSeverity,
     });
   }
 
@@ -372,6 +428,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
     if (!isOpenCoordinationStatus(record.status)) {
       continue;
     }
+    const blocking = coordinationRecordBlocksWave(record);
+    const blockerSeverity = coordinationBlockerSeverity(record);
     blockers.push({
       kind: "human-escalation",
       id: record.id,
@@ -382,6 +440,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
           ? record.targets
           : (record.agentId ? [record.agentId] : []),
       resolutionHint: "Human intervention required.",
+      blocking,
+      blockerSeverity,
     });
   }
 
@@ -389,6 +449,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
     if (!isOpenCoordinationStatus(record.status)) {
       continue;
     }
+    const blocking = coordinationRecordBlocksWave(record);
+    const blockerSeverity = coordinationBlockerSeverity(record);
     blockers.push({
       kind: "human-feedback",
       id: record.id,
@@ -399,6 +461,8 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
           ? record.targets
           : (record.agentId ? [record.agentId] : []),
       resolutionHint: "Awaiting human feedback.",
+      blocking,
+      blockerSeverity,
     });
   }
 
@@ -407,12 +471,15 @@ function deriveOpenBlockers(coordinationState, gateSnapshot) {
       if (gateName === "overall" || !gate || gate.ok !== false) {
         continue;
       }
+      const metadata = gateBlockerMetadata(gateName, gate);
       blockers.push({
         kind: "gate-failure",
         id: gateName,
         detail: gate.detail || gate.statusCode || "",
         blockedAgentIds: gate.agentId ? [gate.agentId] : [],
         resolutionHint: `Gate ${gateName} must pass before wave closure.`,
+        blocking: metadata.blocking,
+        blockerSeverity: metadata.blockerSeverity,
       });
     }
   }

@@ -490,6 +490,39 @@ describe("reduceWaveState", () => {
       expect(state.waveState).toBe("blocked");
     });
 
+    it("keeps advisory clarifications visible without reopening clarifying phase", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "clar-1",
+            kind: "clarification-request",
+            status: "open",
+            agentId: "A1",
+            summary: "Need clarification",
+            recordedAt: new Date().toISOString(),
+            blocking: false,
+            blockerSeverity: "advisory",
+          },
+        ],
+      });
+      expect(state.phase).toBe("running");
+      expect(state.waveState).toBe("running");
+      expect(state.gateSnapshot.clarificationBarrier).toMatchObject({
+        ok: true,
+        statusCode: "pass",
+      });
+      expect(state.openBlockers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "clar-1",
+            blocking: false,
+            blockerSeverity: "advisory",
+          }),
+        ]),
+      );
+    });
+
     it("returns clarifying when human feedback is still open", () => {
       const state = reduceWaveState({
         waveDefinition: makeWaveDefinition(),
@@ -509,6 +542,30 @@ describe("reduceWaveState", () => {
       expect(state.gateSnapshot.clarificationBarrier).toMatchObject({
         ok: false,
         statusCode: "human-feedback-open",
+      });
+    });
+
+    it("does not reopen clarifying when human feedback is downgraded non-blocking", () => {
+      const state = reduceWaveState({
+        waveDefinition: makeWaveDefinition(),
+        coordinationRecords: [
+          {
+            id: "human-1",
+            kind: "human-feedback",
+            status: "open",
+            agentId: "A1",
+            summary: "Need operator answer",
+            recordedAt: new Date().toISOString(),
+            blocking: false,
+            blockerSeverity: "advisory",
+          },
+        ],
+      });
+      expect(state.phase).toBe("running");
+      expect(state.waveState).toBe("running");
+      expect(state.gateSnapshot.clarificationBarrier).toMatchObject({
+        ok: true,
+        statusCode: "pass",
       });
     });
 

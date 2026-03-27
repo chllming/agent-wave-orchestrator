@@ -43,7 +43,17 @@ export const COORDINATION_STATUS_VALUES = [
 
 export const COORDINATION_PRIORITY_VALUES = ["low", "normal", "high", "urgent"];
 export const COORDINATION_CONFIDENCE_VALUES = ["low", "medium", "high"];
+export const COORDINATION_BLOCKER_SEVERITY_VALUES = [
+  "hard",
+  "soft",
+  "stale",
+  "advisory",
+  "proof-critical",
+  "closure-critical",
+];
 const OPEN_COORDINATION_STATUSES = new Set(["open", "acknowledged", "in_progress"]);
+const NON_BLOCKING_BLOCKER_SEVERITIES = new Set(["stale", "advisory"]);
+const HARD_BLOCKER_SEVERITIES = new Set(["hard", "proof-critical", "closure-critical"]);
 export const CLARIFICATION_CLOSURE_PREFIX = "clarification:";
 
 function normalizeString(value, fallback = "") {
@@ -65,6 +75,23 @@ function normalizeStringArray(values) {
   );
 }
 
+function normalizeOptionalBoolean(value, fallback = null) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return Boolean(value);
+}
+
 function validateEnum(value, allowed, label) {
   if (!allowed.includes(value)) {
     throw new Error(`${label} must be one of ${allowed.join(", ")} (got: ${value || "empty"})`);
@@ -73,6 +100,74 @@ function validateEnum(value, allowed, label) {
 
 function stableId(prefix) {
   return `${prefix}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function defaultBlockingForKind(kind) {
+  return ["request", "blocker", "clarification-request", "human-escalation", "human-feedback"].includes(
+    kind,
+  );
+}
+
+function defaultSeverityForRecord(kind, priority, blocking) {
+  if (blocking === false) {
+    return "advisory";
+  }
+  if (kind === "human-escalation" || kind === "human-feedback") {
+    return "hard";
+  }
+  if (kind === "request" || kind === "clarification-request") {
+    return "closure-critical";
+  }
+  if (kind === "blocker") {
+    return ["high", "urgent"].includes(priority) ? "hard" : "soft";
+  }
+  return "advisory";
+}
+
+function normalizeBlockerSeverity(value, defaults = {}) {
+  const normalized = normalizeString(value ?? defaults.blockerSeverity, "").toLowerCase();
+  return normalized || null;
+}
+
+export function coordinationBlockerSeverity(record) {
+  if (!record || typeof record !== "object") {
+    return "advisory";
+  }
+  const blocking =
+    record.blocking === undefined || record.blocking === null
+      ? defaultBlockingForKind(String(record.kind || "").trim().toLowerCase())
+      : record.blocking !== false;
+  const explicitSeverity = normalizeBlockerSeverity(record.blockerSeverity);
+  const derivedSeverity =
+    explicitSeverity ||
+    defaultSeverityForRecord(
+      String(record.kind || "").trim().toLowerCase(),
+      String(record.priority || "normal").trim().toLowerCase(),
+      blocking,
+    );
+  if (COORDINATION_BLOCKER_SEVERITY_VALUES.includes(derivedSeverity)) {
+    return derivedSeverity;
+  }
+  return defaultSeverityForRecord(
+    String(record.kind || "").trim().toLowerCase(),
+    String(record.priority || "normal").trim().toLowerCase(),
+    blocking,
+  );
+}
+
+export function coordinationRecordBlocksWave(record) {
+  if (!record || !isOpenCoordinationStatus(record.status)) {
+    return false;
+  }
+  if (record.blocking === false) {
+    return false;
+  }
+  return !NON_BLOCKING_BLOCKER_SEVERITIES.has(coordinationBlockerSeverity(record));
+}
+
+export function coordinationRecordIsHardBlocker(record) {
+  return coordinationRecordBlocksWave(record) &&
+    HARD_BLOCKER_SEVERITIES.has(coordinationBlockerSeverity(record));
 }
 
 export function normalizeCoordinationRecord(rawRecord, defaults = {}) {
@@ -93,12 +188,25 @@ export function normalizeCoordinationRecord(rawRecord, defaults = {}) {
   ).toLowerCase();
   const priority = normalizeString(rawRecord.priority || defaults.priority || "normal").toLowerCase();
   const confidence = normalizeString(rawRecord.confidence || defaults.confidence || "medium").toLowerCase();
+  const explicitBlocking = normalizeOptionalBoolean(
+    rawRecord.blocking,
+    normalizeOptionalBoolean(defaults.blocking, null),
+  );
+  const blocking = explicitBlocking ?? defaultBlockingForKind(kind);
+  const blockerSeverity =
+    normalizeBlockerSeverity(rawRecord.blockerSeverity, defaults) ||
+    defaultSeverityForRecord(kind, priority, blocking);
   const createdAt = normalizeString(rawRecord.createdAt || defaults.createdAt || now);
   const updatedAt = normalizeString(rawRecord.updatedAt || defaults.updatedAt || createdAt);
   validateEnum(kind, COORDINATION_KIND_VALUES, "Coordination kind");
   validateEnum(status, COORDINATION_STATUS_VALUES, "Coordination status");
   validateEnum(priority, COORDINATION_PRIORITY_VALUES, "Coordination priority");
   validateEnum(confidence, COORDINATION_CONFIDENCE_VALUES, "Coordination confidence");
+  validateEnum(
+    blockerSeverity,
+    COORDINATION_BLOCKER_SEVERITY_VALUES,
+    "Coordination blockerSeverity",
+  );
   if (!lane) {
     throw new Error("Coordination lane is required");
   }
@@ -118,6 +226,8 @@ export function normalizeCoordinationRecord(rawRecord, defaults = {}) {
     targets: normalizeStringArray(rawRecord.targets ?? defaults.targets),
     status,
     priority,
+    blocking,
+    blockerSeverity,
     artifactRefs: normalizeStringArray(rawRecord.artifactRefs ?? defaults.artifactRefs),
     dependsOn: normalizeStringArray(rawRecord.dependsOn ?? defaults.dependsOn),
     closureCondition: normalizeString(rawRecord.closureCondition ?? defaults.closureCondition, ""),
@@ -180,6 +290,8 @@ export function appendCoordinationRecord(filePath, rawRecord, defaults = {}) {
           kind: record.kind,
           status: record.status,
           priority: record.priority,
+          blocking: record.blocking !== false,
+          blockerSeverity: record.blockerSeverity,
           confidence: record.confidence,
           summary: record.summary,
           detail: record.detail,
@@ -416,15 +528,16 @@ export function buildCoordinationResponseMetrics(state, options = {}) {
   for (const record of state?.openRecords || []) {
     const startMs = parseRecordStartMs(record);
     const ageMs = Number.isFinite(startMs) ? Math.max(0, nowMs - startMs) : null;
-    const ackTracked = isAckTrackedRecord(record);
+    const blocking = coordinationRecordBlocksWave(record);
+    const ackTracked = blocking && isAckTrackedRecord(record);
     const ackPending = ackTracked && record.status === "open";
     const clarificationLinked =
-      record.kind === "clarification-request" || isClarificationLinkedRequest(record);
+      blocking && (record.kind === "clarification-request" || isClarificationLinkedRequest(record));
     const overdueAck = ackPending && Number.isFinite(ageMs) && ageMs >= ackTimeoutMs;
     const staleClarification =
       clarificationLinked && Number.isFinite(ageMs) && ageMs >= resolutionStaleMs;
 
-    if (Number.isFinite(ageMs)) {
+    if (blocking && Number.isFinite(ageMs)) {
       oldestOpenCoordinationAgeMs =
         oldestOpenCoordinationAgeMs === null
           ? ageMs
@@ -454,6 +567,7 @@ export function buildCoordinationResponseMetrics(state, options = {}) {
       overdueAck,
       clarificationLinked,
       staleClarification,
+      blocking,
     });
   }
 
@@ -469,7 +583,7 @@ export function buildCoordinationResponseMetrics(state, options = {}) {
       a.localeCompare(b),
     ),
     openHumanEscalationCount: (state?.humanEscalations || []).filter((record) =>
-      isOpenCoordinationStatus(record.status),
+      coordinationRecordBlocksWave(record),
     ).length,
     recordMetricsById,
   };
@@ -489,6 +603,12 @@ function renderOpenRecord(record, responseMetrics = null) {
   }
   if (recordMetrics?.staleClarification) {
     tags.push("stale-clarification");
+  }
+  if (record.blocking === false) {
+    tags.push("non-blocking");
+  }
+  if (record.blockerSeverity) {
+    tags.push(`severity=${record.blockerSeverity}`);
   }
   const timing = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
   return `- [${record.priority}] ${record.kind}/${record.status} ${record.agentId}${targets}${timing} id=${record.id}: ${compactSingleLine(record.summary || record.detail || "no summary", 160)}${artifacts}`;

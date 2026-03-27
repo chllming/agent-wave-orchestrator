@@ -66,8 +66,14 @@ These fields are shared across runtimes:
 | Model | `model` in profile, `executors.claude.model`, `executors.opencode.model` | `model` | Codex uses shared `model` from profile or agent only |
 | Fallbacks | `fallbacks` in profile | `fallbacks` | Runtime ids used for retry-time reassignment |
 | Tags | `tags` in profile | `tags` | Stored in resolved executor state for policy and traces |
-| Budget turns | `budget.turns` in profile | `budget.turns` | Seeds Claude `maxTurns` and OpenCode `steps` when runtime-specific values are absent; it does not set a Codex turn limit |
-| Budget minutes | `budget.minutes` in profile | `budget.minutes` | Caps attempt timeout |
+| Budget turns | `budget.turns` in profile | `budget.turns` | Advisory generic turn budget. Wave records it in resolved metadata, but only runtime-specific settings such as `claude.maxTurns` or `opencode.steps` emit hard turn-limit flags. It does not set a Codex turn limit. |
+| Budget minutes | `budget.minutes` in profile | `budget.minutes` | Primary wall-clock attempt budget |
+
+Practical guidance:
+
+- prefer `budget.minutes` for normal synthesis, integration, and closure work
+- use generic `budget.turns` as a planning hint, not a hard failure trigger
+- only set `claude.maxTurns` or `opencode.steps` when you deliberately want a hard ceiling for that runtime
 
 ## Runtime Pages
 
@@ -161,7 +167,7 @@ Runtime-specific delivery:
 - OpenCode injects the compact catalog into `opencode.json` and attaches `skill.json`, `SKILL.md`, the selected adapter, and recursive `references/**` files through `--file`.
 - Local keeps skills prompt-only.
 
-`launch-preview.json` also records the resolved skill metadata plus a `limits` section. For Claude and OpenCode, that section reports the known turn ceiling and whether it came from the runtime-specific setting or generic `budget.turns`. For Codex, it explicitly records that Wave emitted no turn-limit flag and that any effective ceiling may come from the selected Codex profile or upstream runtime. If a live Codex run later terminates with a visible `Reached max turns (N)` log line, Wave appends that observed ceiling back into the live `launch-preview.json` as runtime evidence rather than pretending Wave set it.
+`launch-preview.json` also records the resolved skill metadata plus a `limits` section. For Claude and OpenCode, that section reports the runtime-specific turn ceiling when one was actually configured; when only generic `budget.turns` exists, the preview keeps it as advisory metadata and notes that Wave emitted no hard turn-limit flag. For Codex, it explicitly records that Wave emitted no turn-limit flag and that any effective ceiling may come from the selected Codex profile or upstream runtime. If a live Codex run later terminates with a visible `Reached max turns (N)` log line, Wave appends that observed ceiling back into the live `launch-preview.json` as runtime evidence rather than pretending Wave set it.
 
 ## Recommended Validation Path
 

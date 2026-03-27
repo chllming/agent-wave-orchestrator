@@ -36,7 +36,7 @@ import {
 } from "./shared.mjs";
 import { normalizeContext7Config, hashAgentPromptFingerprint } from "./context7.mjs";
 import {
-  isOpenCoordinationStatus,
+  coordinationRecordBlocksWave,
   openClarificationLinkedRequests,
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
@@ -2154,23 +2154,19 @@ export function resolveAgentExecutor(agent, options = {}) {
       ? "claude.maxTurns"
       : profile?.claude?.maxTurns !== null && profile?.claude?.maxTurns !== undefined
         ? "claude.maxTurns"
-        : runtimeBudget.turns !== null
-          ? "budget.turns"
-          : laneProfile.executors.claude.maxTurns !== null &&
-              laneProfile.executors.claude.maxTurns !== undefined
-            ? "claude.maxTurns"
-            : null;
+        : laneProfile.executors.claude.maxTurns !== null &&
+            laneProfile.executors.claude.maxTurns !== undefined
+          ? "claude.maxTurns"
+          : null;
   const opencodeStepsSource =
     executorConfig?.opencode?.steps !== null && executorConfig?.opencode?.steps !== undefined
       ? "opencode.steps"
       : profile?.opencode?.steps !== null && profile?.opencode?.steps !== undefined
         ? "opencode.steps"
-        : runtimeBudget.turns !== null
-          ? "budget.turns"
-          : laneProfile.executors.opencode.steps !== null &&
-              laneProfile.executors.opencode.steps !== undefined
-            ? "opencode.steps"
-            : null;
+        : laneProfile.executors.opencode.steps !== null &&
+            laneProfile.executors.opencode.steps !== undefined
+          ? "opencode.steps"
+          : null;
   return {
     id: executorId,
     initialExecutorId: executorId,
@@ -2253,7 +2249,6 @@ export function resolveAgentExecutor(agent, options = {}) {
       maxTurns:
         executorConfig?.claude?.maxTurns ??
         profile?.claude?.maxTurns ??
-        runtimeBudget.turns ??
         laneProfile.executors.claude.maxTurns,
       maxTurnsSource: claudeMaxTurnsSource,
     },
@@ -2271,7 +2266,6 @@ export function resolveAgentExecutor(agent, options = {}) {
       steps:
         executorConfig?.opencode?.steps ??
         profile?.opencode?.steps ??
-        runtimeBudget.turns ??
         laneProfile.executors.opencode.steps,
       stepsSource: opencodeStepsSource,
     },
@@ -3114,7 +3108,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
     coordinationLogPath,
   );
   const openClarificationIds = coordinationState.clarifications
-    .filter((record) => isOpenCoordinationStatus(record.status))
+    .filter((record) => coordinationRecordBlocksWave(record))
     .map((record) => record.id);
   if (openClarificationIds.length > 0) {
     pushWaveCompletionReason(
@@ -3123,9 +3117,9 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       `Open clarification records: ${openClarificationIds.join(", ")}.`,
     );
   }
-  const openClarificationRequestIds = openClarificationLinkedRequests(coordinationState).map(
-    (record) => record.id,
-  );
+  const openClarificationRequestIds = openClarificationLinkedRequests(coordinationState)
+    .filter((record) => coordinationRecordBlocksWave(record))
+    .map((record) => record.id);
   if (openClarificationRequestIds.length > 0) {
     pushWaveCompletionReason(
       reasons,
@@ -3134,7 +3128,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
     );
   }
   const openHumanEscalationIds = coordinationState.humanEscalations
-    .filter((record) => isOpenCoordinationStatus(record.status))
+    .filter((record) => coordinationRecordBlocksWave(record))
     .map((record) => record.id);
   if (openHumanEscalationIds.length > 0) {
     pushWaveCompletionReason(
@@ -3144,7 +3138,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
     );
   }
   const openHumanFeedbackIds = coordinationState.humanFeedback
-    .filter((record) => isOpenCoordinationStatus(record.status))
+    .filter((record) => coordinationRecordBlocksWave(record))
     .map((record) => record.id);
   if (openHumanFeedbackIds.length > 0) {
     pushWaveCompletionReason(

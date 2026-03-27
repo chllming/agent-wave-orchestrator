@@ -297,6 +297,177 @@ describe("wave control CLI", () => {
     });
   });
 
+  it("can downgrade an open task to advisory without leaving a blocking edge behind", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+
+    const createResult = runWaveCli(
+      [
+        "control",
+        "task",
+        "create",
+        "--lane",
+        "main",
+        "--wave",
+        "0",
+        "--agent",
+        "A1",
+        "--kind",
+        "request",
+        "--summary",
+        "Need docs steward follow-up",
+        "--detail",
+        "Keep the request visible, but allow the wave to keep moving.",
+      ],
+      repoDir,
+    );
+    expect(createResult.status).toBe(0);
+    const createdTask = JSON.parse(createResult.stdout);
+
+    const downgradeResult = runWaveCli(
+      [
+        "control",
+        "task",
+        "act",
+        "mark-advisory",
+        "--lane",
+        "main",
+        "--wave",
+        "0",
+        "--id",
+        createdTask.id,
+      ],
+      repoDir,
+    );
+    expect(downgradeResult.status).toBe(0);
+
+    const getResult = runWaveCli(
+      ["control", "task", "get", "--lane", "main", "--wave", "0", "--id", createdTask.id],
+      repoDir,
+    );
+    expect(getResult.status).toBe(0);
+    expect(JSON.parse(getResult.stdout)).toMatchObject({
+      taskId: createdTask.id,
+      taskType: "request",
+      state: "open",
+      blocking: false,
+      blockerSeverity: "advisory",
+    });
+
+    const statusResult = runWaveCli(
+      ["control", "status", "--lane", "main", "--wave", "0", "--agent", "A1", "--json"],
+      repoDir,
+    );
+    expect(statusResult.status).toBe(0);
+    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+      agentId: "A1",
+      blockingEdge: null,
+      tasks: [
+        expect.objectContaining({
+          taskId: createdTask.id,
+          blocking: false,
+          blockerSeverity: "advisory",
+        }),
+      ],
+    });
+  });
+
+  it("resolves clarification-linked requests by policy without leaving them blocking", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+
+    const clarificationResult = runWaveCli(
+      [
+        "control",
+        "task",
+        "create",
+        "--lane",
+        "main",
+        "--wave",
+        "0",
+        "--agent",
+        "A1",
+        "--kind",
+        "clarification",
+        "--summary",
+        "Need shared-plan guidance",
+      ],
+      repoDir,
+    );
+    expect(clarificationResult.status).toBe(0);
+    const clarificationTask = JSON.parse(clarificationResult.stdout);
+
+    const linkedRequestResult = runWaveCli(
+      [
+        "control",
+        "task",
+        "create",
+        "--lane",
+        "main",
+        "--wave",
+        "0",
+        "--agent",
+        "A9",
+        "--kind",
+        "request",
+        "--summary",
+        "Follow up on the clarification",
+        "--depends-on",
+        clarificationTask.id,
+      ],
+      repoDir,
+    );
+    expect(linkedRequestResult.status).toBe(0);
+    const linkedTask = JSON.parse(linkedRequestResult.stdout);
+
+    const resolveResult = runWaveCli(
+      [
+        "control",
+        "task",
+        "act",
+        "resolve-policy",
+        "--lane",
+        "main",
+        "--wave",
+        "0",
+        "--id",
+        clarificationTask.id,
+      ],
+      repoDir,
+    );
+    expect(resolveResult.status).toBe(0);
+
+    const clarifiedGet = runWaveCli(
+      ["control", "task", "get", "--lane", "main", "--wave", "0", "--id", clarificationTask.id],
+      repoDir,
+    );
+    expect(clarifiedGet.status).toBe(0);
+    expect(JSON.parse(clarifiedGet.stdout)).toMatchObject({
+      taskId: clarificationTask.id,
+      taskType: "clarification",
+      state: "resolved",
+      blocking: false,
+      blockerSeverity: "advisory",
+    });
+
+    const linkedGet = runWaveCli(
+      ["control", "task", "get", "--lane", "main", "--wave", "0", "--id", linkedTask.id],
+      repoDir,
+    );
+    expect(linkedGet.status).toBe(0);
+    expect(JSON.parse(linkedGet.stdout)).toMatchObject({
+      taskId: linkedTask.id,
+      taskType: "request",
+      state: "resolved",
+      blocking: false,
+      blockerSeverity: "advisory",
+    });
+  });
+
   it("keeps agent-scoped status from leaking unrelated unresolved helper assignments", () => {
     const repoDir = makeTempDir();
     writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });

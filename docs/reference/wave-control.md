@@ -42,6 +42,8 @@ This lets the control plane answer:
 - which proof and benchmark artifacts back a claim
 - whether a benchmark result is comparison-valid or only diagnostic
 - which coordination failures blocked closure
+- which blockers were hard, soft, stale, or advisory
+- whether a blocked wave is terminal or recoverable and which targeted rerun request was queued
 
 ## Run Identity
 
@@ -91,6 +93,20 @@ Signals to preserve:
   gate snapshots, proof completeness, block reasons, reruns, and cont-QA reversal should be durable
 - benchmark trust:
   every benchmark item should distinguish capability from validity
+
+## Blocker And Recovery Metadata
+
+Wave Control should preserve the softer runtime policy, not flatten it away.
+
+In practice that means `coordination_record`, `task`, `gate`, `wave_run`, and `rerun_request` payloads should keep fields such as:
+
+- `blocking`
+- `blockerSeverity`
+- `recoverable`
+- `recoveryReason`
+- queued rerun request ids or resume targets
+
+That distinction matters because a wave that is `blocked` by a proof-critical gate is different from a wave that is `blocked` only long enough to surface a targeted recovery after timeout, max-turn, rate-limit, or missing-status failure. The control plane should let operators ask which barriers still stop closure outright and which ones were intentionally downgraded to advisory or stale context.
 
 ## Artifact Contract
 

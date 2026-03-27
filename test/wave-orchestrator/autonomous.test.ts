@@ -135,4 +135,50 @@ describe("readAutonomousBarrier", () => {
     });
     expect(barrier.message).toContain("Stopping before wave 2");
   });
+
+  it("ignores non-blocking live human tasks even when stale ledger entries remain", () => {
+    const dir = makeTempDir();
+    const lanePaths = {
+      crossLaneDependenciesDir: path.join(dir, "dependencies"),
+      ledgerDir: path.join(dir, "ledger"),
+      coordinationDir: path.join(dir, "coordination"),
+      feedbackRequestsDir: path.join(dir, "feedback", "requests"),
+    };
+    fs.mkdirSync(lanePaths.ledgerDir, { recursive: true });
+    fs.mkdirSync(lanePaths.coordinationDir, { recursive: true });
+    fs.mkdirSync(lanePaths.feedbackRequestsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(lanePaths.ledgerDir, "wave-2.json"),
+      JSON.stringify(
+        {
+          humanFeedback: ["feedback-1"],
+          humanEscalations: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(lanePaths.coordinationDir, "wave-2.jsonl"),
+      `${JSON.stringify({
+        id: "feedback-1",
+        kind: "human-feedback",
+        lane: "main",
+        wave: 2,
+        agentId: "A1",
+        status: "open",
+        blocking: false,
+        blockerSeverity: "advisory",
+        summary: "Optional operator note",
+        detail: "Helpful context that should not block autonomous finalization.",
+        createdAt: "2026-03-22T00:00:00.000Z",
+        updatedAt: "2026-03-22T00:00:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+
+    expect(readAutonomousBarrier(lanePaths, "main")).toBeNull();
+    expect(readAutonomousBarrier(lanePaths, "main", 2)).toBeNull();
+  });
 });

@@ -40,6 +40,7 @@ For live-proof owners:
 - declare `### Proof artifacts` for machine-visible local evidence
 - keep the executor sticky unless fallback is explicitly required
 - prefer wall-clock budgets over tiny hard turn caps
+- treat generic `budget.turns` as advisory; only set runtime-specific turn ceilings when you want a true hard stop
 
 Example:
 
@@ -118,6 +119,12 @@ For proof-bearing owners, default to sticky retry:
 
 Only enable cross-executor retry when there is a deliberate reason to do so.
 
+Budget guidance:
+
+- `budget.minutes` is the primary attempt budget and should be the normal control for live-proof owners
+- generic `budget.turns` is now advisory metadata for Claude and OpenCode unless you also set the runtime-specific limit
+- use `claude.max_turns` or `opencode.steps` only when a hard per-attempt ceiling is intentional
+
 If you do allow fallback, declare it explicitly:
 
 ```md
@@ -171,6 +178,8 @@ pnpm exec wave control proof register \
 3. the proof owner reruns on the same executor only if additional synthesis is still needed
 4. any stale integration or closure owner reruns if needed
 5. already-valid implementation slices stay reused
+
+For non-proof-centric owners elsewhere in the wave, recoverable timeout, max-turn, rate-limit, or missing-status outcomes can now queue targeted recovery automatically. For proof-bearing owners, the safer default is still to keep the same executor sticky and make the operator decision explicit once the new proof bundle exists.
 
 Authoritative proof registration is the supported way to make operator-produced evidence visible to A8, A0, rerun control, and hermetic traces without forcing an implementation agent to rediscover the same local artifacts in a fresh session. The canonical proof bundle now lands in `.tmp/<lane>-wave-launcher/control-plane/` and is projected into `.tmp/<lane>-wave-launcher/proof/` for compatibility.
 

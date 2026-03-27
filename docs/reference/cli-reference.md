@@ -133,13 +133,15 @@ wave control task create \
   --lane <lane> --wave <n> --agent <id> \
   --kind <kind> --summary "<text>" \
   [--detail "<text>"] [--target <agent-or-capability>] \
-  [--priority normal|high] [--depends-on <id>] \
+  [--priority normal|high] [--blocking true|false] \
+  [--severity hard|soft|stale|advisory|proof-critical|closure-critical] \
+  [--depends-on <id>] \
   [--artifact <ref>] [--operator <name>] [--json]
 ```
 
 Valid `--kind` values: `request`, `blocker`, `clarification`, `handoff`, `evidence`, `claim`, `decision`, `human-input`.
 
-Only `request`, `blocker`, `clarification`, `human-input`, and `escalation` are treated as blocking edges by `wave control status`. The rest (`handoff`, `evidence`, `claim`, `decision`) are informational.
+`wave control status` only treats `request`, `blocker`, `clarification`, `human-input`, and `escalation` as potentially blocking. Tasks of those kinds can still be downgraded with `blocking=false` or non-blocking severities such as `advisory` and `stale`, so they remain visible without owning the active blocking edge.
 
 **List tasks:**
 
@@ -172,6 +174,10 @@ Actions:
 | `reassign` | `--to <agent>` | Supersede the original, reroute to a new agent |
 | `answer` | `--response "<text>"` | Answer a human-input or escalation task |
 | `escalate` | `[--detail]` | Escalate to human feedback queue |
+| `defer` | `[--detail]` | Keep the task open but mark it non-blocking soft work |
+| `mark-advisory` | `[--detail]` | Keep the task visible but non-blocking with advisory severity |
+| `mark-stale` | `[--detail]` | Keep the task as historical context without blocking closure |
+| `resolve-policy` | `[--detail]` | Close the task by operator policy and downgrade linked clarification follow-up when applicable |
 
 **Operator answer example** (responding to a human-input escalation):
 
@@ -201,6 +207,8 @@ wave control rerun request \
 ```
 
 `--agent` is repeatable or comma-separated. At least one of `--agent` or `--resume-cursor` is required.
+
+The launcher may also write a rerun request automatically after recoverable failures such as timeout, max-turn, rate-limit, or missing-status outcomes. Those requests still appear through `wave control rerun get`, so operators can inspect or replace the targeted recovery plan before the next attempt.
 
 **Get active rerun request:**
 
@@ -553,7 +561,7 @@ Interactive draft currently offers worker role kinds:
 - `research`
 - `security`
 
-Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.8.6` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
+Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.8.7` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
 
 ## Ad-Hoc Task Commands
 

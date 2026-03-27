@@ -305,6 +305,7 @@ function buildLaunchLimitsMetadata(agent) {
   const executor = agent?.executorResolved || {};
   const executorId = normalizeExecutorMode(executor.id || DEFAULT_EXECUTOR_MODE);
   const attemptTimeoutMinutes = executor?.budget?.minutes ?? null;
+  const advisoryTurnBudget = executor?.budget?.turns ?? null;
   if (executorId === "claude") {
     const source = executor?.claude?.maxTurnsSource || null;
     return {
@@ -312,9 +313,11 @@ function buildLaunchLimitsMetadata(agent) {
       knownTurnLimit: executor?.claude?.maxTurns ?? null,
       turnLimitSource: source,
       notes:
-        source === "budget.turns"
-          ? ["Known turn limit was derived from generic budget.turns."]
-          : [],
+        source
+          ? []
+          : advisoryTurnBudget !== null
+            ? ["Generic budget.turns remained advisory; Wave emitted no Claude --max-turns flag."]
+            : [],
     };
   }
   if (executorId === "opencode") {
@@ -324,9 +327,11 @@ function buildLaunchLimitsMetadata(agent) {
       knownTurnLimit: executor?.opencode?.steps ?? null,
       turnLimitSource: source,
       notes:
-        source === "budget.turns"
-          ? ["Known turn limit was derived from generic budget.turns."]
-          : [],
+        source
+          ? []
+          : advisoryTurnBudget !== null
+            ? ["Generic budget.turns remained advisory; Wave emitted no OpenCode --steps flag."]
+            : [],
     };
   }
   if (executorId === "codex") {

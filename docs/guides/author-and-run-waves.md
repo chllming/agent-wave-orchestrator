@@ -61,7 +61,7 @@ Good fits:
 - multi-owner waves where downstream implementers need the same decisions and assumptions
 - ambiguous tasks where open questions should become explicit before code owners fan out
 
-The starter contract in `0.8.6` is:
+The starter contract in `0.8.7` is:
 
 - import `docs/agents/wave-design-role.md`
 - own one packet such as `docs/plans/waves/design/wave-<n>-<agentId>.md`

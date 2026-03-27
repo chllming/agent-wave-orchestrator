@@ -235,7 +235,7 @@ export async function launchAgentSession(lanePaths, params, { runTmuxFn }) {
       "const fs=require('node:fs'); const statusPath=process.argv[1]; const payload={code:Number(process.argv[2]),promptHash:process.argv[3]||null,orchestratorId:process.argv[4]||null,attempt:Number(process.argv[5])||1,completedAt:new Date().toISOString()}; fs.writeFileSync(statusPath, JSON.stringify(payload, null, 2)+'\\n', 'utf8');",
     )} ${shellQuote(statusPath)} "$status" ${shellQuote(promptHash)} ${shellQuote(orchestratorId || "")} ${shellQuote(String(attempt || 1))}`,
     `echo "[${lanePaths.lane}-wave-launcher] ${sessionName} finished with code $status"`,
-    "exec bash -l",
+    "exit \"$status\"",
   ].join("\n");
 
   runTmuxFn(

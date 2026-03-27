@@ -17,8 +17,8 @@ import {
   isSecurityReviewAgent,
 } from "./role-helpers.mjs";
 import {
+  coordinationRecordBlocksWave,
   isOpenCoordinationStatus,
-  openClarificationLinkedRequests,
 } from "./coordination-store.mjs";
 
 export const TASK_TYPES = new Set([
@@ -647,7 +647,7 @@ export function buildTasksFromCoordinationState(coordinationState, feedbackReque
   const tasks = [];
 
   for (const record of coordinationState.clarifications || []) {
-    if (!isOpenCoordinationStatus(record.status)) {
+    if (!coordinationRecordBlocksWave(record)) {
       continue;
     }
     const waveNumber = Number.isFinite(record.wave) ? record.wave : 0;
@@ -683,7 +683,7 @@ export function buildTasksFromCoordinationState(coordinationState, feedbackReque
   }
 
   for (const record of coordinationState.humanFeedback || []) {
-    if (!isOpenCoordinationStatus(record.status)) {
+    if (!coordinationRecordBlocksWave(record)) {
       continue;
     }
     const waveNumber = Number.isFinite(record.wave) ? record.wave : 0;
@@ -719,7 +719,7 @@ export function buildTasksFromCoordinationState(coordinationState, feedbackReque
   }
 
   for (const record of coordinationState.humanEscalations || []) {
-    if (!isOpenCoordinationStatus(record.status)) {
+    if (!coordinationRecordBlocksWave(record)) {
       continue;
     }
     const waveNumber = Number.isFinite(record.wave) ? record.wave : 0;

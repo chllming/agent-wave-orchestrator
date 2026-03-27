@@ -347,8 +347,8 @@ describe("buildTasksFromCoordinationState", () => {
   it("creates tasks for open clarifications", () => {
     const state = {
       clarifications: [
-        { id: "clar-1", status: "open", summary: "Need input", agentId: "A1" },
-        { id: "clar-2", status: "resolved", summary: "Done" },
+        { id: "clar-1", kind: "clarification-request", status: "open", summary: "Need input", agentId: "A1" },
+        { id: "clar-2", kind: "clarification-request", status: "resolved", summary: "Done" },
       ],
       humanFeedback: [],
       humanEscalations: [],
@@ -362,7 +362,7 @@ describe("buildTasksFromCoordinationState", () => {
   it("creates tasks for open human feedback", () => {
     const state = {
       clarifications: [],
-      humanFeedback: [{ id: "fb-1", status: "open", summary: "Review needed" }],
+      humanFeedback: [{ id: "fb-1", kind: "human-feedback", status: "open", summary: "Review needed" }],
       humanEscalations: [],
     };
     const tasks = buildTasksFromCoordinationState(state);
@@ -374,7 +374,7 @@ describe("buildTasksFromCoordinationState", () => {
     const state = {
       clarifications: [],
       humanFeedback: [],
-      humanEscalations: [{ id: "esc-1", status: "open", summary: "Urgent" }],
+      humanEscalations: [{ id: "esc-1", kind: "human-escalation", status: "open", summary: "Urgent" }],
     };
     const tasks = buildTasksFromCoordinationState(state);
     expect(tasks.length).toBe(1);
@@ -382,11 +382,51 @@ describe("buildTasksFromCoordinationState", () => {
     expect(tasks[0].priority).toBe("urgent");
   });
 
+  it("skips non-blocking advisory clarification and human-input records", () => {
+    const state = {
+      clarifications: [
+        {
+          id: "clar-1",
+          kind: "clarification-request",
+          status: "open",
+          summary: "Need input",
+          agentId: "A1",
+          blocking: false,
+          blockerSeverity: "advisory",
+        },
+      ],
+      humanFeedback: [
+        {
+          id: "fb-1",
+          kind: "human-feedback",
+          status: "open",
+          summary: "Review needed",
+          agentId: "A1",
+          blocking: false,
+          blockerSeverity: "advisory",
+        },
+      ],
+      humanEscalations: [
+        {
+          id: "esc-1",
+          kind: "human-escalation",
+          status: "open",
+          summary: "Urgent",
+          agentId: "A1",
+          blocking: false,
+          blockerSeverity: "stale",
+        },
+      ],
+    };
+    expect(buildTasksFromCoordinationState(state)).toEqual([]);
+  });
+
   it("builds deterministic task ids and timestamps for coordination-derived tasks", () => {
     const state = {
       clarifications: [
         {
           id: "clar-1",
+          kind: "clarification-request",
           wave: 7,
           lane: "beta",
           status: "open",

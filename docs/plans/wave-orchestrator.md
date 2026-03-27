@@ -55,6 +55,8 @@ The live runtime is organized around explicit modules:
 - performs a closure sweep so optional `cont-EVAL`, optional security review, integration, documentation, and cont-QA gates reflect final landed state through the wave's effective closure-role bindings
 - treats design packets as a first-class pre-implementation gate when a wave declares `design` workers
 - rebuilds contradiction blockers from canonical control-plane events during replay and materializes human-blocked waves as `clarifying` plus blocked `waveState`
+- distinguishes hard, soft, stale, advisory, proof-critical, and closure-critical blockers instead of treating every open coordination record as equally blocking
+- turns recoverable timeout, max-turn, rate-limit, and missing-status failures into targeted recovery intent plus bounded repair work when proof-critical barriers are not present
 
 ## Main Commands
 
@@ -161,9 +163,10 @@ pnpm exec wave launch --lane main --start-wave 0 --end-wave 0 --executor codex -
 ## Coordination Surfaces
 
 - `wave control status` is the read-only projection for "why blocked / why retrying" at wave or agent scope. It returns blocking edges, logical agent state, tasks, dependencies, rerun intent, active proof bundles, and next timers from one materialized control-plane view.
-- `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions. `wave control status` only treats requests, blockers, clarifications, human-input, escalations, helper assignments, and required dependencies as blocking edges.
+- `wave control task create|get|list|act` is the operator task surface for blocking requests, blockers, clarification chains, human-input tickets, escalations, and informative handoffs, evidence, claims, and decisions. `wave control status` only treats requests, blockers, clarifications, human-input, escalations, helper assignments, and required dependencies as candidate blocking edges, and then only when their current task or record metadata still marks them blocking.
+- Tasks now carry explicit `blocking` and `blockerSeverity` semantics. Operators can keep work visible while removing it from the active blocking edge with `defer`, `mark-advisory`, `mark-stale`, or `resolve-policy` when repo policy allows.
 - A fresh live `wave launch --start-wave <n> --end-wave <n>` now clears the previous auto-generated relaunch plan for that wave before selecting the initial implementation fan-out. Pass `--resume-control-state` only when you intentionally want to keep that persisted relaunch selection.
-- `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists.
+- `wave control rerun request|get|clear` manages targeted rerun intent under `.tmp/<lane>-wave-launcher/control-plane/` and projects compatible retry overrides under `.tmp/<lane>-wave-launcher/control/`, including selected agents, reuse selectors, invalidated components, and clear or preserve reuse lists. The launcher can also queue one automatically after recoverable timeout, max-turn, rate-limit, or missing-status failures.
 - `wave control proof register|get|supersede|revoke` manages authoritative proof bundles in the same control-plane log and projects compatible proof registries under `.tmp/<lane>-wave-launcher/proof/`.
 - `wave control telemetry status|flush` inspects and delivers the local Wave Control event queue. Pass `--no-telemetry` on `wave launch` to disable event publication for a single run.
 - `scripts/wave-status.sh` and `scripts/wave-watch.sh` are thin wrapper readers over `wave control status --json` for shell automation and long-running watcher loops. Use [guides/signal-wrappers.md](../guides/signal-wrappers.md) for the exit-code and ack-loop contract.
@@ -178,7 +181,7 @@ The canonical conversational state is the JSONL log under `.tmp/<lane>-wave-laun
 
 Control-plane facts that drive reruns, proof, attempt state, contradictions, facts, human-input workflow, and operator tasks are appended separately under `.tmp/<lane>-wave-launcher/control-plane/`. Result envelopes live under `.tmp/<lane>-wave-launcher/results/wave-<n>/attempt-<a>/<agent>.json`. Legacy proof and retry files remain derived projections for compatibility, not decision inputs.
 
-Capability-targeted requests now become deterministic helper assignments. The runtime resolves the assignee from explicit targets, `capabilityRouting.preferredAgents`, then least-busy matching capability owners, writes that assignment into `.tmp/<lane>-wave-launcher/assignments/`, mirrors the decision into coordination state, and keeps the wave blocked until the linked follow-up resolves.
+Capability-targeted requests now become deterministic helper assignments. The runtime resolves the assignee from explicit targets, `capabilityRouting.preferredAgents`, then matching capability owners with demonstrated same-wave completions, then least-busy fallback, writes that assignment into `.tmp/<lane>-wave-launcher/assignments/`, mirrors the decision into coordination state, and keeps the wave blocked until the linked follow-up resolves or is explicitly downgraded by policy.
 
 Clarification flow is orchestrator-first:
 
@@ -188,7 +191,7 @@ Clarification flow is orchestrator-first:
 4. Routed clarification follow-up requests remain blocking until they resolve.
 5. Human escalations are written back into coordination state, the ledger, and trace artifacts.
 
-During live runs, the orchestrator now keeps an active supervision and state-refresh loop while agents are still running. It refreshes the derived coordination surfaces on cadence, surfaces overdue acknowledgements and stale clarification chains in dashboards and traces, and can reroute clarification follow-up requests inside the same attempt when the routed owner never acknowledges them.
+During live runs, the orchestrator now keeps an active supervision and state-refresh loop while agents are still running. It refreshes the derived coordination surfaces on cadence, surfaces overdue acknowledgements and stale clarification chains in dashboards and traces, can reroute clarification follow-up requests inside the same attempt when the routed owner never acknowledges them, and can leave non-critical advisory or stale records visible without forcing the whole wave into terminal failure.
 
 If you opt into `--resident-orchestrator`, the launcher also starts a long-running non-owning orchestrator session for the wave. That session can inspect the same coordination artifacts and intervene through coordination records, but it does not override reducer, gate, or closure decisions.
 
@@ -366,7 +369,7 @@ For the complete syntax of every command, flag, and subcommand, see [docs/refere
 - Skills resolve only after that executor choice is known. Runtime-specific skill overlays are regenerated whenever retry-time fallback changes the selected executor.
 - Runtime mix targets are enforced before launch and again before any retry-time fallback reassignment.
 - Fallbacks are declared in profiles or lane policy, can be applied automatically on retry when the next executor is available and still satisfies mix targets, and are recorded in the ledger, integration summary, and traces when used.
-- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` seeds `claude.maxTurns` and `opencode.steps` when executor-specific values are not set; Codex turn ceilings remain external to Wave and show up in preview metadata as opaque when Wave cannot inspect them, though live previews now record an observed ceiling if the Codex runtime later logs one explicitly.
+- Generic `budget.minutes` caps per-agent attempt timeouts. Generic `budget.turns` remains advisory metadata unless the runtime-specific ceiling is declared explicitly through `claude.maxTurns` or `opencode.steps`; Codex turn ceilings remain external to Wave and show up in preview metadata as opaque when Wave cannot inspect them, though live previews now record an observed ceiling if the Codex runtime later logs one explicitly.
 - The launcher writes runtime overlay files under `.tmp/<lane>-wave-launcher/executors/`; these should stay ignored and local.
 
 Runtime authoring examples:

@@ -662,6 +662,58 @@ File ownership (only touch these paths):
     });
   });
 
+  it("keeps generic budget.turns advisory for Claude and OpenCode executors", () => {
+    const claudeResolved = resolveAgentExecutor(
+      {
+        agentId: "A2",
+        title: "Docs",
+        executorConfig: {
+          id: "claude",
+          budget: {
+            turns: 6,
+            minutes: 15,
+          },
+        },
+      },
+      { lane: "main", wave: { wave: 4, componentPromotions: [] } },
+    );
+    const opencodeResolved = resolveAgentExecutor(
+      {
+        agentId: "A3",
+        title: "Research",
+        executorConfig: {
+          id: "opencode",
+          budget: {
+            turns: 9,
+            minutes: 12,
+          },
+        },
+      },
+      { lane: "main", wave: { wave: 4, componentPromotions: [] } },
+    );
+
+    expect(claudeResolved).toMatchObject({
+      budget: {
+        turns: 6,
+        minutes: 15,
+      },
+      claude: {
+        maxTurns: null,
+        maxTurnsSource: null,
+      },
+    });
+    expect(opencodeResolved).toMatchObject({
+      budget: {
+        turns: 9,
+        minutes: 12,
+      },
+      opencode: {
+        steps: null,
+        stepsSource: null,
+      },
+    });
+  });
+
   it("composes imported standing role prompts while keeping ownership local", () => {
     const overlayPrompt = [
       "Primary goal:",
@@ -2334,6 +2386,147 @@ describe("completedWavesFromStatusFiles", () => {
         coordinationDir,
       }),
     ).toEqual([]);
+  });
+
+  it("stops treating downgraded clarification follow-up records as completion blockers", () => {
+    const tempRoot = registerTempPath(
+      path.join(REPO_ROOT, ".tmp", `wave-files-test-${Date.now()}-clarification-advisory`),
+    );
+    const statusDir = path.join(tempRoot, "status");
+    const logsDir = path.join(tempRoot, "logs");
+    const coordinationDir = path.join(tempRoot, "coordination");
+    const runStatePath = path.join(tempRoot, "run-state.json");
+    fs.mkdirSync(statusDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(coordinationDir, { recursive: true });
+
+    const reportRelPath = `.tmp/${path.basename(tempRoot)}/wave-0-cont-qa.md`;
+    const wave = {
+      wave: 0,
+      file: "docs/plans/waves/wave-0.md",
+      componentPromotions: [],
+      agents: [
+        {
+          agentId: "A0",
+          slug: "0-a0",
+          prompt: `File ownership (only touch these paths):\n- ${reportRelPath}`,
+          rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+        },
+        {
+          agentId: "A1",
+          slug: "0-a1",
+          prompt: "File ownership (only touch these paths):\n- src/example.ts",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+        },
+      ],
+      contQaReportPath: reportRelPath,
+    };
+
+    fs.writeFileSync(path.join(REPO_ROOT, reportRelPath), "# cont-QA\n\nVerdict: PASS\n", "utf8");
+    for (const agent of wave.agents) {
+      fs.writeFileSync(
+        path.join(statusDir, `wave-0-${agent.slug}.status`),
+        JSON.stringify(
+          {
+            code: 0,
+            promptHash: hashAgentPromptFingerprint(agent),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    }
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a0.summary.json"),
+      JSON.stringify(
+        {
+          reportPath: reportRelPath,
+          gate: {
+            architecture: "pass",
+            integration: "pass",
+            durability: "pass",
+            live: "pass",
+            docs: "pass",
+          },
+          verdict: { verdict: "pass" },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(statusDir, "wave-0-0-a1.summary.json"),
+      JSON.stringify(
+        {
+          agentId: "A1",
+          proof: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            state: "met",
+          },
+          docDelta: {
+            state: "owned",
+            paths: ["src/example.ts"],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(coordinationDir, "wave-0.jsonl"),
+      [
+        JSON.stringify({
+          id: "clarify-a1",
+          kind: "clarification-request",
+          wave: 0,
+          lane: "main",
+          agentId: "A1",
+          status: "open",
+          priority: "high",
+          blocking: false,
+          blockerSeverity: "advisory",
+          targets: ["agent:A9"],
+          summary: "Optional shared plan note",
+          detail: "Helpful but no longer required for closure",
+        }),
+        JSON.stringify({
+          id: "route-clarify-a1-1",
+          kind: "request",
+          wave: 0,
+          lane: "main",
+          agentId: "launcher",
+          status: "open",
+          priority: "high",
+          blocking: false,
+          blockerSeverity: "advisory",
+          targets: ["agent:A9"],
+          dependsOn: ["clarify-a1"],
+          closureCondition: "clarification:clarify-a1",
+          summary: "Advisory clarification follow-up",
+          detail: "Keep visible without blocking completion",
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const reconciliation = reconcileRunStateFromStatusFiles([wave], runStatePath, statusDir, {
+      logsDir,
+      coordinationDir,
+    });
+    const blockedReasons = reconciliation.blockedFromStatus.flatMap((entry) => entry.reasons || []);
+
+    expect(blockedReasons.map((reason) => reason.code)).not.toContain("open-clarification");
+    expect(blockedReasons.map((reason) => reason.code)).not.toContain("open-clarification-request");
   });
 });
 

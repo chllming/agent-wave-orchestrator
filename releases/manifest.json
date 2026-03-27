@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.8.7",
+      "date": "2026-03-27",
+      "summary": "Policy-consistency hardening, capability-specific same-wave routing, stable per-wave tmux session reuse, and 0.8.7 release-surface alignment.",
+      "features": [
+        "Generic `budget.turns` is now documented and tested consistently as advisory metadata only; hard runtime turn ceilings come only from runtime-specific settings such as `claude.maxTurns` or `opencode.steps`.",
+        "Capability-targeted helper routing now prefers demonstrated same-wave success for the requested capability before falling back to the least-busy matching capability owner, and unrelated completed work no longer counts as routing evidence.",
+        "Advisory, stale, and other non-blocking clarification or human-input records stay visible in control and reducer projections without reopening hard blocked reducer state by themselves.",
+        "Wave-agent, resident-orchestrator, and per-wave dashboard tmux sessions now reuse stable per-wave session names, so stale launcher exits stop accumulating extra sessions for the same wave.",
+        "Structured signal extraction now also recognizes markers embedded inside JSON log lines, so wrapped executor transcripts still produce proof, doc-delta, and component evidence."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.8.7` routing, blocker-severity, signal-wrapper, and stable-session behavior.",
+        "If your repo copied starter scripts or operator docs, sync `scripts/wave-status.sh`, `scripts/wave-watch.sh`, `docs/guides/signal-wrappers.md`, `docs/guides/terminal-surfaces.md`, `docs/reference/cli-reference.md`, and any local tmux/session runbooks that still assume run-tagged session names.",
+        "If your repo copied planner or routing guidance, sync `docs/guides/planner.md`, `docs/reference/wave-planning-lessons.md`, `docs/plans/wave-orchestrator.md`, the `planner-agentic` bundle entry in `docs/context7/bundles.json`, and any local helper-assignment policy docs so they describe capability-specific same-wave routing evidence instead of generic prior completion.",
+        "If your repo relies on advisory `budget.turns` as if it were a hard ceiling, move that limit to the runtime-specific executor config (`claude.maxTurns` or `opencode.steps`) before you depend on deterministic turn enforcement."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.6",
       "date": "2026-03-25",
       "summary": "Signal-hygiene starter surface, versioned signal wrappers, terminal watcher hardening, and 0.8.6 release-surface alignment.",

@@ -74,11 +74,15 @@ runtime setup, and the closure artifacts all describe the same truth.
 ## 7. Runtime setup matters as much as wave prose
 
 - Do not use small fixed turn caps for synthesis-heavy or closure-heavy agents.
-  Bound them with `budget.minutes`, not `budget.turns`.
+  Bound them with `budget.minutes`, not generic `budget.turns`.
+- Treat generic `budget.turns` as advisory unless you intentionally set a
+  runtime-specific hard stop such as `claude.max_turns` or `opencode.steps`.
 - Pin exact model and reasoning settings for each runtime. Ambiguous profiles
   create unclear failure modes.
 - Avoid cross-runtime fallback on live-proof or deploy-sensitive slices unless
   there is a very good reason.
+- For non-proof-centric owners, prefer targeted recovery and reuse over broad
+  relaunch when a timeout or max-turn event leaves partial artifacts behind.
 - Context7 should be explicit and real; unresolved bundles create noise instead
   of help.
 
@@ -121,6 +125,8 @@ runtime setup, and the closure artifacts all describe the same truth.
 - Are A8 and A0 told what would make the wave fail honestly?
 - Are runtime pins, Context7 bundles, and budgets specific enough to avoid
   preventable execution failures?
+- Can any non-proof coordination ask be authored as `soft`, `stale`, or
+  `advisory` instead of silently becoming a hard closure blocker?
 - Would a reviewer understand the difference between “code landed” and
   “component promoted” just by reading the wave file?
 

@@ -229,16 +229,16 @@ This is the central failure highlighted by `HiddenBench` and `Silo-Bench`, and t
 
 ### 3. Expertise routing is explicit, but shallow
 
-[scripts/wave-orchestrator/routing-state.mjs](../../scripts/wave-orchestrator/routing-state.mjs) is better than unconstrained self-organization, but it still routes mostly by:
+[scripts/wave-orchestrator/routing-state.mjs](../../scripts/wave-orchestrator/routing-state.mjs) is better than unconstrained self-organization, and it now has a light same-wave success preference, but it still routes mostly by:
 
 - explicit target
 - configured preferred agents
 - declared capability ownership
+- demonstrated same-wave completions on the capability
 - least-busy fallback
 
-It does not yet weight:
+Beyond that light historical-success preference, it still does not weight:
 
-- historical success on a capability
 - evidence quality by agent
 - confidence calibration
 - expert-leverage metrics
@@ -247,14 +247,14 @@ So the repo partially addresses the concern from `Multi-Agent Teams Hold Experts
 
 ### 4. Clarification and contradiction handling are still somewhat heuristic
 
-Clarification triage and integration evidence aggregation are real safeguards, but they still lean heavily on:
+Clarification triage, blocker taxonomy, operator downgrade controls, and integration evidence aggregation are real safeguards, but they still lean heavily on:
 
 - ownership mappings
 - artifact references
 - structured markers
 - text-level summaries and conflict extraction
 
-That is enough to make the runtime operationally safer, but it is not yet a richer semantic evidence-integration layer. Subtle contradictions or latent information asymmetries may still be missed.
+That is enough to make the runtime operationally safer. The newer hard-vs-soft blocker split also removes some unnecessary terminal failures by letting stale or advisory coordination remain visible without owning closure. But it is not yet a richer semantic evidence-integration layer, and subtle contradictions or latent information asymmetries may still be missed.
 
 ### 5. DPBench-style simultaneous coordination is only indirectly addressed
 
@@ -283,7 +283,7 @@ So the design points in the right direction, but the claim is not yet validated.
 
 If the standard is "does this repo merely claim multi-agent coordination," the answer is no. It has real machinery for blackboard-like state sharing, evidence-based closure, clarification handling, and coordination diagnostics.
 
-If the standard is "has this repo already demonstrated that its design beats the core failure modes isolated by HiddenBench, Silo-Bench, DPBench, and related work," the answer is also no. The design is substantially more credible than most MAS stacks, but the empirical proof is still missing.
+If the standard is "has this repo already demonstrated that its design beats the core failure modes isolated by HiddenBench, Silo-Bench, DPBench, and related work," the answer is also no. The design is substantially more credible than most MAS stacks, and it now also reduces avoidable failure through targeted recovery, blocker severity, and policy-safe downgrade paths, but the empirical proof is still missing.
 
 The most accurate claim today is:
 

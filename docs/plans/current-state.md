@@ -1,6 +1,6 @@
 # Current State
 
-- The published package is `0.8.6`, and that release now includes the optional pre-implementation `design` worker role, the `role-design`, `tui-design`, and `signal-hygiene` starter bundles, plus the seeded signal-wrapper scripts for long-running-agent and operator wait loops.
+- The published package is `0.8.7`, and that release now includes the optional pre-implementation `design` worker role, the `role-design`, `tui-design`, and `signal-hygiene` starter bundles, plus the seeded signal-wrapper scripts for long-running-agent and operator wait loops.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.

@@ -103,18 +103,18 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.6`
-- Release tag: [`v0.8.6`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.6)
+- `@chllming/wave-orchestration@0.8.7`
+- Release tag: [`v0.8.7`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.7)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.6`:
+Highlights in `0.8.7`:
 
 - The shipped starter surface now includes `skills/signal-hygiene/` plus seeded `scripts/wave-status.sh` and `scripts/wave-watch.sh` wrappers for long-running-agent and operator wait loops.
 - Long-running agents and resident orchestrators now get prompt-level signal-state and signal-ack paths, so wakeups are edge-triggered by versioned signal changes instead of relying on terminal injection.
 - Versioned wave or agent signal snapshots are now a first-class operator surface under `.tmp/<lane>-wave-launcher/signals/`, with failure treated as terminal in both the runtime and the wrapper exit contract.
-- `0.8.5` design-role and hybrid design-steward behavior remains part of the shipped release surface, and the current migration guide now covers the new signal-wrapper model on top of that design-first runtime.
-- Release docs, current-state notes, and publishing instructions now point at the `0.8.6` surface.
+- `0.8.5` design-role and hybrid design-steward behavior remains part of the shipped release surface, and `0.8.7` adds capability-specific same-wave helper routing, blocker-severity consistency across reducer state, and stable per-wave tmux session reuse.
+- Release docs, current-state notes, migration guidance, and publishing instructions now point at the `0.8.7` surface.
 
 Requirements:
 

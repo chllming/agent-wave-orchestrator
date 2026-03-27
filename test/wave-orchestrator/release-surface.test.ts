@@ -46,13 +46,15 @@ describe("release surface alignment", () => {
       "utf8",
     );
 
+    expect(runtimeReadme).toContain("Advisory generic turn budget.");
     expect(runtimeReadme).toContain(
-      "Seeds Claude `maxTurns` and OpenCode `steps` when runtime-specific values are absent; it does not set a Codex turn limit",
+      "only runtime-specific settings such as `claude.maxTurns` or `opencode.steps` emit hard turn-limit flags.",
     );
     expect(runtimeReadme).toContain("Wave emitted no turn-limit flag");
     expect(codexDoc).toContain("Generic `budget.turns` does not set a Codex turn limit.");
     expect(codexDoc).toContain("limits.observedTurnLimit");
     expect(codexDoc).not.toContain(`"turns": 12`);
+    expect(runbook).toContain("Generic `budget.turns` remains advisory metadata");
     expect(runbook).toContain("Codex turn ceilings remain external to Wave");
   });
 

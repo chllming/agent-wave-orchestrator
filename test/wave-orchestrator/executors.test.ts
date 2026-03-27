@@ -571,6 +571,74 @@ describe("buildExecutorLaunchSpec", () => {
     });
   });
 
+  it("keeps generic turn budgets advisory for Claude launch metadata", () => {
+    const dir = registerTempPath(fs.mkdtempSync(path.join(os.tmpdir(), "wave-executor-claude-advisory-")));
+    const promptPath = path.join(dir, "prompt.md");
+    const logPath = path.join(dir, "agent.log");
+    const overlayDir = path.join(dir, "claude");
+    fs.writeFileSync(promptPath, "Prompt body\n", "utf8");
+
+    const spec = buildExecutorLaunchSpec({
+      agent: {
+        agentId: "A1",
+        title: "Claude Worker",
+        executorResolved: {
+          id: "claude",
+          model: "claude-sonnet-4-6",
+          budget: {
+            turns: 8,
+            minutes: 20,
+          },
+          codex: { command: "codex", sandbox: "danger-full-access" },
+          claude: {
+            command: "claude",
+            model: "claude-sonnet-4-6",
+            agent: null,
+            appendSystemPromptMode: "append",
+            effort: null,
+            permissionMode: null,
+            permissionPromptTool: null,
+            maxTurns: null,
+            maxTurnsSource: null,
+            mcpConfig: [],
+            strictMcpConfig: false,
+            settings: null,
+            settingsJson: null,
+            hooksJson: null,
+            allowedHttpHookUrls: [],
+            outputFormat: "text",
+            allowedTools: [],
+            disallowedTools: [],
+          },
+          opencode: {
+            command: "opencode",
+            model: null,
+            agent: null,
+            attach: null,
+            format: "default",
+            steps: null,
+            instructions: [],
+            permission: null,
+          },
+        },
+      },
+      promptPath,
+      logPath,
+      overlayDir,
+    });
+
+    const invocation = spec.invocationLines.join("\n");
+    expect(invocation).not.toContain("--max-turns");
+    expect(spec.limits).toMatchObject({
+      attemptTimeoutMinutes: 20,
+      knownTurnLimit: null,
+      turnLimitSource: null,
+    });
+    expect(spec.limits.notes).toContain(
+      "Generic budget.turns remained advisory; Wave emitted no Claude --max-turns flag.",
+    );
+  });
+
   it("writes an OpenCode overlay config and builds a headless invocation", () => {
     const dir = registerTempPath(fs.mkdtempSync(path.join(os.tmpdir(), "wave-executor-opencode-")));
     const promptPath = path.join(dir, "prompt.md");
@@ -662,5 +730,71 @@ describe("buildExecutorLaunchSpec", () => {
       knownTurnLimit: 5,
       turnLimitSource: "opencode.steps",
     });
+  });
+
+  it("keeps generic turn budgets advisory for OpenCode launch metadata", () => {
+    const dir = registerTempPath(fs.mkdtempSync(path.join(os.tmpdir(), "wave-executor-opencode-advisory-")));
+    const promptPath = path.join(dir, "prompt.md");
+    const logPath = path.join(dir, "agent.log");
+    const overlayDir = path.join(dir, "opencode");
+    fs.writeFileSync(promptPath, "Prompt body\n", "utf8");
+
+    const spec = buildExecutorLaunchSpec({
+      agent: {
+        agentId: "A2",
+        title: "OpenCode Worker",
+        executorResolved: {
+          id: "opencode",
+          model: "anthropic/claude-sonnet-4-20250514",
+          budget: {
+            turns: 7,
+            minutes: 18,
+          },
+          codex: { command: "codex", sandbox: "danger-full-access" },
+          claude: {
+            command: "claude",
+            model: null,
+            agent: null,
+            appendSystemPromptMode: "append",
+            permissionMode: null,
+            permissionPromptTool: null,
+            maxTurns: null,
+            mcpConfig: [],
+            strictMcpConfig: false,
+            settings: null,
+            outputFormat: "text",
+            allowedTools: [],
+            disallowedTools: [],
+          },
+          opencode: {
+            command: "opencode",
+            model: "anthropic/claude-sonnet-4-20250514",
+            agent: "wave-open",
+            attach: null,
+            files: [],
+            format: "default",
+            steps: null,
+            stepsSource: null,
+            instructions: [],
+            permission: null,
+            configJson: null,
+          },
+        },
+      },
+      promptPath,
+      logPath,
+      overlayDir,
+    });
+
+    const invocation = spec.invocationLines.join("\n");
+    expect(invocation).not.toContain("--steps");
+    expect(spec.limits).toMatchObject({
+      attemptTimeoutMinutes: 18,
+      knownTurnLimit: null,
+      turnLimitSource: null,
+    });
+    expect(spec.limits.notes).toContain(
+      "Generic budget.turns remained advisory; Wave emitted no OpenCode --steps flag.",
+    );
   });
 });

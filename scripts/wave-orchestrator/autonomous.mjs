@@ -27,8 +27,13 @@ import {
   maybeAnnouncePackageUpdate,
   WAVE_SUPPRESS_UPDATE_NOTICE_ENV,
 } from "./package-update-notice.mjs";
+import { buildTaskSnapshots } from "./control-plane.mjs";
+import { readWaveHumanFeedbackRequests } from "./coordination.mjs";
 import { readRunState } from "./wave-files.mjs";
-import { readDependencyTickets } from "./coordination-store.mjs";
+import {
+  readDependencyTickets,
+  readMaterializedCoordinationState,
+} from "./coordination-store.mjs";
 import { readWaveLedger } from "./ledger.mjs";
 
 const AUTONOMOUS_EXECUTOR_MODES = SUPPORTED_EXECUTOR_MODES.filter((mode) => mode !== "local");
@@ -249,7 +254,38 @@ function requiredInboundDependenciesOpen(lanePaths, lane) {
   });
 }
 
-function pendingHumanItemsForWave(lanePaths, wave) {
+function liveBlockingHumanItemsForWave(lanePaths, lane, wave) {
+  if (!lanePaths?.coordinationDir || !lanePaths?.feedbackRequestsDir) {
+    return null;
+  }
+  const coordinationState = readMaterializedCoordinationState(
+    path.join(lanePaths.coordinationDir, `wave-${wave}.jsonl`),
+  );
+  const feedbackRequests = readWaveHumanFeedbackRequests({
+    feedbackRequestsDir: lanePaths.feedbackRequestsDir,
+    lane,
+    waveNumber: wave,
+    agentIds: [],
+    orchestratorId: "",
+  });
+  return buildTaskSnapshots({
+    coordinationState,
+    feedbackRequests,
+  })
+    .filter(
+      (task) =>
+        ["human-input", "escalation"].includes(task.taskType) &&
+        task.blocking !== false &&
+        ["open", "working", "input-required"].includes(task.state),
+    )
+    .map((task) => task.taskId);
+}
+
+function pendingHumanItemsForWave(lanePaths, lane, wave) {
+  const liveItems = liveBlockingHumanItemsForWave(lanePaths, lane, wave);
+  if (Array.isArray(liveItems)) {
+    return liveItems;
+  }
   const existingLedger = readWaveLedger(path.join(lanePaths.ledgerDir, `wave-${wave}.json`));
   return [
     ...(existingLedger?.humanFeedback || []),
@@ -257,7 +293,7 @@ function pendingHumanItemsForWave(lanePaths, wave) {
   ];
 }
 
-function pendingHumanItemsForLane(lanePaths) {
+function pendingHumanItemsForLane(lanePaths, lane) {
   if (!fs.existsSync(lanePaths.ledgerDir)) {
     return [];
   }
@@ -271,7 +307,7 @@ function pendingHumanItemsForLane(lanePaths) {
     .filter((item) => Number.isFinite(item.wave))
     .sort((left, right) => left.wave - right.wave)
     .flatMap((item) =>
-      pendingHumanItemsForWave(lanePaths, item.wave).map((id) => ({
+      pendingHumanItemsForWave(lanePaths, lane, item.wave).map((id) => ({
         wave: item.wave,
         id,
       })),
@@ -292,7 +328,7 @@ export function readAutonomousBarrier(lanePaths, lane, wave = null) {
     };
   }
   if (wave === null) {
-    const pendingHumanEntries = pendingHumanItemsForLane(lanePaths);
+    const pendingHumanEntries = pendingHumanItemsForLane(lanePaths, lane);
     if (pendingHumanEntries.length > 0) {
       return {
         kind: "human-input",
@@ -303,7 +339,7 @@ export function readAutonomousBarrier(lanePaths, lane, wave = null) {
     }
     return null;
   }
-  const pendingHumanItems = pendingHumanItemsForWave(lanePaths, wave);
+  const pendingHumanItems = pendingHumanItemsForWave(lanePaths, lane, wave);
   if (pendingHumanItems.length > 0) {
     return {
       kind: "human-input",

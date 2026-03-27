@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  isOpenCoordinationStatus,
+  coordinationRecordBlocksWave,
   openClarificationLinkedRequests,
   readMaterializedCoordinationState,
 } from "./coordination-store.mjs";
@@ -66,17 +66,19 @@ function compatibilityBlockerIds(derivedState) {
   const coordinationState = derivedState?.coordinationState || {};
   return normalizeShadowIdList([
     ...(coordinationState.blockers || [])
-      .filter((record) => isOpenCoordinationStatus(record.status))
+      .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
     ...(coordinationState.clarifications || [])
-      .filter((record) => isOpenCoordinationStatus(record.status))
+      .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
-    ...openClarificationLinkedRequests(coordinationState).map((record) => record.id),
+    ...openClarificationLinkedRequests(coordinationState)
+      .filter((record) => coordinationRecordBlocksWave(record))
+      .map((record) => record.id),
     ...(coordinationState.humanFeedback || [])
-      .filter((record) => isOpenCoordinationStatus(record.status))
+      .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
     ...(coordinationState.humanEscalations || [])
-      .filter((record) => isOpenCoordinationStatus(record.status))
+      .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
     ...((derivedState?.capabilityAssignments || [])
       .filter((assignment) => assignment.blocking)

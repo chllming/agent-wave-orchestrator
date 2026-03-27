@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   appendCoordinationRecord,
+  coordinationBlockerSeverity,
+  coordinationRecordBlocksWave,
   isOpenCoordinationStatus,
   materializeCoordinationState,
   readCoordinationLog,
@@ -27,6 +29,32 @@ function openTaskCountForAgent(ledger, agentId) {
   return (ledger?.tasks || []).filter(
     (task) => task.owner === agentId && !["done", "closed", "resolved"].includes(task.state),
   ).length;
+}
+
+function completedTaskCountForAgent(ledger, agentId) {
+  return (ledger?.tasks || []).filter(
+    (task) => task.owner === agentId && ["done", "closed", "resolved"].includes(task.state),
+  ).length;
+}
+
+function completedCapabilityCountForAgent(ledger, agentId, capability) {
+  const normalizedCapability = normalizeCapability(capability);
+  if (!normalizedCapability) {
+    return 0;
+  }
+  const taskCount = (ledger?.tasks || []).filter(
+    (task) =>
+      task.owner === agentId &&
+      ["done", "closed", "resolved"].includes(task.state) &&
+      normalizeCapability(task.capability) === normalizedCapability,
+  ).length;
+  const assignmentCount = (ledger?.capabilityAssignments || []).filter(
+    (assignment) =>
+      assignment.assignedAgentId === agentId &&
+      ["done", "closed", "resolved"].includes(String(assignment.state || "").trim().toLowerCase()) &&
+      normalizeCapability(assignment.capability) === normalizedCapability,
+  ).length;
+  return taskCount + assignmentCount;
 }
 
 function resolveTargetAssignment(target, agents, ledger, capabilityRouting = {}) {
@@ -94,6 +122,12 @@ function resolveTargetAssignment(target, agents, ledger, capabilityRouting = {})
       (agent) => Array.isArray(agent.capabilities) && agent.capabilities.includes(capability),
     );
     candidates.sort((left, right) => {
+      const capabilityCompletionDiff =
+        completedCapabilityCountForAgent(ledger, right.agentId, capability) -
+        completedCapabilityCountForAgent(ledger, left.agentId, capability);
+      if (capabilityCompletionDiff !== 0) {
+        return capabilityCompletionDiff;
+      }
       const taskDiff = openTaskCountForAgent(ledger, left.agentId) - openTaskCountForAgent(ledger, right.agentId);
       if (taskDiff !== 0) {
         return taskDiff;
@@ -101,14 +135,25 @@ function resolveTargetAssignment(target, agents, ledger, capabilityRouting = {})
       return String(left.agentId).localeCompare(String(right.agentId));
     });
     if (candidates[0]) {
+      const demonstratedCapabilityCompletions = completedCapabilityCountForAgent(
+        ledger,
+        candidates[0].agentId,
+        capability,
+      );
       return {
         assignedAgentId: candidates[0].agentId,
         target: normalizedTarget,
         targetType: "capability",
         capability,
-        assignmentReason: "least-busy-capability",
+        assignmentReason:
+          demonstratedCapabilityCompletions > 0
+            ? "same-wave-capability-owner"
+            : "least-busy-capability",
         blocking: true,
-        detail: `Capability ${capability} routed to ${candidates[0].agentId}.`,
+        detail:
+          demonstratedCapabilityCompletions > 0
+            ? `Capability ${capability} routed to ${candidates[0].agentId} based on demonstrated same-wave capability work (${demonstratedCapabilityCompletions}).`
+            : `Capability ${capability} routed to ${candidates[0].agentId}.`,
       };
     }
     return {
@@ -265,6 +310,7 @@ export function buildRequestAssignments({
       });
       const resolvedByPolicy = Boolean(resolvedByPolicyRecord);
       const effectiveStatus = resolvedByPolicy ? "resolved" : record.status;
+      const blocking = !resolvedByPolicy && coordinationRecordBlocksWave(record);
       assignments.push({
         id: assignmentId,
         requestId: record.id,
@@ -282,7 +328,8 @@ export function buildRequestAssignments({
         assignedAgentId: resolution.assignedAgentId,
         assignmentReason: resolution.assignmentReason,
         assignmentDetail: resolution.detail,
-        blocking: !resolvedByPolicy && isOpenCoordinationStatus(record.status),
+        blocking,
+        blockerSeverity: coordinationBlockerSeverity(record),
         artifactRefs: Array.isArray(record.artifactRefs) ? record.artifactRefs : [],
         dependsOn: Array.isArray(record.dependsOn) ? record.dependsOn : [],
         closureCondition: String(record.closureCondition || ""),

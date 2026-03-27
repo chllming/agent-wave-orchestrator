@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+## 0.8.7 - 2026-03-27
+
+### Changed
+
+- Generic `budget.turns` is now treated consistently as advisory metadata unless a runtime-specific ceiling such as `claude.maxTurns` or `opencode.steps` is declared; `budget.minutes` remains the primary attempt budget and the release docs/tests now match that runtime behavior.
+- The blocker-severity model is now consistent across coordination, control status, and reducer-backed closure state, so open work can stay visible as `soft`, `stale`, or `advisory` without automatically reopening hard blocking state.
+- The expanded `wave control task act` repair surface now supports deferral, advisory or stale downgrade, and policy resolution inside canonical control state instead of manual file edits.
+
+### Fixed And Hardened
+
+- Recoverable execution failures such as timeout, max-turn, rate-limit, and missing-status outcomes now prefer targeted rerun or resume paths plus bounded repair work instead of broad wave failure when proof-critical blockers are not present.
+- Autonomous and retry flows now keep moving when only non-blocking human or clarification records remain, while proof-centric owners still default to sticky executor behavior.
+- Capability routing now prefers demonstrated same-wave success for the requested capability before falling back to the least-busy matching capability owner; unrelated completed work no longer counts as routing evidence.
+- Structured marker extraction now also recognizes proof, doc-delta, and component markers embedded inside JSON log lines, so wrapped executor transcripts no longer hide valid closure evidence.
+- Wave agent and resident-orchestrator tmux sessions now reuse stable per-wave session names instead of appending a run tag, which prevents stale launcher exits from accumulating extra tmux sessions for the same wave.
+
+### Testing And Validation
+
+- Added regression coverage around advisory blockers, targeted recovery, autonomous non-blocking human-input handling, advisory turn-budget behavior, capability-specific same-wave routing preference, non-blocking clarification/human-input reducer behavior, and stable per-wave tmux session naming.
+
 ## 0.8.6 - 2026-03-25
 
 ### Added

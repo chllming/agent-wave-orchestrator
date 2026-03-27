@@ -10,7 +10,7 @@ import {
   readWaveDependencyBarrier,
 } from "./gate-engine.mjs";
 import {
-  isOpenCoordinationStatus,
+  coordinationRecordBlocksWave,
   openClarificationLinkedRequests,
 } from "./coordination-store.mjs";
 import {
@@ -197,6 +197,7 @@ export function relaunchReasonBuckets(runs, failures, derivedState) {
   const selectedAgentIds = new Set((runs || []).map((run) => run.agent.agentId));
   return {
     clarification: openClarificationLinkedRequests(derivedState?.coordinationState)
+      .filter((record) => coordinationRecordBlocksWave(record))
       .flatMap((record) => record.targets || [])
       .some((target) => {
         const agentId = String(target || "").startsWith("agent:")
@@ -212,7 +213,7 @@ export function relaunchReasonBuckets(runs, failures, derivedState) {
     )),
     blocker: (derivedState?.coordinationState?.blockers || []).some(
       (record) =>
-        isOpenCoordinationStatus(record.status) &&
+        coordinationRecordBlocksWave(record) &&
         (selectedAgentIds.has(record.agentId) ||
           (record.targets || []).some((target) => {
             const agentId = String(target || "").startsWith("agent:")
@@ -239,7 +240,10 @@ const HUMAN_INPUT_BLOCKER_KINDS = new Set([
 ]);
 
 function isHumanInputBlocker(blocker) {
-  return HUMAN_INPUT_BLOCKER_KINDS.has(String(blocker?.kind || "").trim().toLowerCase());
+  return (
+    blocker?.blocking !== false &&
+    HUMAN_INPUT_BLOCKER_KINDS.has(String(blocker?.kind || "").trim().toLowerCase())
+  );
 }
 
 function normalizeRetryTargets(retryTargetSet) {
@@ -672,10 +676,10 @@ function resolveRelaunchRunsLegacy(agentRuns, failures, derivedState, lanePaths,
   const roleBindings = resolveWaveRoleBindings(waveDefinition, lanePaths, waveDefinition?.agents);
   const runsByAgentId = new Map(agentRuns.map((run) => [run.agent.agentId, run]));
   const pendingFeedback = (derivedState?.coordinationState?.humanFeedback || []).filter((record) =>
-    isOpenCoordinationStatus(record.status),
+    coordinationRecordBlocksWave(record),
   );
   const pendingHumanEscalations = (derivedState?.coordinationState?.humanEscalations || []).filter(
-    (record) => isOpenCoordinationStatus(record.status),
+    (record) => coordinationRecordBlocksWave(record),
   );
   if (pendingFeedback.length > 0 || pendingHumanEscalations.length > 0) {
     return { runs: [], barrier: null };
@@ -693,7 +697,9 @@ function resolveRelaunchRunsLegacy(agentRuns, failures, derivedState, lanePaths,
     return { runs: [], barrier: retryBarrier };
   }
   const clarificationTargets = new Set();
-  for (const record of openClarificationLinkedRequests(derivedState?.coordinationState)) {
+  for (const record of openClarificationLinkedRequests(derivedState?.coordinationState).filter((entry) =>
+    coordinationRecordBlocksWave(entry),
+  )) {
     for (const target of record.targets || []) {
       if (String(target).startsWith("agent:")) {
         clarificationTargets.add(String(target).slice("agent:".length));
@@ -782,7 +788,7 @@ function resolveRelaunchRunsLegacy(agentRuns, failures, derivedState, lanePaths,
   }
   const blockerAgentIds = new Set();
   for (const record of derivedState?.coordinationState?.blockers || []) {
-    if (!isOpenCoordinationStatus(record.status)) {
+    if (!coordinationRecordBlocksWave(record)) {
       continue;
     }
     blockerAgentIds.add(record.agentId);
@@ -867,10 +873,10 @@ function resolveRelaunchRunsFromWaveState(
 ) {
   const roleBindings = resolveWaveRoleBindings(waveDefinition, lanePaths, waveDefinition?.agents);
   const pendingFeedback = (waveState?.coordinationState?.humanFeedback || []).filter((record) =>
-    isOpenCoordinationStatus(record.status),
+    coordinationRecordBlocksWave(record),
   );
   const pendingHumanEscalations = (waveState?.coordinationState?.humanEscalations || []).filter(
-    (record) => isOpenCoordinationStatus(record.status),
+    (record) => coordinationRecordBlocksWave(record),
   );
   if (pendingFeedback.length > 0 || pendingHumanEscalations.length > 0) {
     return { runs: [], barrier: null };
@@ -890,7 +896,9 @@ function resolveRelaunchRunsFromWaveState(
   }
 
   const clarificationTargets = new Set();
-  for (const record of openClarificationLinkedRequests(waveState?.coordinationState)) {
+  for (const record of openClarificationLinkedRequests(waveState?.coordinationState).filter((entry) =>
+    coordinationRecordBlocksWave(entry),
+  )) {
     for (const target of record.targets || []) {
       if (String(target).startsWith("agent:")) {
         clarificationTargets.add(String(target).slice("agent:".length));
@@ -967,7 +975,7 @@ function resolveRelaunchRunsFromWaveState(
 
   const blockerAgentIds = new Set();
   for (const record of waveState?.coordinationState?.blockers || []) {
-    if (!isOpenCoordinationStatus(record.status)) {
+    if (!coordinationRecordBlocksWave(record)) {
       continue;
     }
     blockerAgentIds.add(record.agentId);

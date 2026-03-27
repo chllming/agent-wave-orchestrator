@@ -84,6 +84,14 @@ function extractTmuxSessionName(command, socketName) {
   return sessionName || null;
 }
 
+function sanitizeTmuxSessionName(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9:_-]/g, "_");
+}
+
+export function createWaveAgentSessionName(lanePaths, wave, agentSlug) {
+  return sanitizeTmuxSessionName(`${lanePaths.tmuxSessionPrefix}${wave}_${agentSlug}`);
+}
+
 export function createTemporaryTerminalEntries(
   lanePaths,
   wave,
@@ -93,10 +101,7 @@ export function createTemporaryTerminalEntries(
 ) {
   const agentEntries = agents.map((agent) => {
     const terminalName = `${lanePaths.terminalNamePrefix}${wave}-${agent.slug}`;
-    const sessionName = `${lanePaths.tmuxSessionPrefix}${wave}_${agent.slug}_${runTag}`.replace(
-      /[^a-zA-Z0-9_-]/g,
-      "_",
-    );
+    const sessionName = createWaveAgentSessionName(lanePaths, wave, agent.slug);
     return {
       terminalName,
       sessionName,
@@ -111,9 +116,8 @@ export function createTemporaryTerminalEntries(
   if (!includeDashboard) {
     return agentEntries;
   }
-  const dashboardSessionName = `${lanePaths.tmuxDashboardSessionPrefix}${wave}_${runTag}`.replace(
-    /[^a-zA-Z0-9_-]/g,
-    "_",
+  const dashboardSessionName = sanitizeTmuxSessionName(
+    `${lanePaths.tmuxDashboardSessionPrefix}${wave}`,
   );
   agentEntries.push({
     terminalName: `${lanePaths.dashboardTerminalNamePrefix}${wave}`,
@@ -129,9 +133,8 @@ export function createTemporaryTerminalEntries(
 }
 
 export function createGlobalDashboardTerminalEntry(lanePaths, runTag) {
-  const sessionName = `${lanePaths.tmuxGlobalDashboardSessionPrefix}_current`.replace(
-    /[^a-zA-Z0-9:_-]/g,
-    "_",
+  const sessionName = sanitizeTmuxSessionName(
+    `${lanePaths.tmuxGlobalDashboardSessionPrefix}_current`,
   );
   return {
     terminalName: lanePaths.globalDashboardTerminalName,
@@ -146,10 +149,7 @@ export function createGlobalDashboardTerminalEntry(lanePaths, runTag) {
 }
 
 export function createCurrentWaveDashboardTerminalEntry(lanePaths) {
-  const sessionName = `${lanePaths.tmuxDashboardSessionPrefix}_current`.replace(
-    /[^a-zA-Z0-9:_-]/g,
-    "_",
-  );
+  const sessionName = sanitizeTmuxSessionName(`${lanePaths.tmuxDashboardSessionPrefix}_current`);
   const terminalName = currentWaveDashboardTerminalName(lanePaths);
   return {
     terminalName,

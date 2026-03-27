@@ -124,7 +124,7 @@ Top-level and lane-local skill attachment use the same shape:
 
 Lane-local `lanes.<lane>.skills` extends the global config instead of replacing it.
 
-Optional design workers in the shipped `0.8.6` surface normally attach `role-design`. That bundle is intended for docs/spec-first design packets and explicit implementation handoff work before implementation starts. When the design packet covers terminal UX, dashboards, or other operator surfaces, add `tui-design` explicitly in the wave's `### Skills`.
+Optional design workers in the shipped `0.8.7` surface normally attach `role-design`. That bundle is intended for docs/spec-first design packets and explicit implementation handoff work before implementation starts. When the design packet covers terminal UX, dashboards, or other operator surfaces, add `tui-design` explicitly in the wave's `### Skills`.
 
 Long-running agents that should stay resident and react only to orchestrator signal changes can add `signal-hygiene` explicitly in `### Skills`. That bundle is not auto-attached and is not meant for normal one-shot implementation agents.
 

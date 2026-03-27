@@ -49,7 +49,7 @@ import {
   validateWaveComponentMatrixCurrentLevels,
 } from "./wave-files.mjs";
 import {
-  isOpenCoordinationStatus,
+  coordinationRecordBlocksWave,
   openClarificationLinkedRequests,
 } from "./coordination-store.mjs";
 import { contradictionsBlockingGate } from "./contradiction-entity.mjs";
@@ -998,7 +998,7 @@ export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, option
 
 export function readClarificationBarrier(derivedState) {
   const openClarifications = (derivedState?.coordinationState?.clarifications || []).filter(
-    (record) => isOpenCoordinationStatus(record.status),
+    (record) => coordinationRecordBlocksWave(record),
   );
   if (openClarifications.length > 0) {
     return {
@@ -1009,7 +1009,7 @@ export function readClarificationBarrier(derivedState) {
   }
   const openClarificationRequests = openClarificationLinkedRequests(
     derivedState?.coordinationState,
-  );
+  ).filter((record) => coordinationRecordBlocksWave(record));
   if (openClarificationRequests.length > 0) {
     return {
       ok: false,
@@ -1019,10 +1019,10 @@ export function readClarificationBarrier(derivedState) {
   }
   const pendingHuman = [
     ...((derivedState?.coordinationState?.humanEscalations || []).filter((record) =>
-      isOpenCoordinationStatus(record.status),
+      coordinationRecordBlocksWave(record),
     )),
     ...((derivedState?.coordinationState?.humanFeedback || []).filter((record) =>
-      isOpenCoordinationStatus(record.status),
+      coordinationRecordBlocksWave(record),
     )),
   ];
   if (pendingHuman.length > 0) {

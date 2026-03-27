@@ -27,6 +27,7 @@ import {
   writeJsonAtomic,
 } from "./shared.mjs";
 import {
+  createWaveAgentSessionName,
   killTmuxSessionIfExists,
   terminalSurfaceUsesTerminalRegistry,
   pruneOrphanLaneTemporaryTerminalEntries,
@@ -349,9 +350,10 @@ export function buildResidentOrchestratorRun({
     executorResolved,
   };
   const baseName = `wave-${wave.wave}-resident-orchestrator`;
-  const sessionName = `${lanePaths.tmuxSessionPrefix}${wave.wave}_resident_orchestrator_${runTag}`.replace(
-    /[^a-zA-Z0-9_-]/g,
-    "_",
+  const sessionName = createWaveAgentSessionName(
+    lanePaths,
+    wave.wave,
+    "resident_orchestrator",
   );
   return {
     run: {
@@ -443,15 +445,9 @@ function isWaveDashboardBackedByLiveSession(lanePaths, dashboardPath, activeSess
   if (!Number.isFinite(waveNumber)) {
     return false;
   }
-  const dashboardState = readJsonOrNull(dashboardPath);
-  const runTag = String(dashboardState?.runTag || "").trim();
   const agentPrefix = `${lanePaths.tmuxSessionPrefix}${waveNumber}_`;
-  const dashboardPrefix = `${lanePaths.tmuxDashboardSessionPrefix}${waveNumber}_`;
   for (const sessionName of activeSessionNames) {
-    if (!(sessionName.startsWith(agentPrefix) || sessionName.startsWith(dashboardPrefix))) {
-      continue;
-    }
-    if (!runTag || sessionName.endsWith(`_${runTag}`)) {
+    if (sessionName.startsWith(agentPrefix)) {
       return true;
     }
   }

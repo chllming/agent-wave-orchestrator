@@ -96,6 +96,104 @@ describe("buildRequestAssignments", () => {
     });
   });
 
+  it("does not treat unrelated completed work as capability-routing evidence", () => {
+    const state = materializeCoordinationState([
+      {
+        id: "request-runtime-help",
+        kind: "request",
+        lane: "main",
+        wave: 3,
+        agentId: "A8",
+        targets: ["capability:runtime"],
+        status: "open",
+        priority: "high",
+        artifactRefs: ["src/runtime.ts"],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: "2026-03-27T00:01:00.000Z",
+        updatedAt: "2026-03-27T00:01:00.000Z",
+        confidence: "medium",
+        summary: "Need runtime follow-up",
+        detail: "Target the runtime helper role.",
+        source: "agent",
+      },
+    ]);
+
+    const assignments = buildRequestAssignments({
+      coordinationState: state,
+      agents: [
+        { agentId: "A1", capabilities: ["runtime"] },
+        { agentId: "A2", capabilities: ["runtime"] },
+      ],
+      ledger: {
+        tasks: [
+          { owner: "A1", state: "done", capability: "docs" },
+          { owner: "A1", state: "in_progress", capability: "runtime" },
+        ],
+        capabilityAssignments: [],
+      },
+      capabilityRouting: { preferredAgents: {} },
+    });
+
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toMatchObject({
+      assignedAgentId: "A2",
+      assignmentReason: "least-busy-capability",
+    });
+  });
+
+  it("prefers demonstrated same-wave capability success before least-busy fallback", () => {
+    const state = materializeCoordinationState([
+      {
+        id: "request-runtime-help",
+        kind: "request",
+        lane: "main",
+        wave: 3,
+        agentId: "A8",
+        targets: ["capability:runtime"],
+        status: "open",
+        priority: "high",
+        artifactRefs: ["src/runtime.ts"],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: "2026-03-27T00:01:00.000Z",
+        updatedAt: "2026-03-27T00:01:00.000Z",
+        confidence: "medium",
+        summary: "Need runtime follow-up",
+        detail: "Target the runtime helper role.",
+        source: "agent",
+      },
+    ]);
+
+    const assignments = buildRequestAssignments({
+      coordinationState: state,
+      agents: [
+        { agentId: "A1", capabilities: ["runtime"] },
+        { agentId: "A2", capabilities: ["runtime"] },
+      ],
+      ledger: {
+        tasks: [
+          { owner: "A1", state: "done", capability: "docs" },
+          { owner: "A2", state: "in_progress", capability: "runtime" },
+        ],
+        capabilityAssignments: [
+          {
+            assignedAgentId: "A2",
+            capability: "runtime",
+            state: "resolved",
+          },
+        ],
+      },
+      capabilityRouting: { preferredAgents: {} },
+    });
+
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toMatchObject({
+      assignedAgentId: "A2",
+      assignmentReason: "same-wave-capability-owner",
+    });
+  });
+
   it("treats resolved-by-policy follow-up as authoritative helper-assignment closure", () => {
     const state = materializeCoordinationState([
       {

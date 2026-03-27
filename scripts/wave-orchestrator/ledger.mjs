@@ -18,7 +18,11 @@ import {
   isImplementationOwningDesignAgent,
   isSecurityReviewAgent,
 } from "./role-helpers.mjs";
-import { openClarificationLinkedRequests } from "./coordination-store.mjs";
+import {
+  coordinationRecordBlocksWave,
+  coordinationRecordIsHardBlocker,
+  openClarificationLinkedRequests,
+} from "./coordination-store.mjs";
 import { buildHelperTasks } from "./routing-state.mjs";
 import { readJsonOrNull, toIsoTimestamp, writeJsonAtomic } from "./shared.mjs";
 
@@ -35,16 +39,12 @@ function taskStateFromValidation(validation) {
 
 function openHighPriorityBlockers(state) {
   return (state?.blockers || []).filter(
-    (record) =>
-      ["open", "acknowledged", "in_progress"].includes(record.status) &&
-      ["high", "urgent"].includes(record.priority),
+    (record) => coordinationRecordIsHardBlocker(record),
   );
 }
 
 function openClarifications(state) {
-  return (state?.clarifications || []).filter((record) =>
-    ["open", "acknowledged", "in_progress"].includes(record.status),
-  );
+  return (state?.clarifications || []).filter((record) => coordinationRecordBlocksWave(record));
 }
 
 export function buildSeedWaveLedger({
@@ -161,7 +161,7 @@ function derivePhase({
   }
   if (
     openClarifications(state).length > 0 ||
-    openClarificationLinkedRequests(state).length > 0
+    openClarificationLinkedRequests(state).filter((record) => coordinationRecordBlocksWave(record)).length > 0
   ) {
     return "clarifying";
   }
@@ -407,7 +407,9 @@ export function deriveWaveLedger({
     tasks,
     blockers: (coordinationState?.blockers || []).map((record) => record.id),
     openClarifications: openClarifications(coordinationState).map((record) => record.id),
-    clarificationLinkedRequests: openClarificationLinkedRequests(coordinationState).map(
+    clarificationLinkedRequests: openClarificationLinkedRequests(coordinationState)
+      .filter((record) => coordinationRecordBlocksWave(record))
+      .map(
       (record) => record.id,
     ),
     openRequests: (coordinationState?.requests || [])
@@ -437,14 +439,14 @@ export function deriveWaveLedger({
       : null,
     humanFeedback: [
       ...(coordinationState?.humanFeedback || [])
-        .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
+        .filter((record) => coordinationRecordBlocksWave(record))
         .map((record) => record.id),
       ...(coordinationState?.humanEscalations || [])
-        .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
+        .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
     ],
     humanEscalations: (coordinationState?.humanEscalations || [])
-      .filter((record) => ["open", "acknowledged", "in_progress"].includes(record.status))
+      .filter((record) => coordinationRecordBlocksWave(record))
       .map((record) => record.id),
     contEvalState: contEvalValidation.ok ? "pass" : "open",
     securityState: securityValidation.ok ? securityValidation.statusCode || "pass" : "open",

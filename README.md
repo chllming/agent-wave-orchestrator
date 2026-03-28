@@ -105,17 +105,17 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.8.9`
-- Release tag: [`v0.8.9`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.8.9)
+- `@chllming/wave-orchestration@0.9.0`
+- Release tag: [`v0.9.0`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.0)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.8.9`:
+Highlights in `0.9.0`:
 
-- Reducer snapshots now preserve design packet report paths when they rebuild summaries from result envelopes, so successful design passes no longer get replayed as `missing-design-packet`.
-- Launcher transitions after design-only passes now stop on the real design-gate failure and record a design-specific blocker instead of falling through to a misleading downstream implementation `missing-result-envelope` error.
-- Trace bundle summary reconstruction now also preserves design packet report paths, so copied summary artifacts stay aligned when a trace has to rebuild a design summary from logs.
-- Release docs, current-state notes, migration guidance, publishing instructions, the packaged operator recommendations guide, and the tracked install-state fixtures now all point at the `0.8.9` surface.
+- Monorepo repos can now declare `defaultProject` plus `projects.<projectId>` in `wave.config.json`, with project-owned lanes, docs roots, planner defaults, ad-hoc runs, dependency tickets, and launcher state.
+- Lane-scoped CLI surfaces now accept `--project`, including launch, autonomous, dashboard, control, coordination, dependencies, ad-hoc runs, proof, retry, feedback, drafting, and benchmarks.
+- Wave Control now defaults to `https://wave-control.up.railway.app/api/v1` with `reportMode: "metadata-only"`, and metadata delivery includes `projectId`, `lane`, `wave`, and related benchmark identity by default unless explicitly opted out.
+- Release docs, migration guidance, the new monorepo setup guide, the versioned recommendations guide, the manifest, and the tracked install-state fixtures now all point at the `0.9.0` surface.
 
 Requirements:
 

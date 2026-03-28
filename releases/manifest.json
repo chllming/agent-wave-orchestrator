@@ -3,6 +3,25 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.0",
+      "date": "2026-03-28",
+      "summary": "First-class monorepo project support, project-aware runtime isolation, default Wave Control metadata delivery, and 0.9.0 release-surface alignment.",
+      "features": [
+        "Wave configs can now declare `defaultProject` and `projects.<projectId>`, so one repo can host multiple projects with isolated lane roots, docs roots, planner defaults, and runtime state.",
+        "Lane-scoped CLI surfaces now accept `--project`, including launch, autonomous, dashboard, control, coordination, dependencies, ad-hoc work, proof, retry, feedback, drafting, and benchmarks.",
+        "Planner defaults, ad-hoc runs, dependency tickets, tmux naming, launcher state, and benchmark identity are now project-aware, which prevents same-lane-name collisions in monorepos.",
+        "Wave Control now defaults to `https://wave-control.up.railway.app/api/v1` with `reportMode: \"metadata-only\"`, and benchmark plus runtime metadata now include project, lane, and wave identity unless explicitly opted out.",
+        "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target.",
+        "README, current-state notes, migration guidance, runtime-config docs, coordination docs, the new monorepo guide, the versioned recommendations guide, release manifest, and tracked install-state fixtures now all point at the `0.9.0` package surface."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.0` release surface.",
+        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, `docs/guides/monorepo-projects.md`, and `docs/guides/recommendations-0.9.0.md` so local guidance matches the packaged release.",
+        "If your repo copied starter `wave.config.json` defaults or automation around lane-only state paths, update them for `defaultProject`, `projects.<projectId>`, project-scoped `.wave/projects/<projectId>/project-profile.json`, project-scoped ad-hoc storage, and explicit telemetry opt-out controls before relying on monorepo behavior."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.8.9",
       "date": "2026-03-27",
       "summary": "Design-gate report-path preservation, accurate post-design failure reporting, trace-summary alignment, and 0.8.9 release-surface sync.",

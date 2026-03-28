@@ -1,10 +1,10 @@
 # Current State
 
-- The published package is `0.8.9`; that release keeps the shipped design-role and signal-hygiene starter surface, preserves design packet report paths during reducer and trace summary reconstruction, and reports blocked design passes as design-gate failures before implementation starts.
+- The published package is `0.9.0`; that release adds first-class monorepo project support, project-aware runtime isolation, and default metadata delivery to Wave Control while keeping the shipped design-role and signal-hygiene starter surface.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
-- The recommended `0.8.9` operating stance is documented in `docs/guides/recommendations-0.8.9.md`: keep proof and closure strict, keep generic `budget.turns` advisory, and use softer coordination states only for non-proof follow-up.
+- The recommended `0.9.0` operating stance is documented in `docs/guides/recommendations-0.9.0.md`: keep proof and closure strict, keep generic `budget.turns` advisory, and use softer coordination states only for non-proof follow-up.
 - Runtime launch entrypoints now perform a best-effort npmjs version check, cache the result under `.wave/package-update-check.json`, and point operators at `pnpm exec wave self-update` when a newer published package exists.
 - This source repo is itself kept as an adopted Wave workspace, so `node scripts/wave.mjs doctor --json` should pass from the repo root.
 - The default lane is `main`.

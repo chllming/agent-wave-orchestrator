@@ -38,15 +38,15 @@ The useful path is journey-first:
 - Setting up multiple projects in one monorepo:
   Read [guides/monorepo-projects.md](./guides/monorepo-projects.md) for `defaultProject`, `projects.<projectId>`, project-scoped state paths, and telemetry defaults.
 - Adding an optional pre-implementation design steward:
-  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.8.9` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
+  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.9.0` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
 - Want signal-driven automation or long-running watcher loops:
   Read [guides/signal-wrappers.md](./guides/signal-wrappers.md). It covers the seeded `wave-status.sh` and `wave-watch.sh` wrappers, the versioned signal snapshot files, and the ack-loop contract behind `signal-hygiene`.
 - Adding a security review pass:
   Read [plans/wave-orchestrator.md](./plans/wave-orchestrator.md) and the standing reviewer prompt in [agents/wave-security-role.md](./agents/wave-security-role.md).
 - Upgrading an existing repo:
   Read [plans/migration.md](./plans/migration.md), then review the release notes in [../CHANGELOG.md](../CHANGELOG.md) before running `pnpm exec wave upgrade`.
-- Want the practical `0.8.9` operating stance:
-  Read [guides/recommendations-0.8.9.md](./guides/recommendations-0.8.9.md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
+- Want the practical `0.9.0` operating stance:
+  Read [guides/recommendations-0.9.0.md](./guides/recommendations-0.9.0.md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
 - Want the concrete runtime module map:
   Read [plans/end-state-architecture.md](./plans/end-state-architecture.md) for the engine-by-engine architecture and artifact ownership model.
 - Want the CLI surface map:

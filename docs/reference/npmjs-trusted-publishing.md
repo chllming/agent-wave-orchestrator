@@ -2,7 +2,7 @@
 
 This repo now includes a dedicated npmjs publish workflow at [publish-npm.yml](../../.github/workflows/publish-npm.yml).
 
-The current `0.8.9` release procedure publishes through a repository Actions secret named `NPM_TOKEN`.
+The current `0.9.0` release procedure publishes through a repository Actions secret named `NPM_TOKEN`.
 
 ## What This Repo Already Does
 
@@ -48,6 +48,6 @@ If this repo later needs private npm dependencies during CI, consider a separate
 2. Confirm `NPM_TOKEN` exists in the GitHub repo secrets.
 3. Confirm the package version has been bumped and committed.
 4. Confirm `README.md`, `CHANGELOG.md`, `releases/manifest.json`, and `docs/plans/migration.md` all describe the same release surface.
-5. Push the release commit and release tag, for example `v0.8.9`.
+5. Push the release commit and release tag, for example `v0.9.0`.
 6. Verify both `publish-npm.yml` and `publish-package.yml` start from the tag push.
 7. Verify the npmjs publish completes successfully for the tagged source.

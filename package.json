@@ -1,6 +1,6 @@
 {
   "name": "@chllming/wave-orchestration",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "license": "MIT",
   "description": "Generic wave-based multi-agent orchestration for repository work.",
   "packageManager": "pnpm@10.23.0",

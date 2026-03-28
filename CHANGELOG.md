@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-03-28
+
+### Added
+
+- First-class monorepo project support through `defaultProject` and `projects.<projectId>` in `wave.config.json`, including project-owned lane roots, docs roots, planner defaults, and Wave Control identity.
+- A dedicated setup guide at `docs/guides/monorepo-projects.md` that documents explicit project configuration, project-scoped state paths, cross-project dependency wiring, and telemetry defaults.
+- Project-aware regression coverage for shared paths, coordination telemetry, dashboard parsing, and release-surface docs alignment.
+
+### Changed
+
+- Lane-scoped CLI surfaces now accept `--project`, including `launch`, `autonomous`, `dashboard`, `project`, `draft`, `adhoc`, `control`, `coord`, `feedback`, `dep`, `retry`, `proof`, and benchmark commands.
+- Planner defaults are now project-scoped: the implicit default project keeps `.wave/project-profile.json`, while explicit monorepo projects use `.wave/projects/<projectId>/project-profile.json`.
+- Ad-hoc runs, launcher state, tmux naming, dependency tickets, and benchmark identity are now project-aware, so duplicate lane names can coexist across monorepo projects without state collisions.
+- The shipped release surface now points consistently at `0.9.0`, including the README, current-state notes, migration guide, coordination docs, runtime-config docs, release manifest, tracked install-state fixtures, and the versioned recommendations guide `docs/guides/recommendations-0.9.0.md`.
+
+### Fixed And Hardened
+
+- Coordination telemetry, benchmark telemetry, and dashboard attach flows now preserve the selected project instead of falling back to the implicit default project.
+- Package defaults now report metadata to Wave Control through `https://wave-control.up.railway.app/api/v1` with `reportMode: "metadata-only"`, while preserving explicit repo and one-off operator opt-out paths.
+- Documentation and examples now describe the shipped project-aware runtime rather than the old lane-only or unscoped ad-hoc layout.
+
+### Testing And Validation
+
+- `pnpm test -- test/wave-orchestrator/release-surface.test.ts test/wave-orchestrator/shared.test.ts test/wave-orchestrator/dashboard-renderer.test.ts test/wave-orchestrator/coordination-store.test.ts`
+- `pnpm test`
+- `node scripts/wave.mjs doctor --json`
+- `node scripts/wave.mjs launch --lane main --dry-run --no-dashboard`
+- `node scripts/wave.mjs dashboard --help`
+
 ## 0.8.9 - 2026-03-27
 
 ### Changed

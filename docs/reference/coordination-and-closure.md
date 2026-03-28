@@ -134,7 +134,7 @@ Practical rule:
 
 That means a targeted helper request only blocks while it remains open *and* still has blocking severity in coordination state.
 
-For the practical `0.8.9` recommendation on when to keep records blocking versus when to downgrade them to `soft`, `stale`, or `advisory`, see [../guides/recommendations-0.8.9.md](../guides/recommendations-0.8.9.md).
+For the practical `0.9.0` recommendation on when to keep records blocking versus when to downgrade them to `soft`, `stale`, or `advisory`, see [../guides/recommendations-0.9.0.md](../guides/recommendations-0.9.0.md).
 
 This page is documenting runtime semantics first. The important contract is that closure follows the durable coordination state, not that a particular human or agent used one exact command path to mutate it.
 

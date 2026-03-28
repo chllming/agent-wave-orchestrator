@@ -1,6 +1,6 @@
 # End-State Architecture
 
-This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.8.9` surface now follows.
+This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.9.0` surface now follows.
 
 The thesis is unchanged: bounded waves, closure roles, proof artifacts, selective rerun, and delivery discipline. What changes is the internal authority model. The launcher stops being the decision engine and becomes a thin orchestrator that reads decisions from canonical state, sequences the engines, and delegates process work to the session supervisor.
 

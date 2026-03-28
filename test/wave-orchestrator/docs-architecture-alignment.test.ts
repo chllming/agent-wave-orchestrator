@@ -23,6 +23,7 @@ const activeDocsAndSkills = [
   "docs/plans/migration.md",
   "docs/plans/architecture-hardening-migration.md",
   "docs/plans/end-state-architecture.md",
+  "docs/plans/sandbox-end-state-architecture.md",
   "docs/plans/wave-orchestrator.md",
   "docs/research/coordination-failure-review.md",
   "docs/agents/wave-launcher-role.md",
@@ -104,6 +105,7 @@ describe("docs architecture alignment", () => {
     const migrationGuide = read("docs/plans/migration.md");
     const currentState = read("docs/plans/current-state.md");
     const endStateArchitecture = read("docs/plans/end-state-architecture.md");
+    const sandboxEndStateArchitecture = read("docs/plans/sandbox-end-state-architecture.md");
     const cliReference = read("docs/reference/cli-reference.md");
 
     expect(readme).toContain("canonical authority set");
@@ -126,8 +128,13 @@ describe("docs architecture alignment", () => {
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/inboxes/wave-<N>/shared-summary.md");
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/messageboards/wave-<N>.md");
     expect(endStateArchitecture).toContain(".tmp/<lane>-wave-launcher/waves.manifest.json");
+    expect(sandboxEndStateArchitecture).toContain("wave submit");
+    expect(sandboxEndStateArchitecture).toContain("wave-proof-gap");
+    expect(sandboxEndStateArchitecture).toContain("Remaining Gap Plan");
     expect(cliReference).toContain("Command Families");
     expect(cliReference).toContain("--orchestrator-board <path>");
     expect(cliReference).toContain("--coordination-note <text>");
+    expect(cliReference).toContain("wave submit");
+    expect(cliReference).toContain("wave supervise");
   });
 });

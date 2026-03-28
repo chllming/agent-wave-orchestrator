@@ -10,6 +10,8 @@ Use it when you are:
 
 For the completed internal architecture cutover record, see [architecture-hardening-migration.md](./architecture-hardening-migration.md). That document is historical. This one is the operator-facing upgrade checklist.
 
+For the sandbox-specific long-running execution target, including async `submit/status/wait` semantics and daemon ownership goals, see [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
+
 ## What `0.9.0` Changes
 
 The current `0.9.0` surface keeps the packaged operator-guidance alignment and adds first-class monorepo project support plus project-aware default telemetry.

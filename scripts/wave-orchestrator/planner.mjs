@@ -2976,7 +2976,10 @@ async function runProjectSetupFlow(options = {}) {
     );
 
     prompt.describe("\nDo you have deploy environments (e.g. staging, production) you want Wave to know about?");
-    prompt.describe("You can skip this for now and add them later with 'wave project setup'.");
+    prompt.describe("This helps Wave attach the right deployment skills when agents do infra or release work.");
+    prompt.describe("Supported providers: railway, docker-compose, kubernetes, ssh-manual.");
+    prompt.describe("Use 'custom' for anything else (GitHub Actions, Vercel, Cloudflare, etc.).");
+    prompt.describe("You can skip this now (enter 0) and add them later with 'wave project setup'.");
     const deployEnvironmentCount = await prompt.askInteger(
       "How many deploy environments should the planner remember?",
       base.deployEnvironments.length,

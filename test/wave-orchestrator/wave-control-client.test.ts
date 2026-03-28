@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildWaveControlArtifactFromPath,
   flushWaveControlQueue,
@@ -169,6 +169,133 @@ describe("wave-control client", () => {
       }),
     ]);
     expect(receivedBody.events[0].artifactUploads[0].content).toContain('"finalRecommendation": "pass"');
+    expect(readWaveControlQueueState(lanePaths).pendingCount).toBe(0);
+  });
+
+  it("continues a flush when one selected artifact body disappears mid-read", async () => {
+    const dir = makeTempDir();
+    const survivingArtifactPath = path.join(dir, "quality.json");
+    const disappearingArtifactPath = path.join(dir, "results.json");
+    fs.writeFileSync(
+      survivingArtifactPath,
+      JSON.stringify({ finalRecommendation: "pass" }, null, 2),
+      "utf8",
+    );
+    fs.writeFileSync(
+      disappearingArtifactPath,
+      JSON.stringify({ score: 100 }, null, 2),
+      "utf8",
+    );
+
+    let receivedBody = null;
+    const endpoint = await startJsonServer(async (_req, body) => {
+      receivedBody = JSON.parse(body);
+    });
+    const lanePaths = makeLanePaths(dir, {
+      endpoint,
+      authTokenEnvVar: "TEST_WAVE_CONTROL_TOKEN",
+      uploadArtifactKinds: ["trace-quality", "benchmark-results"],
+    });
+    process.env.TEST_WAVE_CONTROL_TOKEN = "secret-token";
+
+    queueWaveControlEvent(lanePaths, {
+      category: "trace",
+      entityType: "artifact",
+      entityId: "trace-partial-upload",
+      action: "bundle-written",
+      artifacts: [
+        {
+          ...buildWaveControlArtifactFromPath(survivingArtifactPath, {
+            kind: "trace-quality",
+            uploadPolicy: "selected",
+          }),
+          sourcePath: survivingArtifactPath,
+        },
+        {
+          ...buildWaveControlArtifactFromPath(disappearingArtifactPath, {
+            kind: "benchmark-results",
+            uploadPolicy: "selected",
+          }),
+          sourcePath: disappearingArtifactPath,
+        },
+      ],
+    });
+
+    const originalReadFileSync = fs.readFileSync;
+    let removed = false;
+    const readSpy = vi.spyOn(fs, "readFileSync").mockImplementation((filePath, ...args) => {
+      if (!removed && String(filePath) === disappearingArtifactPath) {
+        fs.rmSync(disappearingArtifactPath, { force: true });
+        removed = true;
+      }
+      return originalReadFileSync.call(fs, filePath, ...args);
+    });
+
+    const result = await flushWaveControlQueue(lanePaths);
+    readSpy.mockRestore();
+
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 1,
+      failed: 0,
+      pending: 0,
+    });
+    expect(receivedBody.events).toHaveLength(1);
+    expect(receivedBody.events[0].artifactUploads).toHaveLength(1);
+    expect(receivedBody.events[0].artifactUploads[0].content).toContain(
+      '"finalRecommendation": "pass"',
+    );
+  });
+
+  it("tolerates pending files disappearing during a concurrent flush", async () => {
+    const dir = makeTempDir();
+    let receivedBody = null;
+    const endpoint = await startJsonServer(async (_req, body) => {
+      receivedBody = JSON.parse(body);
+    });
+    const lanePaths = makeLanePaths(dir, {
+      endpoint,
+    });
+
+    queueWaveControlEvent(lanePaths, {
+      category: "runtime",
+      entityType: "wave_run",
+      entityId: "wave-1",
+      action: "started",
+    });
+    queueWaveControlEvent(lanePaths, {
+      category: "runtime",
+      entityType: "wave_run",
+      entityId: "wave-2",
+      action: "started",
+    });
+
+    const pendingFiles = fs
+      .readdirSync(path.join(lanePaths.telemetryDir, "pending"))
+      .filter((fileName) => fileName.endsWith(".json"))
+      .sort()
+      .map((fileName) => path.join(lanePaths.telemetryDir, "pending", fileName));
+    const missingTarget = pendingFiles[0];
+    const originalReadFileSync = fs.readFileSync;
+    let removed = false;
+    const readSpy = vi.spyOn(fs, "readFileSync").mockImplementation((filePath, ...args) => {
+      if (!removed && String(filePath) === missingTarget) {
+        fs.rmSync(missingTarget, { force: true });
+        removed = true;
+      }
+      return originalReadFileSync.call(fs, filePath, ...args);
+    });
+
+    const result = await flushWaveControlQueue(lanePaths);
+    readSpy.mockRestore();
+
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 1,
+      failed: 0,
+      pending: 0,
+    });
+    expect(receivedBody.events).toHaveLength(1);
     expect(readWaveControlQueueState(lanePaths).pendingCount).toBe(0);
   });
 

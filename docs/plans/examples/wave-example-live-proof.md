@@ -7,6 +7,7 @@ Use it as the single reference example for the current `0.9.0` Wave surface.
 It intentionally combines more sections than a normal production wave so one file can demonstrate:
 
 - standard closure roles (`A0`, `E0`, `A8`, `A9`)
+- optional security review (`A7`) before integration closure
 - `## Eval targets` with delegated and pinned benchmark selection
 - richer `### Executor` blocks, budgets, and sticky retry
 - `### Skills`
@@ -18,6 +19,10 @@ It intentionally combines more sections than a normal production wave so one fil
 - infra and deploy-verifier specialists
 
 This example is intentionally denser than a launch-minimal wave. Its job is to teach the full authored surface in one place.
+
+It keeps the starter closure role ids (`A0`, `E0`, `A8`, `A9`, `A7`) so the example stays easy to scan. If your repo uses different ids, keep the same role prompts and closure intent but rename the agent ids at the wave level.
+
+All launcher-owned `.tmp/main-wave-launcher/...` paths in this example assume the implicit default project. For explicit monorepo projects, rewrite them to `.tmp/projects/<projectId>/main-wave-launcher/...` and launch the wave with `--project <projectId>`.
 
 **Commit message**: `Docs: add full modern sample wave`
 

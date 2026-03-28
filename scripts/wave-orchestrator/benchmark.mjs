@@ -57,6 +57,15 @@ function localBenchmarkRunId(output) {
   return `bench-local-${String(output.generatedAt || toIsoTimestamp()).replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 }
 
+function flushBenchmarkTelemetryBestEffort(lanePaths) {
+  return flushWaveControlQueue(lanePaths).catch((error) => {
+    console.warn(
+      `[wave:benchmark] telemetry flush skipped: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  });
+}
+
 function publishLocalBenchmarkTelemetry({ output, outputDir, project, lane }) {
   const lanePaths = benchmarkTelemetryLanePaths({ project, lane });
   if (!lanePaths || lanePaths.waveControl?.captureBenchmarkRuns === false) {
@@ -141,7 +150,7 @@ function publishLocalBenchmarkTelemetry({ output, outputDir, project, lane }) {
       });
     }
   }
-  void flushWaveControlQueue(lanePaths);
+  void flushBenchmarkTelemetryBestEffort(lanePaths);
   return benchmarkRunIdValue;
 }
 

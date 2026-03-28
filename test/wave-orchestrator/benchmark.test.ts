@@ -11,6 +11,7 @@ import {
   loadExternalBenchmarkAdapters,
 } from "../../scripts/wave-orchestrator/benchmark-cases.mjs";
 import { REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
+import * as waveControlClient from "../../scripts/wave-orchestrator/wave-control-client.mjs";
 
 const tempPaths = [];
 
@@ -206,5 +207,28 @@ describe("runBenchmarkCli", () => {
     expect(payload.comparisonReady).toBe(false);
     expect(payload.tasks).toHaveLength(10);
     expect(payload.tasks[0].command).toContain("swe-bench-pro-task.mjs");
+  });
+
+  it("downgrades benchmark telemetry flush failures to warnings", async () => {
+    const logs = [];
+    const warnings = [];
+    vi.spyOn(console, "log").mockImplementation((value) => {
+      logs.push(String(value));
+    });
+    vi.spyOn(console, "warn").mockImplementation((value) => {
+      warnings.push(String(value));
+    });
+    vi.spyOn(waveControlClient, "flushWaveControlQueue").mockRejectedValue(
+      new Error("telemetry unavailable"),
+    );
+
+    await runBenchmarkCli(["run", "--case", "wave-hidden-profile-private-evidence", "--json"]);
+    await Promise.resolve();
+
+    const payload = JSON.parse(logs.join("\n"));
+    expect(payload.cases).toHaveLength(1);
+    expect(warnings).toContain(
+      "[wave:benchmark] telemetry flush skipped: telemetry unavailable",
+    );
   });
 });

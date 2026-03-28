@@ -2,7 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadWaveConfig, resolveLaneProfile } from "../../scripts/wave-orchestrator/config.mjs";
+import {
+  loadWaveConfig,
+  resolveLaneProfile,
+  resolveProjectProfile,
+} from "../../scripts/wave-orchestrator/config.mjs";
 
 const tempDirs = [];
 
@@ -19,6 +23,150 @@ afterEach(() => {
 });
 
 describe("runtime configuration normalization", () => {
+  it("rejects an explicit unknown project instead of falling back to the default project", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          projects: {
+            app: {
+              projectName: "App",
+              rootDir: ".",
+              lanes: {
+                main: {},
+              },
+            },
+            service: {
+              projectName: "Service",
+              rootDir: "services/api",
+              lanes: {
+                main: {},
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    expect(() => resolveProjectProfile(config, "typo-project")).toThrow(
+      /Unknown project: typo-project/,
+    );
+  });
+
+  it("resolves project-level path overrides into the lane profile", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          projects: {
+            app: {
+              rootDir: ".",
+              lanes: {
+                main: {},
+              },
+            },
+            service: {
+              rootDir: "services/api",
+              paths: {
+                docsDir: "services/api/custom-docs",
+                stateRoot: ".tmp/service-state",
+                orchestratorStateDir: ".tmp/service-orchestrator",
+                terminalsPath: ".vscode/service-terminals.json",
+                context7BundleIndexPath: "services/api/custom-docs/context7/bundles.json",
+                benchmarkCatalogPath: "services/api/custom-docs/evals/benchmark-catalog.json",
+                componentCutoverMatrixDocPath:
+                  "services/api/custom-docs/plans/custom-component-cutover.md",
+                componentCutoverMatrixJsonPath:
+                  "services/api/custom-docs/plans/custom-component-cutover.json",
+              },
+              lanes: {
+                main: {},
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main", "service");
+
+    expect(lane.docsDir).toBe("services/api/custom-docs");
+    expect(lane.plansDir).toBe("services/api/custom-docs/plans");
+    expect(lane.wavesDir).toBe("services/api/custom-docs/plans/waves");
+    expect(lane.paths).toMatchObject({
+      stateRoot: ".tmp/service-state",
+      orchestratorStateDir: ".tmp/service-orchestrator",
+      terminalsPath: ".vscode/service-terminals.json",
+      context7BundleIndexPath: "services/api/custom-docs/context7/bundles.json",
+      benchmarkCatalogPath: "services/api/custom-docs/evals/benchmark-catalog.json",
+      componentCutoverMatrixDocPath:
+        "services/api/custom-docs/plans/custom-component-cutover.md",
+      componentCutoverMatrixJsonPath:
+        "services/api/custom-docs/plans/custom-component-cutover.json",
+    });
+  });
+
+  it("derives project default cutover paths from a project docs override", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          projects: {
+            app: {
+              rootDir: ".",
+              lanes: {
+                main: {},
+              },
+            },
+            service: {
+              rootDir: "services/api",
+              paths: {
+                docsDir: "services/api/custom-docs",
+              },
+              lanes: {
+                main: {},
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main", "service");
+
+    expect(lane.docsDir).toBe("services/api/custom-docs");
+    expect(lane.paths.componentCutoverMatrixDocPath).toBe(
+      "services/api/custom-docs/plans/component-cutover-matrix.md",
+    );
+    expect(lane.paths.componentCutoverMatrixJsonPath).toBe(
+      "services/api/custom-docs/plans/component-cutover-matrix.json",
+    );
+  });
+
   it("loads and resolves advanced runtime settings from wave.config.json", () => {
     const repoDir = makeTempDir();
     const configPath = path.join(repoDir, "wave.config.json");

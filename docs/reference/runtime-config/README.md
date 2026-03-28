@@ -62,8 +62,10 @@ Wave can run multiple project tracks from one monorepo.
 
 - `defaultProject` selects the implicit project when a command does not pass `--project`
 - `projects.<projectId>.rootDir` relocates that project's default docs root under the repo
+- `projects.<projectId>.paths.*` can relocate that project's docs, launcher-state, terminal-registry, Context7 bundle index, benchmark catalog, and component-matrix surfaces
 - `projects.<projectId>.lanes.<lane>` owns lane-local runtime, planner, skill, and Wave Control overrides
 - legacy top-level `lanes` still work as the implicit default project for backwards compatibility
+- an explicit unknown `--project` is an error; Wave no longer falls back to `defaultProject` for typoed project ids
 
 Example:
 
@@ -81,6 +83,88 @@ Example:
       "rootDir": "services/api",
       "lanes": {
         "main": {}
+      }
+    }
+  }
+}
+```
+
+Supported `projects.<projectId>.paths.*` fields:
+
+| Key | Purpose |
+| --- | --- |
+| `docsDir` | Project-local docs root used as the default base for docs, plans, waves, and matrix defaults |
+| `stateRoot` | Base directory for launcher state, logs, overlays, telemetry, and projections |
+| `orchestratorStateDir` | Base directory for project-scoped orchestrator message boards, feedback, and dependency state |
+| `terminalsPath` | VS Code terminal registry written when `--terminal-surface vscode` is active |
+| `context7BundleIndexPath` | Project-specific Context7 bundle index |
+| `benchmarkCatalogPath` | Project-specific benchmark catalog for `cont-EVAL` and benchmark commands |
+| `componentCutoverMatrixDocPath` | Project-specific component cutover matrix markdown |
+| `componentCutoverMatrixJsonPath` | Project-specific component cutover matrix JSON |
+
+Path resolution order:
+
+1. lane-specific override such as `projects.<projectId>.lanes.<lane>.terminalsPath`
+2. `projects.<projectId>.paths.*`
+3. repo-global `paths.*`
+4. built-in derived defaults for `docsDir`, `plansDir`, `wavesDir`, and matrix paths
+
+Advanced monorepo example:
+
+```json
+{
+  "defaultProject": "app",
+  "paths": {
+    "stateRoot": ".tmp",
+    "terminalsPath": ".vscode/terminals.json"
+  },
+  "projects": {
+    "app": {
+      "rootDir": ".",
+      "lanes": {
+        "main": {}
+      }
+    },
+    "service": {
+      "rootDir": "services/api",
+      "paths": {
+        "docsDir": "services/api/docs",
+        "stateRoot": ".tmp/service-wave",
+        "orchestratorStateDir": ".tmp/service-orchestrator",
+        "terminalsPath": ".vscode/service-terminals.json",
+        "context7BundleIndexPath": "services/api/docs/context7/bundles.json",
+        "benchmarkCatalogPath": "services/api/docs/evals/benchmark-catalog.json",
+        "componentCutoverMatrixDocPath": "services/api/docs/plans/component-cutover-matrix.md",
+        "componentCutoverMatrixJsonPath": "services/api/docs/plans/component-cutover-matrix.json"
+      },
+      "waveControl": {
+        "projectId": "service-api",
+        "reportMode": "metadata-plus-selected"
+      },
+      "lanes": {
+        "main": {
+          "runtimePolicy": {
+            "defaultExecutorByRole": {
+              "design": "claude",
+              "implementation": "codex",
+              "integration": "claude",
+              "documentation": "claude",
+              "cont-qa": "claude",
+              "cont-eval": "codex"
+            },
+            "runtimeMixTargets": {
+              "codex": 4,
+              "claude": 3,
+              "opencode": 1
+            },
+            "fallbackExecutorOrder": ["claude", "opencode", "codex"]
+          }
+        },
+        "release": {
+          "docsDir": "services/api/docs/release",
+          "plansDir": "services/api/docs/release/plans",
+          "wavesDir": "services/api/docs/release/plans/waves"
+        }
       }
     }
   }

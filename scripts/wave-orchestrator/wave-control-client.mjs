@@ -66,6 +66,45 @@ function ensureTelemetryDirs(paths) {
   ensureDirectory(paths.failedDir);
 }
 
+function isMissingFileError(error) {
+  return error && typeof error === "object" && ["ENOENT", "ESTALE"].includes(error.code);
+}
+
+function readQueuedEventOrNull(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function renameIfExists(sourcePath, destinationPath) {
+  try {
+    fs.renameSync(sourcePath, destinationPath);
+    return true;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function copyIfExists(sourcePath, destinationPath) {
+  try {
+    fs.copyFileSync(sourcePath, destinationPath);
+    return true;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 function repoRelativePathOrNull(filePath) {
   if (!filePath) {
     return null;
@@ -158,15 +197,31 @@ function buildInlineArtifactPayload(artifactDescriptor, sourcePath, config) {
   if (!shouldUploadArtifactBody(artifactDescriptor, config) || !sourcePath || !fs.existsSync(sourcePath)) {
     return null;
   }
-  const stat = fs.statSync(sourcePath);
+  let stat;
+  try {
+    stat = fs.statSync(sourcePath);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+    throw error;
+  }
   if (!stat.isFile() || stat.size > MAX_INLINE_ARTIFACT_BYTES) {
     return null;
   }
   const contentType = artifactDescriptor.contentType || contentTypeForPath(sourcePath);
   const textLike = contentType.startsWith("text/") || contentType === "application/json";
-  const content = textLike
-    ? fs.readFileSync(sourcePath, "utf8")
-    : fs.readFileSync(sourcePath).toString("base64");
+  let content;
+  try {
+    content = textLike
+      ? fs.readFileSync(sourcePath, "utf8")
+      : fs.readFileSync(sourcePath).toString("base64");
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+    throw error;
+  }
   return {
     artifactId: artifactDescriptor.artifactId,
     contentType,
@@ -421,10 +476,17 @@ export async function flushWaveControlQueue(lanePaths, options = {}) {
     return { attempted: 0, sent: 0, failed: 0, pending: 0 };
   }
 
-  const queuedEvents = pendingFiles.map((filePath) => {
-    const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    return { filePath, payload };
-  });
+  const queuedEvents = [];
+  for (const filePath of pendingFiles) {
+    const payload = readQueuedEventOrNull(filePath);
+    if (!payload) {
+      continue;
+    }
+    queuedEvents.push({ filePath, payload });
+  }
+  if (queuedEvents.length === 0) {
+    return { attempted: 0, sent: 0, failed: 0, pending: listPendingQueueFiles(paths).length };
+  }
   const hydratedEvents = queuedEvents.map(({ payload }) => {
     const artifactUploads = (payload.event.artifacts || [])
       .map((artifact) =>
@@ -457,32 +519,38 @@ export async function flushWaveControlQueue(lanePaths, options = {}) {
         events: hydratedEvents,
       },
     );
+    let sentCount = 0;
     for (const { filePath, payload } of queuedEvents) {
-      fs.renameSync(filePath, sentFilePath(paths, payload.event));
+      if (renameIfExists(filePath, sentFilePath(paths, payload.event))) {
+        sentCount += 1;
+      }
     }
     writeDeliveryState(lanePaths, config, paths, {
       ...deliveryState,
       pendingCount: listPendingQueueFiles(paths).length,
-      sentCount: (deliveryState.sentCount || 0) + pendingFiles.length,
+      sentCount: (deliveryState.sentCount || 0) + sentCount,
       lastFlushAt: toIsoTimestamp(),
       lastSuccessAt: toIsoTimestamp(),
       lastError: null,
       updatedAt: toIsoTimestamp(),
     });
     return {
-      attempted: pendingFiles.length,
-      sent: pendingFiles.length,
+      attempted: queuedEvents.length,
+      sent: sentCount,
       failed: 0,
       pending: listPendingQueueFiles(paths).length,
     };
   } catch (error) {
+    let failedCount = 0;
     for (const { filePath, payload } of queuedEvents) {
-      fs.copyFileSync(filePath, failedFilePath(paths, payload.event));
+      if (copyIfExists(filePath, failedFilePath(paths, payload.event))) {
+        failedCount += 1;
+      }
     }
     writeDeliveryState(lanePaths, config, paths, {
       ...deliveryState,
       pendingCount: listPendingQueueFiles(paths).length,
-      failedCount: (deliveryState.failedCount || 0) + pendingFiles.length,
+      failedCount: (deliveryState.failedCount || 0) + failedCount,
       lastFlushAt: toIsoTimestamp(),
       lastError: {
         message: error instanceof Error ? error.message : String(error),
@@ -491,9 +559,9 @@ export async function flushWaveControlQueue(lanePaths, options = {}) {
       updatedAt: toIsoTimestamp(),
     });
     return {
-      attempted: pendingFiles.length,
+      attempted: queuedEvents.length,
       sent: 0,
-      failed: pendingFiles.length,
+      failed: failedCount,
       pending: listPendingQueueFiles(paths).length,
       error,
     };

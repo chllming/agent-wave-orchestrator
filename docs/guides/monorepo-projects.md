@@ -48,8 +48,92 @@ Rules:
 
 - `defaultProject` is used when you omit `--project`
 - `projects.<projectId>.rootDir` changes that project's default docs root
+- `projects.<projectId>.paths.*` overrides that project's docs, launcher-state, terminal-registry, benchmark-catalog, and component-matrix paths
 - `projects.<projectId>.lanes.<lane>` is the authoritative lane map for that project
 - legacy top-level `lanes` still work as the implicit default-project compatibility layer
+- an explicit unknown `--project` now fails fast instead of silently falling back to the default project
+
+Supported `projects.<projectId>.paths.*` fields:
+
+- `docsDir`
+- `stateRoot`
+- `orchestratorStateDir`
+- `terminalsPath`
+- `context7BundleIndexPath`
+- `benchmarkCatalogPath`
+- `componentCutoverMatrixDocPath`
+- `componentCutoverMatrixJsonPath`
+
+Path precedence is:
+
+1. lane-specific override such as `projects.<projectId>.lanes.<lane>.terminalsPath`
+2. `projects.<projectId>.paths.*`
+3. repo-global `paths.*`
+4. the built-in lane default for derived docs, plans, waves, and matrix paths
+
+## Advanced Config
+
+Use a fuller project block when different projects need isolated docs roots, terminal registries, telemetry ids, or runtime-policy defaults:
+
+```json
+{
+  "defaultProject": "app",
+  "paths": {
+    "stateRoot": ".tmp",
+    "terminalsPath": ".vscode/terminals.json"
+  },
+  "projects": {
+    "app": {
+      "rootDir": ".",
+      "lanes": {
+        "main": {}
+      }
+    },
+    "service": {
+      "rootDir": "services/api",
+      "paths": {
+        "docsDir": "services/api/docs",
+        "stateRoot": ".tmp/service-wave",
+        "orchestratorStateDir": ".tmp/service-orchestrator",
+        "terminalsPath": ".vscode/service-terminals.json",
+        "context7BundleIndexPath": "services/api/docs/context7/bundles.json",
+        "benchmarkCatalogPath": "services/api/docs/evals/benchmark-catalog.json",
+        "componentCutoverMatrixDocPath": "services/api/docs/plans/component-cutover-matrix.md",
+        "componentCutoverMatrixJsonPath": "services/api/docs/plans/component-cutover-matrix.json"
+      },
+      "waveControl": {
+        "projectId": "service-api",
+        "reportMode": "metadata-plus-selected"
+      },
+      "lanes": {
+        "main": {
+          "runtimePolicy": {
+            "defaultExecutorByRole": {
+              "design": "claude",
+              "implementation": "codex",
+              "integration": "claude",
+              "documentation": "claude",
+              "cont-qa": "claude",
+              "cont-eval": "codex"
+            },
+            "runtimeMixTargets": {
+              "codex": 4,
+              "claude": 3,
+              "opencode": 1
+            },
+            "fallbackExecutorOrder": ["claude", "opencode", "codex"]
+          }
+        },
+        "release": {
+          "docsDir": "services/api/docs/release",
+          "plansDir": "services/api/docs/release/plans",
+          "wavesDir": "services/api/docs/release/plans/waves"
+        }
+      }
+    }
+  }
+}
+```
 
 ## Where State Lives
 
@@ -66,6 +150,8 @@ Explicit projects:
 - launcher state: `.tmp/projects/<projectId>/<lane>-wave-launcher/`
 
 Project-scoped tmux session names, terminal prefixes, and telemetry spools derive from that same project id.
+
+If a project overrides `stateRoot` or `terminalsPath`, those derived runtime locations move with it. For example, the `service` project above writes launcher state under `.tmp/service-wave/projects/service/<lane>-wave-launcher/` and keeps its VS Code terminal registry in `.vscode/service-terminals.json`.
 
 ## Common Commands
 

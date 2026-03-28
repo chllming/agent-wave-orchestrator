@@ -320,8 +320,7 @@ function normalizeThreshold(value, fallback) {
   return parsed;
 }
 
-function defaultDocsDirForLane(lane, defaultLane, repoMode, projectRootDir = "") {
-  const projectDocsDir = joinRepoPath(projectRootDir, DEFAULT_DOCS_DIR);
+function defaultDocsDirForLane(lane, defaultLane, repoMode, projectDocsDir = DEFAULT_DOCS_DIR) {
   if (repoMode === "single-repo" && lane === defaultLane) {
     return projectDocsDir;
   }
@@ -1041,11 +1040,12 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
           rawProject.sharedPlanDocs,
           `projects.${projectId}.sharedPlanDocs`,
         ) || null;
+      const projectDocsDir = normalizeRepoRelativePath(
+        rawProject.paths?.docsDir || joinRepoPath(rootDir, rawConfig.paths?.docsDir || DEFAULT_DOCS_DIR),
+        `projects.${projectId}.paths.docsDir`,
+      );
       const projectPaths = {
-        docsDir: normalizeRepoRelativePath(
-          rawProject.paths?.docsDir || joinRepoPath(rootDir, rawConfig.paths?.docsDir || DEFAULT_DOCS_DIR),
-          `projects.${projectId}.paths.docsDir`,
-        ),
+        docsDir: projectDocsDir,
         stateRoot: normalizeRepoRelativePath(
           rawProject.paths?.stateRoot || rawConfig.paths?.stateRoot || DEFAULT_STATE_ROOT,
           `projects.${projectId}.paths.stateRoot`,
@@ -1075,13 +1075,13 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
         componentCutoverMatrixDocPath: normalizeRepoRelativePath(
           rawProject.paths?.componentCutoverMatrixDocPath ||
             rawConfig.paths?.componentCutoverMatrixDocPath ||
-            defaultComponentCutoverMatrixDocPath(defaultPlansDir(joinRepoPath(rootDir, DEFAULT_DOCS_DIR))),
+            defaultComponentCutoverMatrixDocPath(defaultPlansDir(projectDocsDir)),
           `projects.${projectId}.paths.componentCutoverMatrixDocPath`,
         ),
         componentCutoverMatrixJsonPath: normalizeRepoRelativePath(
           rawProject.paths?.componentCutoverMatrixJsonPath ||
             rawConfig.paths?.componentCutoverMatrixJsonPath ||
-            defaultComponentCutoverMatrixJsonPath(defaultPlansDir(joinRepoPath(rootDir, DEFAULT_DOCS_DIR))),
+            defaultComponentCutoverMatrixJsonPath(defaultPlansDir(projectDocsDir)),
           `projects.${projectId}.paths.componentCutoverMatrixJsonPath`,
         ),
       };
@@ -1139,10 +1139,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
 
 export function resolveProjectProfile(config, projectInput = config.defaultProject) {
   const projectId = sanitizeProjectId(projectInput || config.defaultProject || DEFAULT_PROJECT_ID);
-  const projectConfig =
-    config.projects?.[projectId] ||
-    config.projects?.[config.defaultProject] ||
-    config.projects?.[DEFAULT_PROJECT_ID];
+  const projectConfig = config.projects?.[projectId];
   if (!projectConfig) {
     throw new Error(`Unknown project: ${projectInput}`);
   }
@@ -1208,7 +1205,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane, proje
         lane,
         config.defaultLane,
         config.repoMode,
-        projectProfile.rootDir,
+        projectProfile.paths.docsDir,
       ),
     `${lane}.docsDir`,
   );
@@ -1282,34 +1279,34 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane, proje
     waveControl,
     paths: {
       terminalsPath: normalizeRepoRelativePath(
-        laneConfig.terminalsPath || config.paths.terminalsPath,
+        laneConfig.terminalsPath || projectProfile.paths.terminalsPath,
         `${lane}.terminalsPath`,
       ),
       stateRoot: normalizeRepoRelativePath(
-        laneConfig.stateRoot || config.paths.stateRoot,
+        laneConfig.stateRoot || projectProfile.paths.stateRoot,
         `${lane}.stateRoot`,
       ),
       orchestratorStateDir: normalizeRepoRelativePath(
-        laneConfig.orchestratorStateDir || config.paths.orchestratorStateDir,
+        laneConfig.orchestratorStateDir || projectProfile.paths.orchestratorStateDir,
         `${lane}.orchestratorStateDir`,
       ),
       context7BundleIndexPath: normalizeRepoRelativePath(
-        laneConfig.context7BundleIndexPath || config.paths.context7BundleIndexPath,
+        laneConfig.context7BundleIndexPath || projectProfile.paths.context7BundleIndexPath,
         `${lane}.context7BundleIndexPath`,
       ),
       benchmarkCatalogPath: normalizeRepoRelativePath(
-        laneConfig.benchmarkCatalogPath || config.paths.benchmarkCatalogPath,
+        laneConfig.benchmarkCatalogPath || projectProfile.paths.benchmarkCatalogPath,
         `${lane}.benchmarkCatalogPath`,
       ),
       componentCutoverMatrixDocPath: normalizeRepoRelativePath(
         laneConfig.componentCutoverMatrixDocPath ||
-          config.paths.componentCutoverMatrixDocPath ||
+          projectProfile.paths.componentCutoverMatrixDocPath ||
           defaultComponentCutoverMatrixDocPath(plansDir),
         `${lane}.componentCutoverMatrixDocPath`,
       ),
       componentCutoverMatrixJsonPath: normalizeRepoRelativePath(
         laneConfig.componentCutoverMatrixJsonPath ||
-          config.paths.componentCutoverMatrixJsonPath ||
+          projectProfile.paths.componentCutoverMatrixJsonPath ||
           defaultComponentCutoverMatrixJsonPath(plansDir),
         `${lane}.componentCutoverMatrixJsonPath`,
       ),

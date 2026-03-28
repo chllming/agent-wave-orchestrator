@@ -9,6 +9,7 @@ import {
 } from "../../scripts/wave-orchestrator/benchmark-external.mjs";
 import { REPO_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
 import { runBenchmarkCli } from "../../scripts/wave-orchestrator/benchmark.mjs";
+import * as waveControlClient from "../../scripts/wave-orchestrator/wave-control-client.mjs";
 
 const tempDirs = [];
 
@@ -231,6 +232,41 @@ describe("runExternalBenchmarkPilot", () => {
     expect(result.summary.overall["single-agent"].successRate).toBe(0);
     expect(result.summary.overall["full-wave"].successRate).toBe(100);
     expect(fs.existsSync(path.join(REPO_ROOT, result.outputDir, "results.json"))).toBe(true);
+  });
+
+  it("downgrades external benchmark telemetry flush failures to warnings", async () => {
+    const warnings = [];
+    vi.spyOn(console, "warn").mockImplementation((value) => {
+      warnings.push(String(value));
+    });
+    vi.spyOn(waveControlClient, "flushWaveControlQueue").mockRejectedValue(
+      new Error("telemetry unavailable"),
+    );
+
+    const result = runExternalBenchmarkPilot({
+      adapterId: "swe-bench-pro",
+      dryRun: true,
+      taskIds: ["instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan"],
+      modelId: "gpt-5-codex",
+      executorId: "codex",
+      executorCommand: "codex",
+      toolPermissions: "Read,Write,Edit,Bash",
+      temperature: "0",
+      reasoningEffort: "high",
+      maxWallClockMinutes: "45",
+      maxTurns: "250",
+      retryLimit: "0",
+      verificationHarness: "official-swe-bench-pro",
+      datasetVersion: "public-v1",
+      commandConfigPath: "docs/evals/external-command-config.swe-bench-pro.json",
+      outputDir: ".tmp/wave-benchmarks/external-test-telemetry-warning",
+    });
+    await Promise.resolve();
+
+    expect(result.selectedArms).toEqual(["single-agent", "full-wave"]);
+    expect(warnings).toContain(
+      "[wave:benchmark] telemetry flush skipped: telemetry unavailable",
+    );
   });
 
   it("writes failure review artifacts and separates verifier-image from setup-harness failures", () => {

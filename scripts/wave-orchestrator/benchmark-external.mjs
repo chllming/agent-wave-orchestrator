@@ -120,6 +120,15 @@ function benchmarkRunId(output) {
   return `bench-${output.adapter.id}-${output.manifest.id}-${String(output.generatedAt || toIsoTimestamp()).replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 }
 
+function flushBenchmarkTelemetryBestEffort(lanePaths) {
+  return flushWaveControlQueue(lanePaths).catch((error) => {
+    console.warn(
+      `[wave:benchmark] telemetry flush skipped: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  });
+}
+
 function reviewValidityForResult(result, output) {
   if (result.success && output.comparisonReady) {
     return "comparison-valid";
@@ -339,7 +348,7 @@ function publishExternalBenchmarkTelemetry({ output, outputDir, failureReview, p
       },
     });
   }
-  void flushWaveControlQueue(lanePaths);
+  void flushBenchmarkTelemetryBestEffort(lanePaths);
   return benchmarkRunIdValue;
 }
 

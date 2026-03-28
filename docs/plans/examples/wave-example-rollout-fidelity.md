@@ -10,6 +10,8 @@ This example is intentionally generic. The component id, deliverable paths, and
 Go control-plane slices are illustrative, but the authored Wave structure,
 closure expectations, and maturity discipline match the current surface.
 
+All launcher-owned `.tmp/main-wave-launcher/...` paths in this example assume the implicit default project. For explicit monorepo projects, rewrite them to `.tmp/projects/<projectId>/main-wave-launcher/...` and launch the wave with `--project <projectId>`.
+
 **Commit message**: `Feat: land rollout substrate and desired-state records`
 
 ## Component promotions

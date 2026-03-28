@@ -12,6 +12,8 @@ Use this shape when:
 
 If you want the hybrid design-steward variant instead, keep the same packet path but also assign that same design agent implementation-owned files plus the normal implementation contract sections. The runtime will then run the design pass first and include that same agent in the later implementation fan-out.
 
+All launcher-owned `.tmp/main-wave-launcher/...` paths in this example assume the implicit default project. For explicit monorepo projects, rewrite them to `.tmp/projects/<projectId>/main-wave-launcher/...` and launch the wave with `--project <projectId>`.
+
 **Commit message**: `Feat: add design packet before implementation fan-out`
 
 ## Component promotions

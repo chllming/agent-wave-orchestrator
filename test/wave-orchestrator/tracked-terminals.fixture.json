@@ -1,0 +1,36 @@
+{
+  "autorun": false,
+  "env": {},
+  "terminals": [
+    {
+      "name": "Workspace Shell",
+      "icon": "terminal-bash",
+      "color": "terminal.ansiGreen",
+      "command": "bash"
+    },
+    {
+      "name": "Tests",
+      "icon": "beaker",
+      "color": "terminal.ansiYellow",
+      "command": "bash -lc 'pnpm test; exec bash'"
+    },
+    {
+      "name": "Wave Doctor",
+      "icon": "pulse",
+      "color": "terminal.ansiCyan",
+      "command": "bash -lc 'node scripts/wave.mjs doctor --json; exec bash'"
+    },
+    {
+      "name": "Wave Dashboard Current",
+      "icon": "dashboard",
+      "color": "terminal.ansiBrightCyan",
+      "command": "TMUX= tmux -L oc_default_main_wave_orchest_2f5c21f3_waves new -As oc_default_main_wave_orchest_2f5c21f3_wave_dashboard_current"
+    },
+    {
+      "name": "Wave Dashboard Global",
+      "icon": "dashboard",
+      "color": "terminal.ansiBrightBlue",
+      "command": "TMUX= tmux -L oc_default_main_wave_orchest_2f5c21f3_waves new -As oc_default_main_wave_orchest_2f5c21f3_wave_dashboard_global_current"
+    }
+  ]
+}

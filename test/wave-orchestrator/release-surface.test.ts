@@ -158,6 +158,21 @@ describe("release surface alignment", () => {
     expect(cliReference).toContain("wave control status --project <id> --lane <lane> --wave <n>");
   });
 
+  it("keeps the README setup path agent-first", () => {
+    const rootReadme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+
+    expect(rootReadme).toContain("Wave is meant to be operated through an agent");
+    expect(rootReadme).toContain("The easiest way to set up Wave in any repo is:");
+    expect(rootReadme).toContain("Then give your coding agent this copy-paste prompt:");
+    expect(rootReadme).toContain("determine whether this should be a fresh setup, an adopt-existing setup, or a migration");
+    expect(rootReadme).toContain("single-project or use monorepo projects with `defaultProject` plus `projects.<projectId>`");
+    expect(rootReadme).toContain("Wave sends project, lane, wave, run, proof, and benchmark metadata");
+    expect(rootReadme).toContain("what should count as proof");
+    expect(rootReadme).toContain("build detailed waves, not vague stubs");
+    expect(rootReadme).toContain("The intended interface is an agent using Wave");
+    expect(rootReadme).toContain("## Manual Commands");
+  });
+
   it("documents fresh-launch relaunch-plan reset behavior", () => {
     const cliReference = fs.readFileSync(
       path.join(repoRoot, "docs", "reference", "cli-reference.md"),

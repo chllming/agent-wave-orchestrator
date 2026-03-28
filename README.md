@@ -2,6 +2,8 @@
 
 Wave Orchestration is my framework for "vibe-coding." It keeps the speed of agentic coding, but makes the runtime, coordination, and context model explicit enough to inspect, replay, and improve.
 
+Wave is meant to be operated through an agent that uses the Wave runtime, not as a command-first workflow where a human manually drives every step from the shell.
+
 This package also ships with my personal Wave Control endpoint enabled by default. A repo using the packaged defaults will emit project, lane, wave, run, proof, and benchmark metadata to `https://wave-control.up.railway.app/api/v1` unless you actively opt out.
 
 The framework does three things:
@@ -133,17 +135,76 @@ Telemetry defaults:
 - default identity fields include `projectId`, `lane`, `wave`, `runKind`, and related benchmark ids
 - opt out explicitly with `waveControl.enabled: false`, `waveControl.reportMode: "disabled"`, or `wave launch --no-telemetry`
 
+## Recommended Setup
+
+The easiest way to set up Wave in any repo is:
+
+1. install the package
+2. point a coding agent at the repo
+3. paste one setup prompt
+
+Use direct CLI commands as a manual fallback, debugging surface, or validation aid. The intended interface is an agent using Wave, not a human memorizing the full command set.
+
 Install into another repo:
 
 ```bash
 pnpm add -D @chllming/wave-orchestration
-pnpm exec wave init
-pnpm exec wave doctor
-pnpm exec wave launch --lane main --dry-run --no-dashboard
-pnpm exec wave coord show --lane main --wave 0 --dry-run --json
 ```
 
-If the repo already has Wave config, plans, or waves you want to keep:
+Then give your coding agent this copy-paste prompt:
+
+```text
+Set up and operate Wave Orchestration in this repository.
+
+Start by inspecting the repo before changing anything.
+
+Your job:
+- determine whether this should be a fresh setup, an adopt-existing setup, or a migration from an older Wave version
+- understand the repo well enough to recommend a Wave shape instead of guessing
+- decide whether this repo should stay single-project or use monorepo projects with `defaultProject` plus `projects.<projectId>`
+- explain the default telemetry behavior before enabling anything silently:
+  - Wave sends project, lane, wave, run, proof, and benchmark metadata to `https://wave-control.up.railway.app/api/v1` by default unless the repo explicitly opts out
+  - if this repo should opt out, say exactly how and why
+- decide the right proof and closure posture for this repo:
+  - what should count as proof
+  - whether `cont-EVAL`, security review, stronger closure roles, or stricter proof artifacts are needed
+  - whether non-proof follow-up should remain blocking or be marked soft, stale, or advisory
+- configure Wave for this repo
+- build detailed waves, not vague stubs
+- validate the setup with the normal Wave checks
+- summarize the resulting layout, assumptions, risks, and next recommended waves
+
+Rules:
+- inspect first, then change files
+- prefer adopt-existing over destructive rewrites when Wave files or plans already exist
+- ask only the missing high-impact product questions that cannot be inferred from the repo
+- treat commands as implementation tools, not the user-facing interface
+
+Required execution flow:
+1. inspect the repo and determine fresh setup vs adopt-existing vs migration
+2. install and initialize Wave appropriately
+3. choose single-project vs monorepo project structure
+4. configure telemetry intentionally and explain the default
+5. define proof expectations and closure roles
+6. draft or refine detailed waves
+7. run Wave validation
+8. report what you changed and what the human should review next
+
+Validation to run:
+- `pnpm exec wave doctor --json`
+- `pnpm exec wave launch --lane main --dry-run --no-dashboard`
+- `pnpm exec wave control status --lane main --wave 0 --json` if wave 0 exists
+
+Useful docs:
+- `README.md`
+- `docs/plans/migration.md`
+- `docs/guides/monorepo-projects.md`
+- `docs/guides/planner.md`
+- `docs/reference/runtime-config/README.md`
+- `docs/reference/wave-control.md`
+```
+
+If the repo already has Wave config, plans, or waves you want to keep, the agent should generally choose the adopt-existing path:
 
 ```bash
 pnpm exec wave init --adopt-existing
@@ -170,7 +231,9 @@ If a non-resident agent should stay alive and react only to orchestrator-written
 
 When runtime launch commands detect a newer npmjs release, Wave prints a non-blocking update notice on stderr. The fast path is `pnpm exec wave self-update`, which updates the dependency, prints the changelog delta, and then records the workspace upgrade report.
 
-## Common Commands
+## Manual Commands
+
+These commands are still useful when you want to validate, debug, or inspect the runtime directly. They are not the recommended first-touch onboarding path.
 
 ```bash
 # Save project defaults and draft a new wave

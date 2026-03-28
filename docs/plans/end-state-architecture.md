@@ -2,6 +2,8 @@
 
 This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.9.0` surface now follows.
 
+For the sandbox-specific execution model, including async supervisor ownership, daemon adoption goals, and forwarded closure-gap behavior, read [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
+
 The thesis is unchanged: bounded waves, closure roles, proof artifacts, selective rerun, and delivery discipline. What changes is the internal authority model. The launcher stops being the decision engine and becomes a thin orchestrator that reads decisions from canonical state, sequences the engines, and delegates process work to the session supervisor.
 
 ---

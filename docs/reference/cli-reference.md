@@ -13,6 +13,8 @@ When a command targets lane-scoped runtime state, it also accepts `--project <id
 
 - Runtime:
   `wave launch`, `wave autonomous`, and `wave local` cover dry-run validation, live execution, and executor-specific prompt transport.
+- Sandbox async supervision:
+  `wave submit`, `wave supervise`, `wave status`, and `wave wait` provide the sandbox-friendly submit-and-observe surface for long-running waves.
 - Operator control:
   `wave control` is the preferred surface for live status, tasks, reruns, proof bundles, and telemetry.
 - Compatibility and inspection:
@@ -93,6 +95,50 @@ wave autonomous [options]
 | `--dashboard` | off | Enable dashboards |
 | `--keep-sessions` | off | Keep tmux sessions between waves |
 | `--keep-terminals` | off | Keep terminal entries between waves |
+
+When you run Wave in a sandbox with short-lived `exec` sessions, prefer the async supervisor surface instead of binding the whole run to one long-lived `wave autonomous` client process. The end-state sandbox model is documented in [../plans/sandbox-end-state-architecture.md](../plans/sandbox-end-state-architecture.md).
+
+## wave submit
+
+Submit a launcher request for daemon-owned execution and return quickly with a `runId`.
+
+```
+wave submit [launcher options]
+```
+
+Current implementation status: this is a thin file-backed wrapper over `wave-launcher.mjs`. It is the preferred sandbox-facing entrypoint, but the durable lease and adoption model described in [../plans/sandbox-end-state-architecture.md](../plans/sandbox-end-state-architecture.md) is still partial.
+
+`wave submit` accepts the same launcher options you would pass to `wave launch`, for example `--project`, `--lane`, `--start-wave`, `--end-wave`, `--executor`, `--codex-sandbox`, `--timeout-minutes`, `--agent-launch-stagger-ms`, `--resident-orchestrator`, `--no-dashboard`, and `--dry-run`.
+
+## wave supervise
+
+Run the supervisor loop that claims queued submitted runs and reconciles launcher status.
+
+```
+wave supervise [--project <id>] [--lane <name>] [--once]
+```
+
+Use `--once` for a single reconciliation pass in tests or wrapper scripts. The intended end state is a durable daemon that owns launch, monitoring, adoption, and cleanup.
+
+## wave status
+
+Read the current supervisor-owned state for a submitted run.
+
+```
+wave status --run-id <id> [--json]
+```
+
+Current implementation status: reads the thin file-backed supervisor state. In the full end state this will read canonical daemon-owned run state with lease and heartbeat metadata.
+
+## wave wait
+
+Wait for a submitted run to reach terminal state or until the wait timeout expires.
+
+```
+wave wait --run-id <id> [--timeout-seconds <n>] [--json]
+```
+
+`wave wait` is observational only. Timing out does not cancel or kill the underlying run.
 
 ## wave control
 

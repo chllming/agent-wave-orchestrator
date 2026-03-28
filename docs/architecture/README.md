@@ -12,15 +12,17 @@ It is derived from reading every source module, test file, configuration surface
 5. [Wave Execution Lifecycle](#5-wave-execution-lifecycle)
 6. [Coordination and Blackboard Model](#6-coordination-and-blackboard-model)
 7. [Gate Evaluation and Proof Model](#7-gate-evaluation-and-proof-model)
-8. [Closure Sweep](#8-closure-sweep)
+8. [Closure Sweep: How Waves Actually Close](#8-closure-sweep-how-waves-actually-close)
 9. [Retry and Recovery](#9-retry-and-recovery)
-10. [Runtime Abstraction and Executor Adapters](#10-runtime-abstraction-and-executor-adapters)
-11. [Skills, Context7, and Compiled Context](#11-skills-context7-and-compiled-context)
-12. [Entity Model](#12-entity-model)
-13. [Artifact Hierarchy](#13-artifact-hierarchy)
-14. [Telemetry and Wave Control](#14-telemetry-and-wave-control)
-15. [CLI Surface Map](#15-cli-surface-map)
-16. [Research Grounding](#16-research-grounding)
+10. [Run-State Reconciler](#10-run-state-reconciler)
+11. [Sandbox Supervisor Model](#11-sandbox-supervisor-model)
+12. [Runtime Abstraction and Executor Adapters](#12-runtime-abstraction-and-executor-adapters)
+13. [Skills, Context7, and Compiled Context](#13-skills-context7-and-compiled-context)
+14. [Entity Model](#14-entity-model)
+15. [Artifact Hierarchy](#15-artifact-hierarchy)
+16. [Telemetry and Wave Control](#16-telemetry-and-wave-control)
+17. [CLI Surface Map](#17-cli-surface-map)
+18. [Research Grounding](#18-research-grounding)
 
 ---
 
@@ -498,55 +500,180 @@ Envelope path: `.tmp/<lane>-wave-launcher/results/wave-<N>/attempt-<A>/<agentId>
 
 ---
 
-## 8. Closure Sweep
+## 8. Closure Sweep: How Waves Actually Close
 
-Closure is staged and fail-closed. The `closure-engine.mjs` module orchestrates the sweep in this exact order:
+### The Core Problem
+
+Agents say "done" before the work is actually done. This is the single most common failure mode in multi-agent coding systems. An agent can produce plausible-looking output, claim PASS, and move on -- but the deliverables don't exist, the tests don't run, the integration breaks, or the proof is narrative rather than structural. Wave's closure model exists to make premature closure impossible.
+
+### Closure Is Not "Agent Finished"
+
+A wave does not close when agents finish running. A wave closes when:
+
+1. Every agent's **owned slice is structurally proven** (deliverables exist, proof markers valid, SHA256 checks pass)
+2. Every **cross-cutting concern** is clear (no open blockers, clarifications, dependencies, contradictions)
+3. A **staged sweep of closure stewards** has validated the integrated result
+4. The **final cont-QA verdict** is PASS based on structural evidence, not agent self-report
+
+This is enforced by the `closure-engine.mjs` module. The launcher cannot bypass closure; the gate stack is fail-closed.
+
+### How the Closure Sweep Executes
+
+The sweep is sequential and staged. Each stage launches a closure agent, waits for it to complete, evaluates the gate, and only proceeds to the next stage if the gate passes. This is implemented in `runClosureSweepPhase()`.
 
 ```
-Stage 1: cont-EVAL  (optional, only if E0 agent declared in wave)
-  -> Launch E0
-  -> Evaluate cont-EVAL gate
-  -> On failure: only E0 reruns; implementation proof preserved
-
-Stage 2: Security Review  (optional, only if security agent declared)
-  -> Launch security reviewer
-  -> Evaluate security gate
-  -> On failure: only security reviewer reruns
-
-Stage 3: Integration
-  -> Launch integration steward (A8)
-  -> Evaluate integration barrier
-  -> On failure: only A8 reruns
-
-Stage 4: Documentation
-  -> Launch documentation steward (A9)
-  -> Evaluate documentation gate + component matrix gate
-  -> On failure: only A9 reruns
-
-Stage 5: cont-QA
-  -> Launch cont-QA steward (A0)
-  -> Evaluate cont-QA gate
-  -> This is the final verdict
+┌─────────────────────────────────────────────────────────────────────┐
+│ IMPLEMENTATION PHASE (parallel)                                      │
+│  A1, A2, A3... run concurrently                                      │
+│  Each writes: status file, execution summary, result envelope        │
+│  Gate: readWaveImplementationGate() checks all exit codes + summaries│
+│  If any fail → retry (Section 9), do not enter closure               │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ all agents exit 0 + valid summaries
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 1: cont-EVAL  (optional — only if E0 declared in wave)        │
+│  Launch: E0 agent                                                    │
+│  Reads: implementation result envelopes, eval target declarations    │
+│  Writes: eval report artifact + [wave-eval] structured marker        │
+│  Gate: readWaveContEvalGate()                                        │
+│    ✓ Report artifact exists                                          │
+│    ✓ [wave-eval] marker present with exact target_ids match          │
+│    ✓ benchmark_ids valid                                             │
+│  On fail: only E0 reruns; all implementation proof preserved         │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ gate passes (or stage skipped)
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 2: Security Review  (optional — only if security agent exists) │
+│  Launch: security review agent (A7)                                  │
+│  Reads: implementation envelopes, source diff, dependency state      │
+│  Writes: security report + [wave-security] structured marker         │
+│  Gate: readWaveSecurityGate()                                        │
+│    ✓ Report exists                                                   │
+│    ✓ [wave-security] marker with state=clear|concerns|blocked        │
+│    ✓ state != blocked (concerns are logged but non-blocking)         │
+│  On fail: only A7 reruns; implementation proof preserved             │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ gate passes (or stage skipped)
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 3: Integration                                                 │
+│  Launch: integration steward (A8)                                    │
+│  Reads: all implementation envelopes, coordination state,            │
+│         contradiction entities, shared summary                       │
+│  Writes: integration evidence, contradiction resolutions             │
+│  Gate: readWaveIntegrationBarrier()                                  │
+│    ✓ Integration state is clean or claims_pending (not blocked)      │
+│    ✓ No unresolved hard contradictions                               │
+│    ✓ Evidence aggregation shows cross-agent consistency              │
+│  On fail: only A8 reruns                                             │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ gate passes
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 4: Documentation                                               │
+│  Launch: documentation steward (A9)                                  │
+│  Reads: doc-delta claims from implementation envelopes,              │
+│         component matrix, shared plan docs                           │
+│  Writes: documentation closure report                                │
+│  Gate: readWaveDocumentationGate() + readWaveComponentMatrixGate()   │
+│    ✓ Doc closure state is valid                                      │
+│    ✓ Component matrix promotions are consistent across agents        │
+│    ✓ Current levels match expected post-promotion state              │
+│  On fail: only A9 reruns                                             │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ gate passes
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 5: cont-QA  (final verdict)                                    │
+│  Launch: cont-QA steward (A0)                                        │
+│  Reads: ALL preceding closure evidence, all envelopes,               │
+│         full coordination state, forwarded closure gaps               │
+│  Writes: final verdict + [wave-gate] structured marker               │
+│  Gate: readWaveContQaGate()                                          │
+│    ✓ Verdict artifact exists                                         │
+│    ✓ [wave-gate] marker present                                      │
+│    ✓ Verdict is PASS (not FAIL, not PARTIAL)                         │
+│  This is the terminal gate. PASS here = wave_closure_ready           │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### What Each Closure Agent Actually Validates
+
+**cont-EVAL (E0):** Runs declared eval targets from the wave's `### Eval targets` section against the benchmark catalog. Verifies that eval results meet declared thresholds. Writes a typed eval report with `target_ids` linking back to wave declarations. The gate enforces exact match between declared and reported target IDs.
+
+**Security Reviewer (A7):** Reviews source changes for OWASP top-10, dependency vulnerabilities, credential exposure, and wave-declared security concerns. Writes a structured report with `state` field. `clear` = no findings. `concerns` = findings logged but non-blocking. `blocked` = critical findings that must be resolved.
+
+**Integration Steward (A8):** The cross-agent consistency checker. Reads all implementation envelopes to detect contradictions (agent A1 changed an interface that agent A2 depends on), verify that claims from different agents are compatible, and confirm that the integrated codebase is coherent. Works against the materialized contradiction entities from the control plane.
+
+**Documentation Steward (A9):** Validates that all doc-delta claims from implementation agents were actually fulfilled, that the component maturity matrix is consistent (no agent promoted a component that another agent left at a lower level), and that shared plan docs reflect the current state.
+
+**cont-QA (A0):** The final authority. Has access to everything: all envelopes, all coordination state, all forwarded closure gaps, all prior closure-stage reports. Makes the terminal PASS/FAIL decision based on structural evidence. The gate rejects narrative-only verdicts -- the `[wave-gate]` marker must be present with the exact structured format.
 
 ### Closure Gap Forwarding
 
-A special case: if a closure-stage agent returns `wave-proof-gap`, it is a soft blocker, not an immediate full-wave stop. The system:
+A special case exists for `wave-proof-gap` status codes. When a closure-stage agent (e.g., A7 security review) identifies a gap but the gap is not a hard failure, the system does not stop the closure sweep:
 
-1. Records the gap as a coordination blocker with `closure-critical` severity
-2. Continues launching later closure stages with the gap as structured input
-3. Later closure agents evaluate available artifacts (they don't refuse to run)
-4. Final disposition remains blocked until all forwarded gaps are resolved
+1. Records the gap as a `closure-critical` blocker in the coordination log via `forwardedClosureGapRecord()`
+2. Continues launching subsequent closure stages (A8, A9, A0) with the gap as structured input
+3. Later closure agents evaluate the available artifacts. They don't refuse to run just because an earlier stage had a gap
+4. The final disposition remains blocked until all forwarded gaps are resolved
 
-This prevents a single gap in early closure from preventing the collection of useful evidence from later closure stages.
+**Why this matters:** Without gap forwarding, a minor security concern in Stage 2 would prevent the system from collecting integration evidence (Stage 3), documentation validation (Stage 4), and the QA assessment (Stage 5). That evidence is valuable regardless of whether the security gap needs resolution. Gap forwarding collects maximum evidence before blocking.
 
-### Strict Validation
+### Closure Role Bindings
 
-Live closure enforces strict marker validation:
-- cont-EVAL: Report artifact + `[wave-eval]` marker with exact `target_ids` match and valid `benchmark_ids`
-- Security: Report + `[wave-security]` marker with `state=clear|concerns|blocked`
-- cont-QA: Final verdict + final `[wave-gate]` marker
-- Legacy or underspecified artifacts fail in live closure (replay-only compatibility)
+Closure roles are resolved through `resolveWaveRoleBindings()`:
+
+| Role | Default Agent ID | Config Override |
+|------|-----------------|----------------|
+| cont-QA | A0 | `roles.contQaAgentId` or wave-level `contQaAgentId` |
+| cont-EVAL | E0 | `roles.contEvalAgentId` or wave-level `contEvalAgentId` |
+| Integration | A8 | `roles.integrationAgentId` or wave-level `integrationAgentId` |
+| Documentation | A9 | `roles.documentationAgentId` or wave-level `documentationAgentId` |
+| Security | A7 | Detected by `isSecurityReviewAgent()` from role prompt path |
+
+Waves can override these defaults. Starter defaults (`E0`, `A7`, `A8`, `A9`, `A0`) fill gaps only when a wave does not declare its own bindings.
+
+### Design-First Gating (Pre-Closure)
+
+Before the closure sweep, waves can optionally run a **design-first pass**:
+
+1. Design agents (detected by `isDesignAgent()`) run before implementation agents
+2. Design agents produce **design packets** under `docs/plans/waves/design/`
+3. The design gate blocks implementation until every design packet is `ready-for-implementation`
+4. Once the design gate clears, implementation agents fan out normally
+5. Hybrid design stewards (flagged by `isImplementationOwningDesignAgent()`) rejoin the implementation fan-out after their design pass
+
+This is orchestrated by `resolvePostDesignPassTransition()` in `launcher.mjs`.
+
+### Infra Gate (Post-Implementation, Pre-Closure)
+
+An additional gate checks infrastructure signal state. `readWaveInfraGate()` in `closure-engine.mjs` scans agent logs for structured infra signals and blocks if any signal ended in a non-conformant state. Conformant states (`conformant`, `setup-required`, `setup-in-progress`, `action-required`, `action-approved`, `action-complete`) are non-blocking.
+
+### Strict Validation Rules
+
+Live closure enforces strict marker validation. This is intentionally unforgiving:
+
+- **cont-EVAL:** Report artifact must exist. `[wave-eval]` marker must be present with `target_ids` exactly matching the wave's declared eval targets. `benchmark_ids` must reference valid catalog entries.
+- **Security:** Report must exist. `[wave-security]` marker must be present with `state` in `{clear, concerns, blocked}`.
+- **cont-QA:** Final verdict artifact must exist. `[wave-gate]` marker must be present with structured verdict.
+- **Legacy tolerance:** Underspecified or evaluator-era artifacts fail in live closure. They are only tolerated in replay mode for historical compatibility.
+
+### Smart Rerun After Closure Failure
+
+When a closure gate fails, the system does not rerun the entire wave:
+
+| Failure Point | What Reruns | What Is Preserved |
+|---|---|---|
+| cont-EVAL fails | Only E0 | All implementation proof |
+| Security fails | Only A7 | All implementation proof + E0 results |
+| Integration fails | Only A8 | All implementation proof + E0 + A7 |
+| Documentation fails | Only A9 | All proof + E0 + A7 + A8 |
+| cont-QA fails | Only A0 | All proof + all closure stages |
+
+This targeted rerun is computed by `planRetryWaveAttempt()` in the implementation engine, which reads the gate snapshot to identify exactly which closure role failed.
 
 ---
 
@@ -590,7 +717,390 @@ The barrier is surfaced through the coordination log and dashboard so operators 
 
 ---
 
-## 10. Runtime Abstraction and Executor Adapters
+## 10. Run-State Reconciler
+
+### What the Reconciler Does
+
+The reconciler answers one question: **which waves are actually complete?** It inspects on-disk artifacts (status files, execution summaries, coordination state, dependency tickets, assignment records) and determines whether each wave's completion evidence is structurally valid. This runs at launcher startup before any new execution begins.
+
+The core function is `reconcileRunStateFromStatusFiles()` in `wave-files.mjs`. It is called from `launcher.mjs` during startup and can also be invoked standalone via `wave launch --reconcile-status`.
+
+### Why It Exists
+
+Several scenarios can leave run state and disk artifacts out of sync:
+
+- The launcher crashes mid-wave, leaving status files on disk but no recorded completion
+- A wave completed in a prior launcher run, but the wave definition has changed since (prompt drift)
+- Coordination state has changed (new blockers, clarifications, escalations) that invalidate a previous completion
+- An operator manually edited artifacts or resolved dependencies outside the launcher
+
+The reconciler detects all of these and produces a correct run state.
+
+### How It Works
+
+```
+reconcileRunStateFromStatusFiles(allWaves, runStatePath, statusDir, options)
+    │
+    ├─ Read existing run-state.json (previous completions, history)
+    │
+    ├─ For each wave definition:
+    │   │
+    │   └─ analyzeWaveCompletionFromStatusFiles()
+    │       │
+    │       ├─ Status File Validation
+    │       │   ├─ Read agent status files (wave-<N>-<agentId>.status)
+    │       │   ├─ Check exit code == 0
+    │       │   └─ Verify metadata (promptHash present)
+    │       │
+    │       ├─ Prompt Drift Detection
+    │       │   ├─ Compare current prompt hash to status file's recorded hash
+    │       │   └─ Flag: prompt-hash-missing or prompt-hash-mismatch
+    │       │
+    │       ├─ Agent Summary Validation (per role)
+    │       │   ├─ cont-QA → validateContQaSummary()
+    │       │   ├─ cont-EVAL → validateContEvalSummary()
+    │       │   ├─ Security → validateSecuritySummary()
+    │       │   ├─ Integration → validateIntegrationSummary()
+    │       │   ├─ Documentation → validateDocumentationClosureSummary()
+    │       │   └─ Implementation → validateImplementationSummary()
+    │       │
+    │       ├─ Coordination State Checks
+    │       │   ├─ Open clarifications → open-clarification
+    │       │   ├─ Open clarification-linked requests → open-clarification-request
+    │       │   ├─ Unresolved human escalations → open-human-escalation
+    │       │   ├─ Pending human feedback → open-human-feedback
+    │       │   ├─ Blocking helper assignments → helper-assignment-unresolved / open
+    │       │   └─ Open dependency tickets → dependency-open / unresolved
+    │       │
+    │       ├─ Component Matrix Validation
+    │       │   ├─ Promotion consistency across agents
+    │       │   └─ Current levels match expected state
+    │       │
+    │       └─ Returns: { ok: boolean, reasons: [{code, detail}], evidence: {...} }
+    │
+    ├─ For each analyzed wave, decide outcome:
+    │   ├─ ok == true → mark "completed"
+    │   ├─ Previously completed + only prompt drift → preserve as "completed_with_drift"
+    │   └─ Otherwise → mark "blocked" with reasons
+    │
+    ├─ Write state transitions to run-state.json history (append-only)
+    │
+    └─ Return reconciliation report:
+        { completedFromStatus, addedFromBefore, blockedFromStatus, preservedWithDrift, state }
+```
+
+### Blocking Reason Codes
+
+When a wave fails reconciliation, the reasons are tagged with specific codes:
+
+| Code | Meaning |
+|------|---------|
+| `nonzero-status` | Agent exited with non-zero code |
+| `missing-status` | Agent status file does not exist |
+| `prompt-hash-missing` | Status file lacks promptHash metadata |
+| `prompt-hash-mismatch` | Prompt has changed since agent ran |
+| `invalid-cont-qa-summary` | cont-QA summary validation failed |
+| `invalid-cont-eval-summary` | cont-EVAL summary validation failed |
+| `invalid-security-summary` | Security summary validation failed |
+| `invalid-integration-summary` | Integration summary validation failed |
+| `invalid-documentation-summary` | Documentation summary validation failed |
+| `invalid-implementation-summary` | Implementation proof validation failed |
+| `component-promotions-invalid` | Component matrix promotion inconsistencies |
+| `component-matrix-invalid` | Current level mismatches |
+| `open-clarification` | Unresolved clarification records in coordination log |
+| `open-clarification-request` | Clarification-linked requests still open |
+| `open-human-escalation` | Human escalations unresolved |
+| `open-human-feedback` | Human feedback still pending |
+| `helper-assignment-unresolved` | Blocking assignments not assigned |
+| `helper-assignment-open` | Blocking assignments assigned but not completed |
+| `dependency-assignment-unresolved` | Inbound dependencies not assigned |
+| `dependency-open` | Required cross-lane dependencies remain open |
+
+### Prompt Drift Preservation
+
+When a wave was previously completed by an actual launcher run, but the wave definition has since changed (causing prompt hash mismatch), the reconciler does **not** invalidate the completion. Instead it preserves the wave as `completed_with_drift`.
+
+The logic in `shouldPreserveCompletedWave()` requires both conditions:
+
+1. **Previous completion is authoritative**: the wave's `lastSource` is not empty and not `"legacy-run-state"` (i.e., it was completed by a real execution, not imported from old data)
+2. **Only prompt drift reasons exist**: every blocking reason is in `{prompt-hash-missing, prompt-hash-mismatch}` and no other validation failures are present
+
+This is a pragmatic choice: prompt changes alone (e.g., editing a wave description after completion) should not force a full re-execution. But if the agent summary is also invalid, or coordination state has open blockers, the completion is revoked.
+
+### Run State Structure
+
+The persistent run state at `.tmp/<lane>-wave-launcher/run-state.json`:
+
+```javascript
+{
+  completedWaves: [0, 1, 2],  // derived sorted list
+  waves: {
+    "0": {
+      wave: 0,
+      currentState: "completed",           // or "completed_with_drift" or "blocked"
+      lastTransitionAt: "2024-03-22T...",
+      lastSource: "live-launcher",          // who determined this state
+      lastReasonCode: "wave-complete",      // why
+      lastDetail: "Wave 0 completed.",      // human-readable
+      lastEvidence: {                       // supporting metadata
+        waveFileHash: "sha256:...",
+        statusFiles: [{ agentId, path, promptHash, code, completedAt, sha256 }],
+        summaryFiles: [{ agentId, path, sha256 }],
+        coordinationLogSha256: "sha256:...",
+        assignmentsSha256: "sha256:...",
+        gateSnapshotSha256: "sha256:..."
+      }
+    }
+  },
+  history: [                               // append-only audit trail
+    { seq: 1, at: "...", wave: 0, fromState: null, toState: "completed", source: "live-launcher", ... }
+  ]
+}
+```
+
+### Evidence Collection
+
+Every state transition records comprehensive evidence via `buildRunStateEvidence()`:
+
+- `waveFileHash`: SHA256 of the wave definition file
+- `statusFiles[]`: Per-agent status file metadata (path, promptHash, exit code, SHA256)
+- `summaryFiles[]`: Per-agent execution summary metadata (path, SHA256)
+- `coordinationLogSha256`: Hash of the coordination log at transition time
+- `assignmentsSha256`: Hash of the assignment snapshot
+- `dependencySnapshotSha256`: Hash of the dependency snapshot
+- `gateSnapshotSha256`: Hash of the gate snapshot
+- `blockedReasons[]`: List of blocking reasons (if transition is to "blocked")
+
+This makes every run-state transition auditable: you can verify exactly what evidence supported the decision.
+
+### Reconcile-Only Mode
+
+`wave launch --reconcile-status` runs reconciliation without executing any waves. It also cleans up stale artifacts:
+
+- Removes stale launcher locks (from crashed launchers)
+- Kills orphaned tmux sessions
+- Prunes stale terminal registry entries
+- Clears stale dashboard artifacts
+
+Output format (`reconcile-format.mjs`):
+```
+[reconcile] added from status files: wave-0, wave-1
+[reconcile] wave 2 not reconstructable: nonzero-status=A1 exited 1; open-clarification=CR-001
+[reconcile] wave 3 preserved as completed: prompt-hash-mismatch=A2 hash changed
+[reconcile] completed waves now: 0, 1, 3
+```
+
+---
+
+## 11. Sandbox Supervisor Model
+
+### The Problem
+
+Sandboxed environments (like Codex's sandbox) have constraints that break the standard launcher model:
+
+- **Short-lived sessions**: Sandbox `exec` commands have wall-clock timeouts shorter than real wave execution
+- **Process pressure**: Bursty agent spawning can hit `EAGAIN`, `EMFILE`, `ENFILE` limits
+- **Launcher death**: The launcher process can die before agents finish, orphaning tmux sessions
+- **Ambiguous terminal state**: A missing tmux session does not mean the agent failed
+
+The standard `wave launch` model assumes the launcher process stays alive for the entire wave. In sandboxed environments, this assumption breaks.
+
+### Solution: Async Submit/Observe
+
+The sandbox model separates the client (short-lived) from the daemon (long-running) through four commands:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ wave submit [launcher options] [--json]                              │
+│                                                                      │
+│  Purpose: Quick queue, return runId, exit immediately                │
+│  1. Parse and validate launcher flags                                │
+│  2. Generate runId: run-<timestamp>-<random>                         │
+│  3. Create supervisor/runs/<runId>/                                   │
+│  4. Write request.json (immutable) + state.json (status=pending)     │
+│  5. Append event to events.jsonl: { type: "submitted" }              │
+│  6. Call ensureSupervisorRunning() — spawn daemon if needed           │
+│  7. Return { runId, statePath, supervisorPid }                       │
+│  8. Exit 0                                                           │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ wave supervise [--project <id>] [--lane <name>] [--once]             │
+│                                                                      │
+│  Purpose: Long-running daemon that claims and supervises runs        │
+│  Loop:                                                               │
+│    1. Update heartbeat + lease in daemon.lock (15s renewal)          │
+│    2. Scan supervisor/runs/*/state.json for all states               │
+│    3. Reconcile "running" states:                                    │
+│       - If launcher-status.json exists → read exit code → terminal   │
+│       - If PID alive (signal 0) → still running                     │
+│       - If PID dead + no status → mark failed                       │
+│    4. If no active runs: claim next "pending" run                    │
+│       - Spawn detached launcher process                             │
+│       - Launcher writes to launcher.log                             │
+│       - Launcher writes launcher-status.json atomically on exit     │
+│    5. Sleep 2s, repeat (or break if --once)                          │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ wave status --run-id <id> [--project <id>] [--lane <name>] [--json]  │
+│                                                                      │
+│  Purpose: Read-only state snapshot (no side effects)                 │
+│  Reads supervisor/runs/<runId>/state.json and returns current state  │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ wave wait --run-id <id> [--timeout-seconds <n>] [--json]             │
+│                                                                      │
+│  Purpose: Observational poll until terminal or timeout               │
+│  Polls state.json every 2s                                           │
+│  Returns when status ∈ {completed, failed} or deadline reached       │
+│  Non-cancelling: timeout does NOT kill the run                       │
+│  Sets process.exitCode from launcher exit code                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Run State Machine
+
+```
+      ┌─────────────────────────────────────────────┐
+      │ "pending"                                   │
+      │ • submittedAt set                           │
+      │ • launcherPid: null, exitCode: null         │
+      └──────────┬──────────────────────────────────┘
+                 │ daemon claims run, spawns launcher
+      ┌──────────▼──────────────────────────────────┐
+      │ "running"                                   │
+      │ • startedAt set                             │
+      │ • launcherPid: <pid> (detached process)     │
+      └──────────┬──────────────────────────────────┘
+                 │ launcher writes launcher-status.json
+                 │ OR launcher process dies unexpectedly
+      ┌──────────▼──────────────────────────────────┐
+      │ "completed" | "failed"                      │
+      │ • completedAt set                           │
+      │ • exitCode: <0|1|...>                       │
+      └─────────────────────────────────────────────┘
+```
+
+### Daemon Lock and Lease Mechanism
+
+Only one supervisor daemon runs per lane. The lock at `.tmp/<lane>-wave-launcher/supervisor/daemon.lock` contains:
+
+```javascript
+{
+  supervisorId: "supervisor-<pid>-<random>",
+  pid: 45821,
+  project: "default",
+  lane: "main",
+  acquiredAt: "2024-03-22T10:30:00.000Z",
+  heartbeatAt: "2024-03-22T10:30:15.000Z",     // renewed every poll cycle
+  leaseExpiresAt: "2024-03-22T10:30:17.000Z"   // 15s from heartbeat
+}
+```
+
+**Acquisition:** Try exclusive file create (`O_EXCL`). If the file exists:
+- Read the existing lock
+- Check if the PID is alive (`process.kill(pid, 0)`) AND the lease is fresh (`leaseExpiresAt > now`)
+- If stale or dead: delete the lock, retry
+- If alive and fresh: return `null` (daemon already running)
+
+**Renewal:** Each poll cycle updates `heartbeatAt` and extends `leaseExpiresAt` by 15 seconds.
+
+**Stale detection:** If `leaseExpiresAt < Date.now()` and PID is not responding to signal 0, the lock is considered stale and can be claimed by a new daemon.
+
+### Launcher Spawning
+
+When the daemon claims a pending run, it spawns the launcher as a **detached child process**:
+
+```javascript
+spawn('bash', ['-lc', wrapperCommand], {
+  cwd: REPO_ROOT,
+  detached: true,    // survives daemon exit
+  stdio: "ignore",   // no parent I/O dependency
+  env: { ...process.env, WAVE_SUPERVISOR_RUN_ID: runId }
+});
+child.unref();       // parent won't wait for exit
+```
+
+The wrapper shell command:
+1. Runs `node wave-launcher.mjs <args>`
+2. Redirects all output to `launcher.log`
+3. Captures the exit code
+4. Writes `launcher-status.json` atomically (the terminal state marker)
+
+**Critical design choice:** `detached: true` + `unref()` means the launcher process survives even if the supervisor daemon dies. The daemon does not need to stay alive for the launcher to complete.
+
+### Orphan Adoption
+
+If the supervisor daemon dies and restarts (or a new daemon starts):
+
+1. New daemon acquires the lock (old one is stale)
+2. Scans `supervisor/runs/*/state.json` for runs in "running" state
+3. For each running run:
+   - Check if the launcher PID is alive (`process.kill(pid, 0)`)
+   - If alive: the run is healthy, just supervise it
+   - If dead: check for `launcher-status.json`
+     - If present: reconcile to `completed` or `failed` based on exit code
+     - If absent: mark as `failed` with detail "launcher exited before writing status"
+
+This is conservative: the daemon only cleans up after confirming both that the PID is dead and the lease has expired.
+
+### Supervisor State Files
+
+All supervisor state lives under `.tmp/<lane>-wave-launcher/supervisor/`:
+
+```
+supervisor/
+├── daemon.lock                     Daemon lease file
+└── runs/
+    └── <runId>/
+        ├── request.json            Immutable: submitted request (never changes)
+        ├── state.json              Mutable: current daemon snapshot
+        ├── events.jsonl            Append-only: supervisor observation history
+        ├── launcher-status.json    Atomic: launcher exit record (written once)
+        └── launcher.log            Text: launcher stdout/stderr stream
+```
+
+### Canonical Authority in Sandboxed Runs
+
+The sandbox model adds a fourth observation layer but does not change the canonical authority set:
+
+| Authority | What It Covers |
+|-----------|---------------|
+| Wave definitions | Declared work, closure roles, proof contracts |
+| Coordination log | Workflow state, claims, evidence, blockers |
+| Control-plane log | Entity lifecycle, proof bundles, gates |
+| **Supervisor run state** | **Daemon-observed runtime facts (PIDs, exits, leases)** |
+
+The supervisor state is authoritative for *what the daemon observed about process execution*. It does not override wave definitions or coordination state.
+
+### Typical Sandbox Workflow
+
+```bash
+# Client: quick exit, daemon takes over
+runId=$(wave submit --project backend --lane main \
+  --executor codex --codex-sandbox danger-full-access --json | jq -r .runId)
+
+# Client: wait with timeout (non-cancelling)
+wave wait --run-id "$runId" --project backend --lane main --timeout-seconds 600
+
+# Or poll from external automation
+wave status --run-id "$runId" --project backend --lane main --json
+```
+
+### Current Limitations
+
+The sandbox supervisor model is functional but some design-doc features are still partial:
+
+- **Per-agent runtime records** (`agents/<agentId>.runtime.json` with PID, pgid, heartbeat) are designed but not fully implemented
+- **Bounded process launch concurrency** with jittered backoff for `EAGAIN`/`EMFILE` is designed but not stress-tested
+- **Full orphan adoption** across daemon restarts (preserving in-flight agent state, not just run-level state) is partial
+- **Removal of tmux from steady-state monitoring** is planned but tmux is still used for session management
+
+---
+
+## 12. Runtime Abstraction and Executor Adapters
 
 ### What Stays the Same Across Runtimes
 
@@ -648,7 +1158,7 @@ Waves can use multiple executors simultaneously. The config supports:
 
 ---
 
-## 11. Skills, Context7, and Compiled Context
+## 13. Skills, Context7, and Compiled Context
 
 ### Skills System
 
@@ -706,7 +1216,7 @@ All of this is assembled into a single execution prompt per agent at launch time
 
 ---
 
-## 12. Entity Model
+## 14. Entity Model
 
 ### Core Entities
 
@@ -745,7 +1255,7 @@ Facts have stable semantic IDs with separate content hashing:
 
 ---
 
-## 13. Artifact Hierarchy
+## 15. Artifact Hierarchy
 
 Every artifact in the system belongs to exactly one of four classes:
 
@@ -794,7 +1304,7 @@ Every artifact in the system belongs to exactly one of four classes:
 
 ---
 
-## 14. Telemetry and Wave Control
+## 16. Telemetry and Wave Control
 
 ### Local-First Model
 
@@ -834,7 +1344,7 @@ Opt-out options:
 
 ---
 
-## 15. CLI Surface Map
+## 17. CLI Surface Map
 
 ### Command Groups
 
@@ -876,7 +1386,7 @@ Legacy surfaces (`wave coord`, `wave retry`, `wave proof`) remain for direct log
 
 ---
 
-## 16. Research Grounding
+## 18. Research Grounding
 
 Wave's architecture is directly informed by published research on multi-agent systems, harness engineering, and coordination failure. The key sources and how they map to the architecture:
 
@@ -906,6 +1416,16 @@ Wave's architecture is directly informed by published research on multi-agent sy
 | [Agent Workflow Memory](https://arxiv.org/abs/2409.07429) | Compiled context model, dynamic assembly over static files |
 | [Agent READMEs](https://arxiv.org/abs/2511.12884) | Project profile, shared plan docs, per-agent context compilation |
 
+### Evaluation and Benchmarking
+
+| Source | Architectural Influence |
+|--------|------------------------|
+| [EvoClaw: Evaluating AI Agents on Continuous Software Evolution](https://arxiv.org/abs/2603.13428) | Adapted as `evoclaw-style-sequence` benchmark family for measuring long-horizon wave sequencing, dependent wave maintenance, and error accumulation across wave chains |
+| [VeRO: An Evaluation Harness for Agents to Optimize Agents](https://arxiv.org/abs/2602.22480) | Proof-oriented evaluation model, benchmark validity buckets, review entity types |
+| [MetaClaw: Just Talk](https://arxiv.org/abs/2603.17187) | Failure-driven skill synthesis, zero-downtime evolution of agent capabilities (referenced via OpenClaw platform) |
+
+**Note on OpenClaw/EvoClaw/MetaClaw:** These are external open-source and research projects cited as sources, not proprietary agents. OpenClaw is an open-source multi-agent platform. EvoClaw and MetaClaw are research papers. Wave adapts their evaluation methodologies into its benchmark catalog (`docs/evals/external-benchmarks.json`) but does not embed or depend on their codebases.
+
 ### Known Gaps
 
 The architecture addresses the documented failure modes structurally but empirical validation is still in progress:
@@ -924,8 +1444,10 @@ Core orchestrator:     scripts/wave-orchestrator/launcher.mjs
 Phase engines:         scripts/wave-orchestrator/{implementation,derived-state,gate,closure,retry}-engine.mjs
 State reducer:         scripts/wave-orchestrator/wave-state-reducer.mjs
 Session supervisor:    scripts/wave-orchestrator/session-supervisor.mjs
+Supervisor CLI:        scripts/wave-orchestrator/supervisor-cli.mjs
 Projection writer:     scripts/wave-orchestrator/projection-writer.mjs
 Wave parser:           scripts/wave-orchestrator/wave-files.mjs
+Reconcile formatting:  scripts/wave-orchestrator/reconcile-format.mjs
 Agent state:           scripts/wave-orchestrator/agent-state.mjs
 Task entities:         scripts/wave-orchestrator/task-entity.mjs
 Coordination store:    scripts/wave-orchestrator/coordination-store.mjs
@@ -942,4 +1464,9 @@ Tests:                 test/wave-orchestrator/*.test.ts (61 files)
 Wave config:           wave.config.json
 Wave definitions:      docs/plans/waves/wave-<N>.md
 Skills bundles:        skills/<skill-id>/
+Run state:             .tmp/<lane>-wave-launcher/run-state.json
+Supervisor state:      .tmp/<lane>-wave-launcher/supervisor/
+Supervisor daemon lock: .tmp/<lane>-wave-launcher/supervisor/daemon.lock
+Supervisor runs:       .tmp/<lane>-wave-launcher/supervisor/runs/<runId>/
+Sandbox architecture:  docs/plans/sandbox-end-state-architecture.md
 ```

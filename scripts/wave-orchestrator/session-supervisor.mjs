@@ -44,6 +44,7 @@ import {
   launchAgentSession as launchAgentSessionImpl,
   waitForWaveCompletion as waitForWaveCompletionImpl,
 } from "./launcher-runtime.mjs";
+import { terminateAgentProcessRuntime } from "./agent-process-runner.mjs";
 import {
   buildSupervisorPaths,
   supervisorAgentRuntimePathForRun,
@@ -376,6 +377,7 @@ export function buildResidentOrchestratorRun({
       promptPath: path.join(lanePaths.promptsDir, `${baseName}.prompt.md`),
       logPath: path.join(lanePaths.logsDir, `${baseName}.log`),
       statusPath: path.join(lanePaths.statusDir, `${baseName}.status`),
+      runtimePath: path.join(lanePaths.statusDir, `${baseName}.runtime.json`),
       promptOverride: buildResidentOrchestratorPrompt({
         lane: lanePaths.lane,
         wave: wave.wave,
@@ -639,7 +641,7 @@ export async function launchAgentSession(lanePaths, params) {
       supervisorRunId,
       params?.agent?.agentId || "unknown-agent",
     )
-    : null;
+    : params?.runtimePath || null;
   const result = await launchAgentSessionImpl(
     lanePaths,
     {
@@ -664,6 +666,23 @@ export async function launchAgentSession(lanePaths, params) {
     ...result,
     runtimePath,
   };
+}
+
+export async function cleanupLaunchedRun(
+  lanePaths,
+  run,
+  {
+    terminateRuntimeFn = terminateAgentProcessRuntime,
+    killSessionFn = killTmuxSessionIfExists,
+  } = {},
+) {
+  const runtimeRecord = readRuntimeRecord(run);
+  if (runtimeRecord && typeof runtimeRecord === "object") {
+    await terminateRuntimeFn(runtimeRecord);
+  }
+  if (run?.sessionName) {
+    await killSessionFn(lanePaths.tmuxSocketName, run.sessionName);
+  }
 }
 
 export async function waitForWaveCompletion(

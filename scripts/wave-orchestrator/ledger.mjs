@@ -54,6 +54,7 @@ export function buildSeedWaveLedger({
   contEvalAgentId = DEFAULT_CONT_EVAL_AGENT_ID,
   integrationAgentId = DEFAULT_INTEGRATION_AGENT_ID,
   documentationAgentId = DEFAULT_DOCUMENTATION_AGENT_ID,
+  securityRolePromptPath = null,
 }) {
   const tasks = [];
   for (const agent of wave.agents) {
@@ -69,7 +70,7 @@ export function buildSeedWaveLedger({
             ? "documentation"
             : isDesignAgent(agent)
               ? "design"
-            : isSecurityReviewAgent(agent)
+            : isSecurityReviewAgent(agent, { securityRolePromptPath })
               ? "security"
               : "implementation";
     const runtime = agent.executorResolved
@@ -220,6 +221,7 @@ export function deriveWaveLedger({
   benchmarkCatalogPath = null,
   capabilityAssignments = [],
   dependencySnapshot = null,
+  securityRolePromptPath = null,
 }) {
   const seed = buildSeedWaveLedger({
     lane,
@@ -228,6 +230,7 @@ export function deriveWaveLedger({
     contEvalAgentId,
     integrationAgentId,
     documentationAgentId,
+    securityRolePromptPath,
   });
   const primaryTasks = seed.tasks.map((task) => {
     const agent = wave.agents.find((item) => item.agentId === task.owner);
@@ -343,7 +346,9 @@ export function deriveWaveLedger({
   const docAgent = wave.agents.find((agent) => agent.agentId === documentationAgentId);
   const contEvalAgent = wave.agents.find((agent) => agent.agentId === contEvalAgentId);
   const contQaAgent = wave.agents.find((agent) => agent.agentId === contQaAgentId);
-  const securityAgents = (wave.agents || []).filter((agent) => isSecurityReviewAgent(agent));
+  const securityAgents = (wave.agents || []).filter((agent) =>
+    isSecurityReviewAgent(agent, { securityRolePromptPath }),
+  );
   const contEvalValidation = (() => {
     if (!contEvalAgent) {
       return { ok: true };

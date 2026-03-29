@@ -26,7 +26,7 @@ import { deriveWaveLedger, readWaveLedger } from "./ledger.mjs";
 import { buildDocsQueue, readDocsQueue } from "./docs-queue.mjs";
 import { parseStructuredSignalsFromLog } from "./dashboard-state.mjs";
 import {
-  isSecurityReviewAgent,
+  isSecurityReviewAgentForLane,
   resolveSecurityReviewReportPath,
   isContEvalImplementationOwningAgent,
   resolveWaveRoleBindings,
@@ -214,7 +214,9 @@ export function buildWaveSecuritySummary({
   summariesByAgentId = {},
 }) {
   const createdAt = toIsoTimestamp();
-  const securityAgents = (wave.agents || []).filter((agent) => isSecurityReviewAgent(agent));
+  const securityAgents = (wave.agents || []).filter((agent) =>
+    isSecurityReviewAgentForLane(agent, lanePaths),
+  );
   if (securityAgents.length === 0) {
     return {
       wave: wave.wave,
@@ -377,7 +379,7 @@ function buildIntegrationEvidence({
       isContEvalImplementationOwningAgent(agent, {
         contEvalAgentId: roleBindings.contEvalAgentId,
       });
-    if (isSecurityReviewAgent(agent)) {
+    if (isSecurityReviewAgentForLane(agent, lanePaths)) {
       continue;
     }
     if (agent.agentId === roleBindings.contEvalAgentId) {
@@ -710,6 +712,7 @@ export function buildWaveDerivedState({
     benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
     capabilityAssignments,
     dependencySnapshot,
+    securityRolePromptPath: lanePaths.securityRolePromptPath,
   });
   const inboxDir = waveInboxDir(lanePaths, wave.wave);
   const sharedSummary = compileSharedSummary({

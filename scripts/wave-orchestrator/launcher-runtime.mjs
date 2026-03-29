@@ -40,6 +40,31 @@ export function refreshResolvedSkillsForRun(runInfo, waveDefinition, lanePaths) 
   return runInfo.agent.skillsResolved;
 }
 
+export function applyLaunchResultToRun(
+  runInfo,
+  launchResult,
+  {
+    attempt = null,
+    fallbackExecutorId = null,
+    fallbackSkills = null,
+  } = {},
+) {
+  if (!runInfo || !launchResult) {
+    return runInfo;
+  }
+  if (attempt !== null && attempt !== undefined) {
+    runInfo.lastLaunchAttempt = attempt;
+  }
+  runInfo.lastPromptHash = launchResult.promptHash || null;
+  runInfo.lastContext7 = launchResult.context7 || null;
+  runInfo.lastExecutorId = launchResult.executorId || fallbackExecutorId || null;
+  runInfo.lastSkillProjection = launchResult.skills || fallbackSkills || null;
+  runInfo.runtimePath = launchResult.runtimePath || runInfo.runtimePath || null;
+  runInfo.sessionBackend = launchResult.sessionBackend || runInfo.sessionBackend || "process";
+  runInfo.attachMode = launchResult.attachMode || runInfo.attachMode || "log-tail";
+  return runInfo;
+}
+
 export function collectUnexpectedSessionWarnings(
   lanePaths,
   agentRuns,
@@ -220,6 +245,9 @@ export async function launchAgentSession(
     executionLines.push("rate_attempt=1");
     executionLines.push("status=1");
     executionLines.push('while [ "$rate_attempt" -le "$max_rate_attempts" ]; do');
+    executionLines.push(
+      `  attempt_log_offset=$(wc -c < ${shellQuote(logPath)} 2>/dev/null || echo 0)`,
+    );
     for (const line of launchSpec.invocationLines) {
       executionLines.push(`  ${line}`);
     }
@@ -231,7 +259,7 @@ export async function launchAgentSession(
     executionLines.push("    break");
     executionLines.push("  fi");
     executionLines.push(
-      `  if tail -n 120 ${shellQuote(logPath)} | grep -Eqi '429 Too Many Requests|exceeded retry limit|last status: 429|rate limit'; then`,
+      `  if tail -c +$((attempt_log_offset + 1)) ${shellQuote(logPath)} | grep -Eqi '429 Too Many Requests|exceeded retry limit|last status: 429|rate limit'; then`,
     );
     executionLines.push("    sleep_seconds=$((rate_delay_base * (2 ** (rate_attempt - 1))))");
     executionLines.push(

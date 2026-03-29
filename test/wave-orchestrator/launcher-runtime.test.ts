@@ -93,7 +93,8 @@ describe("launchAgentSession", () => {
     const command = captured[0].command;
     expect(command).toContain("max_rate_attempts=3");
     expect(command).toContain('while [ "$rate_attempt" -le "$max_rate_attempts" ]; do');
-    expect(command).toContain("tail -n 120");
+    expect(command).toContain("attempt_log_offset=$(wc -c <");
+    expect(command).toContain("tail -c +$((attempt_log_offset + 1))");
     expect(command).toContain("grep -Eqi");
     expect(command).toContain("rate-limit detected for A1");
     expect(command).toContain("sleep_seconds=$((rate_delay_base * (2 ** (rate_attempt - 1))))");

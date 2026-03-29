@@ -1209,7 +1209,11 @@ function isImplementationOwningWaveAgent(
   );
 }
 
-function resolveAgentSummaryReportPath(wave, agentId, { contQaAgentId, contEvalAgentId } = {}) {
+function resolveAgentSummaryReportPath(
+  wave,
+  agentId,
+  { contQaAgentId, contEvalAgentId, securityRolePromptPath } = {},
+) {
   if (agentId === contQaAgentId && wave.contQaReportPath) {
     return path.resolve(REPO_ROOT, wave.contQaReportPath);
   }
@@ -1223,7 +1227,7 @@ function resolveAgentSummaryReportPath(wave, agentId, { contQaAgentId, contEvalA
       return path.resolve(REPO_ROOT, designReportPath);
     }
   }
-  if (isSecurityReviewAgent(agent)) {
+  if (isSecurityReviewAgent(agent, { securityRolePromptPath })) {
     const securityReportPath = resolveSecurityReviewReportPath(agent);
     if (securityReportPath) {
       return path.resolve(REPO_ROOT, securityReportPath);
@@ -1240,6 +1244,7 @@ function materializeLiveExecutionSummaryIfMissing({
   logsDir,
   contQaAgentId,
   contEvalAgentId,
+  securityRolePromptPath = null,
 }) {
   const logPath = logsDir ? path.join(logsDir, `wave-${wave.wave}-${agent.slug}.log`) : null;
   const existing = readAgentExecutionSummary(statusPath, {
@@ -1250,6 +1255,7 @@ function materializeLiveExecutionSummaryIfMissing({
     reportPath: resolveAgentSummaryReportPath(wave, agent.agentId, {
       contQaAgentId,
       contEvalAgentId,
+      securityRolePromptPath,
     }),
   });
   if (existing) {
@@ -1265,6 +1271,7 @@ function materializeLiveExecutionSummaryIfMissing({
     reportPath: resolveAgentSummaryReportPath(wave, agent.agentId, {
       contQaAgentId,
       contEvalAgentId,
+      securityRolePromptPath,
     }),
   });
   writeAgentExecutionSummary(statusPath, summary);
@@ -2006,7 +2013,9 @@ function inferAgentRuntimeRole(agent, laneProfile) {
   ) {
     return "design";
   }
-  if (isSecurityReviewAgent(agent)) {
+  if (isSecurityReviewAgent(agent, {
+    securityRolePromptPath: laneProfile?.roles?.securityRolePromptPath,
+  })) {
     return "security";
   }
   const capabilities = Array.isArray(agent?.capabilities)
@@ -2924,6 +2933,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
   const componentThreshold =
     options.requireComponentPromotionsFromWave ??
     laneProfile.validation.requireComponentPromotionsFromWave;
+  const securityRolePromptPath = resolveSecurityRolePromptPath(laneProfile);
 
   const reasons = [];
   const summariesByAgentId = {};
@@ -2980,6 +2990,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       logsDir,
       contQaAgentId,
       contEvalAgentId,
+      securityRolePromptPath,
     });
     summariesByAgentId[agent.agentId] = summary;
     if (agent.agentId === contQaAgentId) {
@@ -3021,7 +3032,7 @@ function analyzeWaveCompletionFromStatusFiles(wave, statusDir, options = {}) {
       }
       continue;
     }
-    if (isSecurityReviewAgent(agent)) {
+    if (isSecurityReviewAgent(agent, { securityRolePromptPath })) {
       const validation = validateSecuritySummary(agent, summary);
       if (!validation.ok) {
         pushWaveCompletionReason(

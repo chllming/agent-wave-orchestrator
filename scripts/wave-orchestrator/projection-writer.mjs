@@ -103,7 +103,13 @@ export function writeWaveAttemptTraceProjection({
   );
   const summariesByAgentId = Object.fromEntries(
     agentRuns
-      .map((run) => [run.agent.agentId, readRunExecutionSummary(run, wave, { mode: "compat" })])
+      .map((run) => [
+        run.agent.agentId,
+        readRunExecutionSummary(run, wave, {
+          mode: "compat",
+          securityRolePromptPath: lanePaths?.securityRolePromptPath,
+        }),
+      ])
       .filter(([, summary]) => summary),
   );
   const traceDir = writeTraceBundle({

@@ -36,7 +36,7 @@ import {
   isDocsOnlyDesignAgent,
   isDesignAgent,
   isImplementationOwningDesignAgent,
-  isSecurityReviewAgent,
+  isSecurityReviewAgentForLane,
   resolveWaveRoleBindings,
 } from "./role-helpers.mjs";
 import {
@@ -283,7 +283,10 @@ export function reconcileFailuresAgainstSharedComponentState(wave, agentRuns, fa
   const summariesByAgentId = Object.fromEntries(
     (agentRuns || []).map((runInfo) => [
       runInfo.agent.agentId,
-      readRunExecutionSummary(runInfo, wave, { mode: "live" }),
+      readRunExecutionSummary(runInfo, wave, {
+        mode: "live",
+        securityRolePromptPath: lanePaths?.securityRolePromptPath,
+      }),
     ]),
   );
   const failureAgentIds = new Set(failures.map((failure) => failure.agentId).filter(Boolean));
@@ -407,7 +410,7 @@ function isClosureAgentId(agent, lanePaths, waveDefinition = null) {
   return (
     resolveWaveRoleBindings(waveDefinition, lanePaths, waveDefinition?.agents).closureAgentIds.includes(
       agent?.agentId,
-    ) || isSecurityReviewAgent(agent)
+    ) || isSecurityReviewAgentForLane(agent, lanePaths)
   );
 }
 
@@ -658,7 +661,7 @@ function resolveRunsForResumePhase(agentRuns, lanePaths, resumePhase, waveDefini
     return runsFromAgentIds(agentRuns, [roleBindings.integrationAgentId]);
   }
   if (resumePhase === "security-review") {
-    return (agentRuns || []).filter((run) => isSecurityReviewAgent(run.agent));
+    return (agentRuns || []).filter((run) => isSecurityReviewAgentForLane(run.agent, lanePaths));
   }
   if (resumePhase === "docs-closure") {
     return runsFromAgentIds(agentRuns, [roleBindings.documentationAgentId]);
@@ -820,7 +823,7 @@ function resolveRelaunchRunsLegacy(agentRuns, failures, derivedState, lanePaths,
   }
   if (derivedState?.ledger?.phase === "security-review") {
     return {
-      runs: agentRuns.filter((run) => isSecurityReviewAgent(run.agent)),
+      runs: agentRuns.filter((run) => isSecurityReviewAgentForLane(run.agent, lanePaths)),
       barrier: null,
     };
   }

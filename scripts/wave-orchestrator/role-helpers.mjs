@@ -105,6 +105,12 @@ export function isSecurityReviewAgent(
   return capabilities.includes("security-review");
 }
 
+export function isSecurityReviewAgentForLane(agent, lanePaths = null) {
+  return isSecurityReviewAgent(agent, {
+    securityRolePromptPath: lanePaths?.securityRolePromptPath,
+  });
+}
+
 export function isDesignAgent(
   agent,
   { designRolePromptPath = DEFAULT_DESIGN_ROLE_PROMPT_PATH } = {},

@@ -145,6 +145,7 @@ import {
   summarizeResolvedSkills,
 } from "./skills.mjs";
 import {
+  applyLaunchResultToRun,
   launchAgentSession as launchAgentSessionImpl,
   refreshResolvedSkillsForRun,
   waitForWaveCompletion as waitForWaveCompletionImpl,
@@ -208,6 +209,7 @@ import {
   monitorResidentOrchestratorSession,
   launchWaveDashboardSession,
   cleanupLaneTmuxSessions,
+  cleanupLaunchedRun,
   pruneDryRunExecutorPreviewDirs,
   recordAttemptState,
   recordWaveRunState,
@@ -322,6 +324,7 @@ function parseArgs(argv) {
   let manifestOutProvided = false;
   let orchestratorBoardProvided = false;
   let executorProvided = false;
+  let terminalSurfaceProvided = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -335,6 +338,7 @@ function parseArgs(argv) {
       options.dryRun = true;
     } else if (arg === "--terminal-surface") {
       options.terminalSurface = normalizeTerminalSurface(argv[++i], "--terminal-surface");
+      terminalSurfaceProvided = true;
     } else if (arg === "--no-dashboard") {
       options.dashboard = false;
     } else if (arg === "--cleanup-sessions") {
@@ -363,9 +367,11 @@ function parseArgs(argv) {
         project: options.project,
         adhocRunId: options.adhocRunId,
       });
-      options.terminalSurface = resolveDefaultTerminalSurface(
-        readProjectProfile({ config, project: options.project }),
-      );
+      if (!terminalSurfaceProvided) {
+        options.terminalSurface = resolveDefaultTerminalSurface(
+          readProjectProfile({ config, project: options.project }),
+        );
+      }
     } else if (arg === "--lane") {
       options.lane = String(argv[++i] || "").trim();
       lanePaths = buildLanePaths(options.lane, {
@@ -1197,6 +1203,7 @@ export async function runLauncherCli(argv) {
             promptPath: path.join(lanePaths.promptsDir, `${safeName}.prompt.md`),
             logPath: path.join(lanePaths.logsDir, `${safeName}.log`),
             statusPath: path.join(lanePaths.statusDir, `${safeName}.status`),
+            runtimePath: path.join(lanePaths.statusDir, `${safeName}.runtime.json`),
             previewPath: path.join(
               lanePaths.executorOverlaysDir,
               `wave-${wave.wave}`,
@@ -1231,7 +1238,12 @@ export async function runLauncherCli(argv) {
           }
           const summariesByAgentId = Object.fromEntries(
             agentRuns
-              .map((run) => [run.agent.agentId, readRunExecutionSummary(run, wave)])
+              .map((run) => [
+                run.agent.agentId,
+                readRunExecutionSummary(run, wave, {
+                  securityRolePromptPath: lanePaths.securityRolePromptPath,
+                }),
+              ])
               .filter(([, summary]) => summary),
           );
           const feedbackRequests = readWaveHumanFeedbackRequests({
@@ -1455,6 +1467,7 @@ export async function runLauncherCli(argv) {
               promptPath: residentOrchestratorRun.promptPath,
               logPath: residentOrchestratorRun.logPath,
               statusPath: residentOrchestratorRun.statusPath,
+              runtimePath: residentOrchestratorRun.runtimePath,
               messageBoardPath: derivedState.messageBoardPath,
               messageBoardSnapshot: derivedState.messageBoardText,
               sharedSummaryPath: derivedState.sharedSummaryPath,
@@ -1468,10 +1481,10 @@ export async function runLauncherCli(argv) {
               agentRateLimitMaxDelaySeconds: options.agentRateLimitMaxDelaySeconds,
               context7Enabled: options.context7Enabled,
             });
-            residentOrchestratorRun.lastPromptHash = launchResult?.promptHash || null;
-            residentOrchestratorRun.lastExecutorId =
-              launchResult?.executorId || residentOrchestratorRun.agent.executorResolved?.id || null;
-            residentOrchestratorRun.runtimePath = launchResult?.runtimePath || null;
+            applyLaunchResultToRun(residentOrchestratorRun, launchResult, {
+              fallbackExecutorId: residentOrchestratorRun.agent.executorResolved?.id || null,
+              fallbackSkills: summarizeResolvedSkills(residentOrchestratorRun.agent.skillsResolved),
+            });
             recordCombinedEvent({
               agentId: residentOrchestratorRun.agent.agentId,
               message: `Resident orchestrator launched via ${launchResult?.sessionBackend || "process"} backend`,
@@ -1618,6 +1631,7 @@ export async function runLauncherCli(argv) {
                 promptPath: runInfo.promptPath,
                 logPath: runInfo.logPath,
                 statusPath: runInfo.statusPath,
+                runtimePath: runInfo.runtimePath,
                 messageBoardPath: runInfo.messageBoardPath,
                 messageBoardSnapshot: runInfo.messageBoardSnapshot || "",
                 sharedSummaryPath: runInfo.sharedSummaryPath,
@@ -1645,12 +1659,11 @@ export async function runLauncherCli(argv) {
                   attempt,
                 },
               });
-              runInfo.lastLaunchAttempt = attempt;
-              runInfo.lastPromptHash = launchResult?.promptHash || null;
-              runInfo.lastContext7 = launchResult?.context7 || null;
-              runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
-              runInfo.lastSkillProjection =
-                launchResult?.skills || summarizeResolvedSkills(runInfo.agent.skillsResolved);
+              applyLaunchResultToRun(runInfo, launchResult, {
+                attempt,
+                fallbackExecutorId: runInfo.agent.executorResolved?.id || null,
+                fallbackSkills: summarizeResolvedSkills(runInfo.agent.skillsResolved),
+              });
               writeLauncherRunProgress({
                 waveNumber: wave.wave,
                 attemptNumber: attempt,
@@ -1736,7 +1749,9 @@ export async function runLauncherCli(argv) {
             timedOut = waitResult.timedOut;
           }
 
-          materializeAgentExecutionSummaries(wave, agentRuns);
+          materializeAgentExecutionSummaries(wave, agentRuns, {
+            securityRolePromptPath: lanePaths.securityRolePromptPath,
+          });
           failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
           refreshDerivedState(attempt);
           const reducerDecisionForProgress = latestReducerSnapshot || refreshReducerSnapshot(attempt);
@@ -1835,7 +1850,9 @@ export async function runLauncherCli(argv) {
               }
             }
             if (failures.length === 0) {
-              const implementationGate = readWaveImplementationGate(wave, agentRuns);
+              const implementationGate = readWaveImplementationGate(wave, agentRuns, {
+                securityRolePromptPath: lanePaths.securityRolePromptPath,
+              });
               if (!implementationGate.ok) {
                 failures = [
                   {
@@ -1959,7 +1976,9 @@ export async function runLauncherCli(argv) {
                     });
                     failures = closureResult.failures;
                     timedOut = timedOut || closureResult.timedOut;
-                    materializeAgentExecutionSummaries(wave, agentRuns);
+                    materializeAgentExecutionSummaries(wave, agentRuns, {
+                      securityRolePromptPath: lanePaths.securityRolePromptPath,
+                    });
                     failures = annotateFailuresWithRecoveryHints(failures, agentRuns);
                     refreshDerivedState(attempt);
                   }
@@ -2535,7 +2554,7 @@ export async function runLauncherCli(argv) {
         });
       } finally {
         if (residentOrchestratorRun) {
-          await killTmuxSessionIfExists(lanePaths.tmuxSocketName, residentOrchestratorRun.sessionName);
+          await cleanupLaunchedRun(lanePaths, residentOrchestratorRun);
         }
         if (terminalsAppended && !options.keepTerminals) {
           removeTerminalEntries(lanePaths.terminalsPath, terminalEntries);

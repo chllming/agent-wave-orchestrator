@@ -13,7 +13,7 @@ import {
 import {
   isDesignAgent,
   isDocsOnlyDesignAgent,
-  isSecurityReviewAgent,
+  isSecurityReviewAgentForLane,
 } from "./role-helpers.mjs";
 import { ensureDirectory, parseNonNegativeInt } from "./shared.mjs";
 
@@ -196,7 +196,7 @@ export function resolveRetryOverrideAgentIds(waveDefinition, lanePaths, override
         (agent) =>
           agent?.agentId &&
           !closureAgentIds.has(agent.agentId) &&
-          !isSecurityReviewAgent(agent) &&
+          !isSecurityReviewAgentForLane(agent, lanePaths) &&
           !isDocsOnlyDesignAgent(agent),
       )
       .map((agent) => agent.agentId);
@@ -211,7 +211,7 @@ export function resolveRetryOverrideAgentIds(waveDefinition, lanePaths, override
   }
   if (resumePhase === "security-review") {
     return agents
-      .filter((agent) => isSecurityReviewAgent(agent))
+      .filter((agent) => isSecurityReviewAgentForLane(agent, lanePaths))
       .map((agent) => agent.agentId);
   }
   if (resumePhase === "docs-closure") {

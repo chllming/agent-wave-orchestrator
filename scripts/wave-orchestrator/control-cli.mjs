@@ -42,7 +42,7 @@ import {
 import { readWaveRelaunchPlanSnapshot, readWaveRetryOverride, resolveRetryOverrideAgentIds, writeWaveRetryOverride, clearWaveRetryOverride } from "./retry-control.mjs";
 import { flushWaveControlQueue, readWaveControlQueueState } from "./wave-control-client.mjs";
 import { readAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
-import { isContEvalReportOnlyAgent, isSecurityReviewAgent } from "./role-helpers.mjs";
+import { isContEvalReportOnlyAgent, isSecurityReviewAgentForLane } from "./role-helpers.mjs";
 import {
   buildSignalStatusLine,
   syncWaveSignalProjections,
@@ -367,7 +367,8 @@ function buildLogicalAgents({
       proofRegistry || { entries: [] },
     );
     const proofValidation =
-      !isSecurityReviewAgent(agent) && !isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId })
+      !isSecurityReviewAgentForLane(agent, lanePaths) &&
+      !isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId })
         ? validateImplementationSummary(agent, summary ? summary : null)
         : { ok: statusRecord?.code === 0, statusCode: statusRecord?.code === 0 ? "pass" : "pending" };
     const targetedTasks = tasks.filter(
@@ -386,7 +387,7 @@ function buildLogicalAgents({
     const satisfiedByStatus =
       statusRecord?.code === 0 &&
       (proofValidation.ok ||
-        isSecurityReviewAgent(agent) ||
+        isSecurityReviewAgentForLane(agent, lanePaths) ||
         isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId }));
     let state = "planned";
     let reason = "";
@@ -405,7 +406,7 @@ function buildLogicalAgents({
         lanePaths.integrationAgentId || "A8",
         lanePaths.documentationAgentId || "A9",
         lanePaths.contQaAgentId || "A0",
-      ].includes(agent.agentId) || isSecurityReviewAgent(agent)
+      ].includes(agent.agentId) || isSecurityReviewAgentForLane(agent, lanePaths)
         ? "closed"
         : "satisfied";
       reason = "Completed wave preserves the latest satisfied agent state.";
@@ -426,7 +427,7 @@ function buildLogicalAgents({
         lanePaths.integrationAgentId || "A8",
         lanePaths.documentationAgentId || "A9",
         lanePaths.contQaAgentId || "A0",
-      ].includes(agent.agentId) || isSecurityReviewAgent(agent)
+      ].includes(agent.agentId) || isSecurityReviewAgentForLane(agent, lanePaths)
         ? "closed"
         : "satisfied";
       reason = "Latest attempt satisfied current control-plane state.";

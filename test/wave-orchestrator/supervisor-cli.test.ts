@@ -7,6 +7,7 @@ import { buildLanePaths, REPO_ROOT } from "../../scripts/wave-orchestrator/share
 import {
   buildSupervisorPaths,
   findSupervisorRunState,
+  reconcileSupervisorRun,
   submitLauncherRun,
   runSupervisorLoop,
 } from "../../scripts/wave-orchestrator/supervisor-cli.mjs";
@@ -442,6 +443,184 @@ describe("supervisor-cli", () => {
     expect(events).toContain("\"type\":\"launcher-started\"");
     expect(events).toContain("\"resumed\":true");
   }, 30000);
+
+  it("resumes the remaining explicit wave range instead of truncating a multi-wave submission", async () => {
+    const config = loadWaveConfig();
+    const lane = `test-supervisor-resume-range-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
+    trackCleanup(lanePaths.stateDir);
+    const supervisorPaths = buildSupervisorPaths(lanePaths);
+    const runId = `run-${Date.now()}-resume-range`;
+    const runDir = path.join(supervisorPaths.runsDir, runId);
+    fs.mkdirSync(path.join(runDir, "agents"), { recursive: true });
+    const startedAt = new Date().toISOString();
+    fs.writeFileSync(
+      path.join(runDir, "state.json"),
+      JSON.stringify(
+        {
+          runId,
+          project: config.defaultProject,
+          lane,
+          adhocRunId: null,
+          status: "running",
+          submittedAt: startedAt,
+          startedAt,
+          updatedAt: startedAt,
+          launcherArgs: [
+            "--project",
+            config.defaultProject,
+            "--lane",
+            lane,
+            "--dry-run",
+            "--no-dashboard",
+            "--start-wave",
+            "1",
+            "--end-wave",
+            "3",
+          ],
+          launcherPid: 999996,
+          activeWave: 2,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "launcher-progress.json"),
+      JSON.stringify(
+        {
+          runId,
+          waveNumber: 2,
+          attemptNumber: 1,
+          phase: "attempt-running",
+          selectedAgentIds: ["A1"],
+          launchedAgentIds: ["A1"],
+          completedAgentIds: [],
+          finalized: false,
+          finalDisposition: null,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const resumedState = reconcileSupervisorRun(
+      JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8")),
+      path.join(runDir, "state.json"),
+    );
+    try {
+      expect(resumedState.status).toBe("running");
+      expect(resumedState.launcherArgs).toEqual([
+        "--project",
+        config.defaultProject,
+        "--lane",
+        lane,
+        "--dry-run",
+        "--no-dashboard",
+        "--start-wave",
+        "2",
+        "--end-wave",
+        "3",
+        "--resume-control-state",
+      ]);
+    } finally {
+      try {
+        process.kill(resumedState.launcherPid, "SIGKILL");
+      } catch {
+        // no-op
+      }
+    }
+  });
+
+  it("does not recover auto-next runs from canonical run-state before the remaining waves execute", () => {
+    const config = loadWaveConfig();
+    const lane = `test-supervisor-auto-next-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
+    trackCleanup(lanePaths.stateDir);
+    const supervisorPaths = buildSupervisorPaths(lanePaths);
+    const runId = `run-${Date.now()}-auto-next`;
+    const runDir = path.join(supervisorPaths.runsDir, runId);
+    fs.mkdirSync(path.join(runDir, "agents"), { recursive: true });
+    const startedAt = new Date().toISOString();
+    fs.writeFileSync(
+      path.join(runDir, "state.json"),
+      JSON.stringify(
+        {
+          runId,
+          project: config.defaultProject,
+          lane,
+          adhocRunId: null,
+          status: "running",
+          submittedAt: startedAt,
+          startedAt,
+          updatedAt: startedAt,
+          launcherArgs: [
+            "--project",
+            config.defaultProject,
+            "--lane",
+            lane,
+            "--dry-run",
+            "--no-dashboard",
+            "--auto-next",
+          ],
+          launcherPid: 999995,
+          activeWave: 1,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "launcher-progress.json"),
+      JSON.stringify(
+        {
+          runId,
+          waveNumber: 1,
+          attemptNumber: 1,
+          phase: "wave-completed",
+          selectedAgentIds: [],
+          launchedAgentIds: [],
+          completedAgentIds: ["A1"],
+          finalized: false,
+          finalDisposition: null,
+          updatedAt: startedAt,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const resumedState = reconcileSupervisorRun(
+      JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8")),
+      path.join(runDir, "state.json"),
+    );
+    try {
+      expect(resumedState.status).toBe("running");
+      expect(resumedState.recoveryState).toBe("resuming");
+      expect(resumedState.recoveryState).not.toBe("recovered-from-run-state");
+      expect(resumedState.launcherArgs).toEqual([
+        "--project",
+        config.defaultProject,
+        "--lane",
+        lane,
+        "--dry-run",
+        "--no-dashboard",
+        "--auto-next",
+        "--resume-control-state",
+      ]);
+    } finally {
+      try {
+        process.kill(resumedState.launcherPid, "SIGKILL");
+      } catch {
+        // no-op
+      }
+    }
+  });
 
   it("submits launcher flags without rejecting normal launch options", () => {
     const config = loadWaveConfig();

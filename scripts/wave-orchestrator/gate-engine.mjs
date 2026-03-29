@@ -84,7 +84,13 @@ function readIntegrationContradictionBarrier(derivedState, agentId, logPath) {
   };
 }
 
-function resolveRunReportPath(wave, runInfo) {
+function isSecurityReviewAgentWithOptions(agent, options = {}) {
+  return isSecurityReviewAgent(agent, {
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
+}
+
+function resolveRunReportPath(wave, runInfo, options = {}) {
   if (!wave || !runInfo?.agent) {
     return null;
   }
@@ -94,7 +100,7 @@ function resolveRunReportPath(wave, runInfo) {
   if (runInfo.agent.agentId === (wave.contEvalAgentId || "E0") && wave.contEvalReportPath) {
     return path.resolve(REPO_ROOT, wave.contEvalReportPath);
   }
-  if (isSecurityReviewAgent(runInfo.agent)) {
+  if (isSecurityReviewAgentWithOptions(runInfo.agent, options)) {
     const securityReportPath = resolveSecurityReviewReportPath(runInfo.agent);
     return securityReportPath ? path.resolve(REPO_ROOT, securityReportPath) : null;
   }
@@ -132,12 +138,12 @@ function validateEnvelopeForRun(runInfo, envelope, options = {}) {
   };
 }
 
-export function materializeAgentExecutionSummaryForRun(wave, runInfo) {
+export function materializeAgentExecutionSummaryForRun(wave, runInfo, options = {}) {
   const statusRecord = readStatusRecordIfPresent(runInfo.statusPath);
   if (!statusRecord) {
     return null;
   }
-  const reportPath = resolveRunReportPath(wave, runInfo);
+  const reportPath = resolveRunReportPath(wave, runInfo, options);
   const summary = buildAgentExecutionSummary({
     agent: runInfo.agent,
     statusRecord,
@@ -189,7 +195,7 @@ export function materializeAgentExecutionSummaryForRun(wave, runInfo) {
 export function readRunResultEnvelope(runInfo, wave = null, options = {}) {
   const mode = normalizeReadMode(options.mode);
   const statusRecord = runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null;
-  const reportPath = wave ? resolveRunReportPath(wave, runInfo) : null;
+  const reportPath = wave ? resolveRunReportPath(wave, runInfo, options) : null;
   const runEnvelopeContext = resolveRunEnvelopeContext(runInfo, wave, { statusRecord });
   const envelopeReadOptions = buildEnvelopeReadOptions(runInfo, wave, statusRecord, reportPath);
   const synthesizeFromSummary = (summary, source) => {
@@ -285,7 +291,7 @@ export function readRunResultEnvelope(runInfo, wave = null, options = {}) {
     runInfo?.logPath &&
     fs.existsSync(runInfo.statusPath)
   ) {
-    materializeAgentExecutionSummaryForRun(wave, runInfo);
+    materializeAgentExecutionSummaryForRun(wave, runInfo, options);
     const envelope =
       readAgentResultEnvelopeForRun(runInfo, wave, { statusRecord }) ||
       readAgentResultEnvelope(runInfo.statusPath);
@@ -313,9 +319,12 @@ export function readRunExecutionSummary(runInfo, wave = null, options = {}) {
   const applyProofRegistry = (summary) =>
     runInfo?.proofRegistry ? augmentSummaryWithProofRegistry(runInfo.agent, summary, runInfo.proofRegistry) : summary;
   const statusRecord = runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null;
-  const reportPath = wave ? resolveRunReportPath(wave, runInfo) : null;
+  const reportPath = wave ? resolveRunReportPath(wave, runInfo, options) : null;
   const envelopeReadOptions = buildEnvelopeReadOptions(runInfo, wave, statusRecord, reportPath);
-  const envelopeResult = readRunResultEnvelope(runInfo, wave, { mode });
+  const envelopeResult = readRunResultEnvelope(runInfo, wave, {
+    mode,
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
   if (envelopeResult?.valid && envelopeResult.envelope) {
     return applyProofRegistry(
       projectLegacySummaryFromEnvelope(envelopeResult.envelope, envelopeReadOptions),
@@ -348,9 +357,12 @@ export function readRunExecutionSummary(runInfo, wave = null, options = {}) {
   return null;
 }
 
-export function materializeAgentExecutionSummaries(wave, agentRuns) {
+export function materializeAgentExecutionSummaries(wave, agentRuns, options = {}) {
   return Object.fromEntries(
-    agentRuns.map((runInfo) => [runInfo.agent.agentId, materializeAgentExecutionSummaryForRun(wave, runInfo)]),
+    agentRuns.map((runInfo) => [
+      runInfo.agent.agentId,
+      materializeAgentExecutionSummaryForRun(wave, runInfo, options),
+    ]),
   );
 }
 
@@ -369,7 +381,10 @@ export function readWaveContQaGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const envelopeResult = readRunResultEnvelope(contQaRun, wave, { mode });
+  const envelopeResult = readRunResultEnvelope(contQaRun, wave, {
+    mode,
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
   const summary = envelopeResult.valid
     ? projectLegacySummaryFromEnvelope(
         envelopeResult.envelope,
@@ -377,10 +392,13 @@ export function readWaveContQaGate(wave, agentRuns, options = {}) {
           contQaRun,
           wave,
           contQaRun?.statusPath ? readStatusRecordIfPresent(contQaRun.statusPath) : null,
-          resolveRunReportPath(wave, contQaRun),
+          resolveRunReportPath(wave, contQaRun, options),
         ),
       )
-    : readRunExecutionSummary(contQaRun, wave, { mode });
+    : readRunExecutionSummary(contQaRun, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
   if (summary) {
     const validation = validateContQaSummary(contQaRun.agent, summary, { mode });
     return {
@@ -461,7 +479,10 @@ export function readWaveContEvalGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const envelopeResult = readRunResultEnvelope(contEvalRun, wave, { mode });
+  const envelopeResult = readRunResultEnvelope(contEvalRun, wave, {
+    mode,
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
   const summary = envelopeResult.valid
     ? projectLegacySummaryFromEnvelope(
         envelopeResult.envelope,
@@ -469,10 +490,13 @@ export function readWaveContEvalGate(wave, agentRuns, options = {}) {
           contEvalRun,
           wave,
           contEvalRun?.statusPath ? readStatusRecordIfPresent(contEvalRun.statusPath) : null,
-          resolveRunReportPath(wave, contEvalRun),
+          resolveRunReportPath(wave, contEvalRun, options),
         ),
       )
-    : readRunExecutionSummary(contEvalRun, wave, { mode });
+    : readRunExecutionSummary(contEvalRun, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
   if (summary) {
     const validation = validateContEvalSummary(contEvalRun.agent, summary, {
       mode,
@@ -522,11 +546,14 @@ export function readWaveImplementationGate(wave, agentRuns, options = {}) {
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(runInfo.agent.agentId) ||
       isContEvalReportOnlyAgent(runInfo.agent, { contEvalAgentId }) ||
       isDocsOnlyDesignAgent(runInfo.agent) ||
-      isSecurityReviewAgent(runInfo.agent)
+      isSecurityReviewAgentWithOptions(runInfo.agent, options)
     ) {
       continue;
     }
-    const envelopeResult = readRunResultEnvelope(runInfo, wave, { mode });
+    const envelopeResult = readRunResultEnvelope(runInfo, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
     if (mode === "live" && !envelopeResult.valid) {
       return {
         ok: false,
@@ -548,10 +575,13 @@ export function readWaveImplementationGate(wave, agentRuns, options = {}) {
             runInfo,
             wave,
             runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null,
-            resolveRunReportPath(wave, runInfo),
+            resolveRunReportPath(wave, runInfo, options),
           ),
         )
-      : readRunExecutionSummary(runInfo, wave, { mode });
+      : readRunExecutionSummary(runInfo, wave, {
+        mode,
+        securityRolePromptPath: options.securityRolePromptPath,
+      });
     const validation = validateImplementationSummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -585,7 +615,10 @@ export function readWaveDesignGate(wave, agentRuns, options = {}) {
     };
   }
   for (const runInfo of designRuns) {
-    const envelopeResult = readRunResultEnvelope(runInfo, wave, { mode });
+    const envelopeResult = readRunResultEnvelope(runInfo, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
     if (mode === "live" && !envelopeResult.valid) {
       return {
         ok: false,
@@ -607,10 +640,13 @@ export function readWaveDesignGate(wave, agentRuns, options = {}) {
             runInfo,
             wave,
             runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null,
-            resolveRunReportPath(wave, runInfo),
+            resolveRunReportPath(wave, runInfo, options),
           ),
         )
-      : readRunExecutionSummary(runInfo, wave, { mode });
+      : readRunExecutionSummary(runInfo, wave, {
+        mode,
+        securityRolePromptPath: options.securityRolePromptPath,
+      });
     const validation = validateDesignSummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -709,7 +745,10 @@ export function readWaveComponentGate(wave, agentRuns, options = {}) {
   const summariesByAgentId = Object.fromEntries(
     agentRuns.map((runInfo) => [
       runInfo.agent.agentId,
-      readRunExecutionSummary(runInfo, wave, { mode }),
+      readRunExecutionSummary(runInfo, wave, {
+        mode,
+        securityRolePromptPath: options.securityRolePromptPath,
+      }),
     ]),
   );
   const validation = validateWaveComponentPromotions(wave, summariesByAgentId, options);
@@ -793,7 +832,10 @@ export function readWaveDocumentationGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const envelopeResult = readRunResultEnvelope(docRun, wave, { mode });
+  const envelopeResult = readRunResultEnvelope(docRun, wave, {
+    mode,
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
   if (mode === "live" && !envelopeResult.valid) {
     return {
       ok: false,
@@ -815,10 +857,13 @@ export function readWaveDocumentationGate(wave, agentRuns, options = {}) {
           docRun,
           wave,
           docRun?.statusPath ? readStatusRecordIfPresent(docRun.statusPath) : null,
-          resolveRunReportPath(wave, docRun),
+          resolveRunReportPath(wave, docRun, options),
         ),
       )
-    : readRunExecutionSummary(docRun, wave, { mode });
+    : readRunExecutionSummary(docRun, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
   const validation = validateDocumentationClosureSummary(docRun.agent, summary);
   return {
     ok: validation.ok,
@@ -831,7 +876,9 @@ export function readWaveDocumentationGate(wave, agentRuns, options = {}) {
 
 export function readWaveSecurityGate(wave, agentRuns, options = {}) {
   const mode = normalizeReadMode(options.mode || "live");
-  const securityRuns = (agentRuns || []).filter((run) => isSecurityReviewAgent(run.agent));
+  const securityRuns = (agentRuns || []).filter((run) =>
+    isSecurityReviewAgentWithOptions(run.agent, options),
+  );
   if (securityRuns.length === 0) {
     return {
       ok: true,
@@ -843,7 +890,10 @@ export function readWaveSecurityGate(wave, agentRuns, options = {}) {
   }
   const concernAgentIds = [];
   for (const runInfo of securityRuns) {
-    const envelopeResult = readRunResultEnvelope(runInfo, wave, { mode });
+    const envelopeResult = readRunResultEnvelope(runInfo, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
     if (mode === "live" && !envelopeResult.valid) {
       return {
         ok: false,
@@ -865,10 +915,13 @@ export function readWaveSecurityGate(wave, agentRuns, options = {}) {
             runInfo,
             wave,
             runInfo?.statusPath ? readStatusRecordIfPresent(runInfo.statusPath) : null,
-            resolveRunReportPath(wave, runInfo),
+            resolveRunReportPath(wave, runInfo, options),
           ),
         )
-      : readRunExecutionSummary(runInfo, wave, { mode });
+      : readRunExecutionSummary(runInfo, wave, {
+        mode,
+        securityRolePromptPath: options.securityRolePromptPath,
+      });
     const validation = validateSecuritySummary(runInfo.agent, summary);
     if (!validation.ok) {
       return {
@@ -923,7 +976,10 @@ export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
       logPath: null,
     };
   }
-  const envelopeResult = readRunResultEnvelope(integrationRun, wave, { mode });
+  const envelopeResult = readRunResultEnvelope(integrationRun, wave, {
+    mode,
+    securityRolePromptPath: options.securityRolePromptPath,
+  });
   if (mode === "live" && !envelopeResult.valid) {
     return {
       ok: false,
@@ -945,10 +1001,13 @@ export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
           integrationRun,
           wave,
           integrationRun?.statusPath ? readStatusRecordIfPresent(integrationRun.statusPath) : null,
-          resolveRunReportPath(wave, integrationRun),
+          resolveRunReportPath(wave, integrationRun, options),
         ),
       )
-    : readRunExecutionSummary(integrationRun, wave, { mode });
+    : readRunExecutionSummary(integrationRun, wave, {
+      mode,
+      securityRolePromptPath: options.securityRolePromptPath,
+    });
   const validation = validateIntegrationSummary(integrationRun.agent, summary);
   return {
     ok: validation.ok,
@@ -1105,7 +1164,10 @@ export function buildGateSnapshot({
     (agentRuns || [])
       .map((runInfo) => [
         runInfo.agent.agentId,
-        readRunExecutionSummary(runInfo, wave, { mode: validationMode }),
+        readRunExecutionSummary(runInfo, wave, {
+          mode: validationMode,
+          securityRolePromptPath: lanePaths?.securityRolePromptPath,
+        }),
       ])
       .filter(([, summary]) => Boolean(summary)),
   );
@@ -1127,6 +1189,7 @@ export function buildGateSnapshot({
       contEvalAgentId: lanePaths?.contEvalAgentId,
       integrationAgentId: lanePaths?.integrationAgentId,
       documentationAgentId: lanePaths?.documentationAgentId,
+      securityRolePromptPath: lanePaths?.securityRolePromptPath,
       requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
       laneProfile: lanePaths?.laneProfile,
       benchmarkCatalogPath: lanePaths?.laneProfile?.paths?.benchmarkCatalogPath,
@@ -1157,7 +1220,7 @@ export function readWaveImplementationGatePure(wave, agentResults, options = {})
       [contQaAgentId, integrationAgentId, documentationAgentId].includes(agent.agentId) ||
       isContEvalReportOnlyAgent(agent, { contEvalAgentId }) ||
       isDocsOnlyDesignAgent(agent) ||
-      isSecurityReviewAgent(agent)
+      isSecurityReviewAgentWithOptions(agent, options)
     ) {
       continue;
     }
@@ -1348,7 +1411,9 @@ export function readWaveDocumentationGatePure(wave, agentResults, options = {}) 
 
 export function readWaveSecurityGatePure(wave, agentResults, options = {}) {
   const agents = Array.isArray(wave.agents) ? wave.agents : [];
-  const securityAgents = agents.filter((agent) => isSecurityReviewAgent(agent));
+  const securityAgents = agents.filter((agent) =>
+    isSecurityReviewAgentWithOptions(agent, options),
+  );
   if (securityAgents.length === 0) {
     return { ok: true, agentId: null, statusCode: "pass",
       detail: "No security reviewer declared for this wave.", logPath: null };
@@ -1419,6 +1484,7 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   const implementationGate = readWaveImplementationGatePure(wave, agentResults, {
     contQaAgentId: laneConfig.contQaAgentId, contEvalAgentId: laneConfig.contEvalAgentId,
     integrationAgentId: laneConfig.integrationAgentId, documentationAgentId: laneConfig.documentationAgentId,
+    securityRolePromptPath: laneConfig.securityRolePromptPath,
   });
   const componentGate = readWaveComponentGatePure(wave, agentResults, { laneProfile: laneConfig.laneProfile });
   const integrationMarkerGate = readWaveIntegrationGatePure(wave, agentResults, {
@@ -1459,7 +1525,9 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   const contEvalGate = readWaveContEvalGatePure(wave, agentResults, {
     contEvalAgentId: laneConfig.contEvalAgentId, mode: validationMode,
     evalTargets: wave.evalTargets, benchmarkCatalogPath: laneConfig.benchmarkCatalogPath });
-  const securityGate = readWaveSecurityGatePure(wave, agentResults);
+  const securityGate = readWaveSecurityGatePure(wave, agentResults, {
+    securityRolePromptPath: laneConfig.securityRolePromptPath,
+  });
   const contQaGate = readWaveContQaGatePure(wave, agentResults, {
     contQaAgentId: laneConfig.contQaAgentId, mode: validationMode });
   const infraGate = readWaveInfraGatePure(wave, agentResults);

@@ -163,6 +163,15 @@ function parseWaveBoundsFromLauncherArgs(launcherArgs = []) {
   };
 }
 
+function parseLauncherWaveSelection(launcherArgs = []) {
+  const { startWave, endWave } = parseWaveBoundsFromLauncherArgs(launcherArgs);
+  return {
+    startWave,
+    endWave,
+    autoNext: launcherArgsInclude(launcherArgs, "--auto-next"),
+  };
+}
+
 function deriveActiveWaveFromLauncherArgs(launcherArgs = []) {
   const { startWave, endWave } = parseWaveBoundsFromLauncherArgs(launcherArgs);
   if (Number.isFinite(startWave) && Number.isFinite(endWave) && startWave === endWave) {
@@ -176,12 +185,12 @@ function launcherArgsInclude(launcherArgs = [], flag) {
 }
 
 function selectedWavesFromLauncherArgs(launcherArgs = []) {
-  const { startWave, endWave } = parseWaveBoundsFromLauncherArgs(launcherArgs);
+  const { startWave, endWave, autoNext } = parseLauncherWaveSelection(launcherArgs);
+  if (autoNext) {
+    return [];
+  }
   if (Number.isFinite(startWave) && Number.isFinite(endWave) && endWave >= startWave) {
     return Array.from({ length: endWave - startWave + 1 }, (_, index) => startWave + index);
-  }
-  if (Number.isFinite(startWave) && !launcherArgsInclude(launcherArgs, "--auto-next")) {
-    return [startWave];
   }
   return [];
 }
@@ -289,6 +298,8 @@ function stripLauncherArgsForResume(launcherArgs = []) {
 }
 
 function buildResumedLauncherArgs(state, progressJournal) {
+  const baseLauncherArgs = Array.isArray(state?.launcherArgs) ? state.launcherArgs : [];
+  const { startWave, endWave, autoNext } = parseLauncherWaveSelection(baseLauncherArgs);
   const waveNumber = Number.isFinite(Number(progressJournal?.waveNumber))
     ? Number(progressJournal.waveNumber)
     : Number.isFinite(Number(state?.activeWave))
@@ -297,14 +308,25 @@ function buildResumedLauncherArgs(state, progressJournal) {
   if (!Number.isFinite(waveNumber)) {
     return null;
   }
-  return [
-    ...stripLauncherArgsForResume(Array.isArray(state?.launcherArgs) ? state.launcherArgs : []),
-    "--start-wave",
-    String(waveNumber),
-    "--end-wave",
-    String(waveNumber),
-    "--resume-control-state",
+  if (Number.isFinite(endWave) && endWave < waveNumber) {
+    return null;
+  }
+  const resumedArgs = [
+    ...stripLauncherArgsForResume(baseLauncherArgs),
   ];
+  if (autoNext) {
+    resumedArgs.push("--auto-next");
+    if (Number.isFinite(endWave)) {
+      resumedArgs.push("--end-wave", String(endWave));
+    }
+  } else {
+    resumedArgs.push("--start-wave", String(waveNumber));
+    if (Number.isFinite(endWave)) {
+      resumedArgs.push("--end-wave", String(endWave));
+    }
+  }
+  resumedArgs.push("--resume-control-state");
+  return resumedArgs;
 }
 
 export function startSupervisorRun(

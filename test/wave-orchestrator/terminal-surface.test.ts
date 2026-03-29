@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
+import { DEFAULT_PROJECT_ID } from "../../scripts/wave-orchestrator/config.mjs";
 import { PACKAGE_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
 
 const tempDirs = [];
@@ -28,6 +29,31 @@ function runWaveCli(args, cwd) {
     },
     timeout: 90000,
   });
+}
+
+function readDefaultProject(repoDir) {
+  const configPath = path.join(repoDir, "wave.config.json");
+  return JSON.parse(fs.readFileSync(configPath, "utf8")).defaultProject || DEFAULT_PROJECT_ID;
+}
+
+function listRuntimeFiles(rootDir) {
+  const found = [];
+  const stack = [rootDir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || !fs.existsSync(current)) {
+      continue;
+    }
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const entryPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(entryPath);
+      } else if (entry.name.endsWith(".runtime.json")) {
+        found.push(entryPath);
+      }
+    }
+  }
+  return found;
 }
 
 function writeLocalExecutorWave(repoDir) {
@@ -203,13 +229,19 @@ describe("terminal surfaces", () => {
     );
     expect(vscodeResult.status).toBe(0);
     expect(fs.existsSync(path.join(vscodeRepo, ".vscode", "terminals.json"))).toBe(true);
+    expect(listRuntimeFiles(path.join(vscodeRepo, ".tmp")).length).toBeGreaterThan(0);
 
     const tmuxRepo = makeTempRepo();
     expect(runWaveCli(["init"], tmuxRepo).status).toBe(0);
     writeLocalExecutorWave(tmuxRepo);
+    const defaultProject = readDefaultProject(tmuxRepo);
     const tmuxResult = runWaveCli(
       [
         "launch",
+        "--terminal-surface",
+        "tmux",
+        "--project",
+        defaultProject,
         "--lane",
         "main",
         "--start-wave",
@@ -220,13 +252,12 @@ describe("terminal surfaces", () => {
         "--agent-launch-stagger-ms",
         "0",
         "--keep-terminals",
-        "--terminal-surface",
-        "tmux",
       ],
       tmuxRepo,
     );
     expect(tmuxResult.status).toBe(0);
     expect(fs.existsSync(path.join(tmuxRepo, ".vscode", "terminals.json"))).toBe(false);
+    expect(listRuntimeFiles(path.join(tmuxRepo, ".tmp")).length).toBeGreaterThan(0);
 
     const noneRepo = makeTempRepo();
     expect(runWaveCli(["init"], noneRepo).status).toBe(0);

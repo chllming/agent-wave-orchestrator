@@ -24,12 +24,14 @@ import {
 } from "../../scripts/wave-orchestrator/retry-engine.mjs";
 import {
   acquireLauncherLock,
+  cleanupLaunchedRun,
   collectUnexpectedSessionWarnings,
   markLauncherFailed,
   reconcileStaleLauncherArtifacts,
   releaseLauncherLock,
 } from "../../scripts/wave-orchestrator/session-supervisor.mjs";
 import {
+  planClosureStages,
   readWaveInfraGate,
   runClosureSweepPhase,
   runClosureSweepPhase as runClosureSweepEnginePhase,
@@ -103,6 +105,7 @@ function makeLanePaths(dir) {
     integrationAgentId: "A8",
     documentationAgentId: "A9",
     contQaAgentId: "A0",
+    securityRolePromptPath: "docs/agents/wave-security-role.md",
     laneProfile: {
       runtimePolicy: {
         runtimeMixTargets: {},
@@ -536,6 +539,63 @@ describe("readWaveSecurityGate", () => {
       ok: false,
       agentId: "A7",
       statusCode: "security-blocked",
+    });
+  });
+
+  it("recognizes security reviewers declared through a custom lane security prompt path", () => {
+    const dir = makeTempDir();
+    const reportPath = path.join(dir, "wave-0-security-review.md");
+    const logPath = path.join(dir, "wave-0-a7.log");
+    const statusPath = path.join(dir, "wave-0-a7.status");
+
+    fs.writeFileSync(reportPath, "# Security Review\n", "utf8");
+    fs.writeFileSync(
+      logPath,
+      "[wave-security] state=clear findings=0 approvals=0 detail=custom-security-role\n",
+      "utf8",
+    );
+    fs.writeFileSync(
+      statusPath,
+      JSON.stringify({ code: 0, promptHash: "hash", attempt: 1 }, null, 2),
+      "utf8",
+    );
+    const runInfo = makeRunInfo("A7", statusPath, logPath, {
+      wave: 0,
+      agent: {
+        title: "Security Engineer",
+        rolePromptPaths: ["docs/agents/custom-security-role.md"],
+        ownedPaths: [path.relative(process.cwd(), reportPath)],
+      },
+    });
+    writeAgentResultEnvelopeForRun(
+      runInfo,
+      { wave: 0, lane: "main" },
+      buildAgentResultEnvelope(
+        { agentId: "A7", role: "security" },
+        {
+          agentId: "A7",
+          security: {
+            state: "clear",
+            findings: 0,
+            approvals: 0,
+            detail: "custom-security-role",
+          },
+        },
+      ),
+      { statusRecord: { attempt: 1 } },
+    );
+
+    expect(
+      readWaveSecurityGate(
+        {
+          wave: 0,
+        },
+        [runInfo],
+        { securityRolePromptPath: "docs/agents/custom-security-role.md" },
+      ),
+    ).toMatchObject({
+      ok: true,
+      statusCode: "pass",
     });
   });
 });
@@ -3632,6 +3692,117 @@ describe("selectReusablePreCompletedAgentIds", () => {
       ),
     ).toEqual(["A1"]);
   });
+
+  it("treats custom security reviewers as closure agents for reuse selection", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.securityRolePromptPath = "docs/agents/custom-security-role.md";
+    const a1StatusPath = path.join(dir, "wave-0-a1.status");
+    const a7StatusPath = path.join(dir, "wave-0-a7.status");
+    const a1 = {
+      agentId: "A1",
+      prompt: "Implement the runtime fix.",
+    };
+    const a7 = {
+      agentId: "A7",
+      title: "Security Engineer",
+      rolePromptPaths: ["docs/agents/custom-security-role.md"],
+      ownedPaths: ["docs/security-review.md"],
+      prompt: "Review the implementation for security risks.",
+    };
+
+    fs.writeFileSync(
+      a1StatusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(a1),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      a7StatusPath,
+      JSON.stringify(
+        {
+          code: 0,
+          promptHash: hashAgentPromptFingerprint(a7),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    expect(
+      Array.from(
+        selectReusablePreCompletedAgentIds(
+          [
+            { agent: a1, statusPath: a1StatusPath },
+            { agent: a7, statusPath: a7StatusPath },
+          ],
+          lanePaths,
+          {
+            wave: {
+              agents: [a1, a7],
+            },
+          },
+        ),
+      ),
+    ).toEqual(["A1"]);
+  });
+});
+
+describe("cleanupLaunchedRun", () => {
+  it("terminates process-backed runtime records before tmux cleanup", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    const runtimePath = path.join(dir, "wave-0-orch.runtime.json");
+    fs.writeFileSync(
+      runtimePath,
+      JSON.stringify(
+        {
+          agentId: "ORCH",
+          sessionBackend: "process",
+          runnerPid: 1234,
+          pgid: 1234,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const calls = [];
+
+    await cleanupLaunchedRun(
+      lanePaths,
+      {
+        sessionName: "oc_leap_claw_wave0_orch",
+        runtimePath,
+      },
+      {
+        terminateRuntimeFn: async (runtimeRecord) => {
+          calls.push({ type: "terminate", runtimeRecord });
+          return true;
+        },
+        killSessionFn: async (_socketName, sessionName) => {
+          calls.push({ type: "tmux", sessionName });
+        },
+      },
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toMatchObject({
+      type: "terminate",
+      runtimeRecord: { agentId: "ORCH", sessionBackend: "process" },
+    });
+    expect(calls[1]).toMatchObject({
+      type: "tmux",
+      sessionName: "oc_leap_claw_wave0_orch",
+    });
+  });
 });
 
 describe("buildCodexExecInvocation", () => {
@@ -3887,6 +4058,38 @@ describe("runClosureSweepPhase required stage checks", () => {
         },
       ],
     });
+  });
+
+  it("keeps custom security reviewers in the security-review stage", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.securityRolePromptPath = "docs/agents/custom-security-role.md";
+    const securityRun = {
+      agent: {
+        agentId: "A7",
+        title: "Security Engineer",
+        rolePromptPaths: ["docs/agents/custom-security-role.md"],
+        ownedPaths: ["docs/security-review.md"],
+      },
+      sessionName: "wave-a7",
+      promptPath: path.join(dir, "A7.prompt.md"),
+      logPath: path.join(dir, "A7.log"),
+      statusPath: path.join(dir, "A7.status.json"),
+    };
+
+    const stages = planClosureStages({
+      lanePaths,
+      wave: {
+        wave: 4,
+        agents: [securityRun.agent, { agentId: "A8" }, { agentId: "A9" }, { agentId: "A0" }],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+      },
+      closureRuns: [securityRun],
+    });
+
+    expect(stages.find((stage) => stage.key === "security-review")?.runs).toEqual([securityRun]);
   });
 });
 

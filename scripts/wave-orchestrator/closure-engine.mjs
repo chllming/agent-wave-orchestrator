@@ -15,8 +15,9 @@ import {
   readWaveIntegrationBarrier as readWaveIntegrationBarrierDefault,
   readWaveSecurityGate as readWaveSecurityGateDefault,
 } from "./gate-engine.mjs";
+import { applyLaunchResultToRun } from "./launcher-runtime.mjs";
 import { REPO_ROOT, toIsoTimestamp } from "./shared.mjs";
-import { isSecurityReviewAgent, resolveWaveRoleBindings } from "./role-helpers.mjs";
+import { isSecurityReviewAgentForLane, resolveWaveRoleBindings } from "./role-helpers.mjs";
 import { summarizeResolvedSkills } from "./skills.mjs";
 
 function failureResultFromGate(gate, fallbackLogPath) {
@@ -99,11 +100,7 @@ function stageRequiresRun(stage, wave, lanePaths) {
     case "security-review":
       return (
         Array.isArray(wave?.agents) &&
-        wave.agents.some((agent) =>
-          isSecurityReviewAgent(agent, {
-            securityRolePromptPath: lanePaths?.securityRolePromptPath,
-          }),
-        )
+        wave.agents.some((agent) => isSecurityReviewAgentForLane(agent, lanePaths))
       );
     default:
       return false;
@@ -215,6 +212,7 @@ export async function runClosureSweepPhase({
         promptPath: runInfo.promptPath,
         logPath: runInfo.logPath,
         statusPath: runInfo.statusPath,
+        runtimePath: runInfo.runtimePath,
         messageBoardPath: runInfo.messageBoardPath,
         messageBoardSnapshot: runInfo.messageBoardSnapshot || "",
         sharedSummaryPath: runInfo.sharedSummaryPath,
@@ -234,19 +232,18 @@ export async function runClosureSweepPhase({
           attempt: dashboardState?.attempt || 1,
         },
       });
-      runInfo.lastLaunchAttempt = dashboardState?.attempt || null;
-      runInfo.lastPromptHash = launchResult?.promptHash || null;
-      runInfo.lastContext7 = launchResult?.context7 || null;
-      runInfo.lastExecutorId = launchResult?.executorId || runInfo.agent.executorResolved?.id || null;
-      runInfo.lastSkillProjection =
-        launchResult?.skills || summarizeResolvedSkills(runInfo.agent.skillsResolved);
+      applyLaunchResultToRun(runInfo, launchResult, {
+        attempt: dashboardState?.attempt || null,
+        fallbackExecutorId: runInfo.agent.executorResolved?.id || null,
+        fallbackSkills: summarizeResolvedSkills(runInfo.agent.skillsResolved),
+      });
       setWaveDashboardAgent(dashboardState, runInfo.agent.agentId, {
         state: "running",
         detail: `Closure sweep launched${launchResult?.context7?.mode ? ` (${launchResult.context7.mode})` : ""}`,
       });
       recordCombinedEvent({
         agentId: runInfo.agent.agentId,
-        message: `Closure sweep launched in tmux session ${runInfo.sessionName}`,
+        message: `Closure sweep launched via ${launchResult?.sessionBackend || "process"} backend`,
       });
       flushDashboards();
       const result = await waitForWaveCompletionFn(
@@ -376,7 +373,7 @@ export function planClosureStages({ lanePaths, wave, closureRuns }) {
       key: "security-review",
       agentId: "security",
       label: "Security review",
-      runs: closureRuns.filter((run) => isSecurityReviewAgent(run.agent)),
+      runs: closureRuns.filter((run) => isSecurityReviewAgentForLane(run.agent, lanePaths)),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve blocked security findings or missing approvals before integration closure.`,
     },
@@ -434,7 +431,10 @@ function evaluateClosureStage({
         benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
       });
     case "security-review":
-      return readWaveSecurityGateFn(wave, closureRuns, { mode: "live" });
+      return readWaveSecurityGateFn(wave, closureRuns, {
+        mode: "live",
+        securityRolePromptPath: lanePaths?.securityRolePromptPath,
+      });
     case "integration":
       return readWaveIntegrationBarrierFn(
         wave,

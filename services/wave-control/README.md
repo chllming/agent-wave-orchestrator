@@ -266,6 +266,9 @@ Frontend env vars:
 - `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
 
 The frontend also accepts `NEXT_PUBLIC_STACK_PROJECT_ID` and `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` as compatibility fallbacks.
+`VITE_WAVE_CONTROL_API_BASE_URL` may be set to either the service origin (for example
+`https://control.example.test`) or the full API base ending in `/api/v1`; the web app normalizes the
+configured value before appending its route paths.
 
 The browser app persists the Stack session across reloads, completes OAuth and magic-link callbacks on the same app path, and only renders sign-in methods that are enabled in the Stack project configuration.
 

@@ -188,6 +188,7 @@ Wave Control now also supports a separate browser app and browser-authenticated 
 - PATs and browser users must also hold the matching provider grant before they can use broker routes or provider env leasing
 - arbitrary stored credential leasing is owner-scoped and does not expose raw secrets through the admin APIs
 - the frontend package lives at `services/wave-control-web`, persists the Stack browser session across reloads, and mirrors the Stack project's enabled auth methods
+- `VITE_WAVE_CONTROL_API_BASE_URL` for the browser app may point either at the Wave Control origin or the full `/api/v1` base; the frontend normalizes either form before appending route paths
 
 The key app routes are:
 

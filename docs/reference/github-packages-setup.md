@@ -3,7 +3,7 @@
 Use this page only if you intentionally want the legacy GitHub Packages install path.
 
 GitHub's npm registry still requires authentication for installs from `npm.pkg.github.com`, even when the package and backing repository are public.
-This is now the optional authenticated fallback path. The primary public install path is npmjs. Maintainer npm publishing setup is documented in [npmjs-trusted-publishing.md](./npmjs-trusted-publishing.md).
+This is now the optional authenticated fallback path. The primary public install path is npmjs. Maintainer npm publishing setup is documented in [npmjs-token-publishing.md](./npmjs-token-publishing.md).
 
 ## `.npmrc`
 

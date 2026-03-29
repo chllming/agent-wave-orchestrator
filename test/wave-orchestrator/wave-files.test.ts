@@ -1193,6 +1193,62 @@ describe("validateWaveDefinition", () => {
     ).toMatchObject({ wave: 0 });
   });
 
+  it("rejects agents that overlap security review with another closure role", () => {
+    expect(() =>
+      validateWaveDefinition(
+        {
+          wave: 0,
+          file: "docs/plans/waves/wave-0.md",
+          componentPromotions: starterComponentPromotions,
+          agents: [
+            {
+              agentId: "A0",
+              prompt: leapClawPrompt.replace(
+                "go/example/file.go",
+                "docs/plans/waves/reviews/wave-0-cont-qa.md",
+              ),
+              rolePromptPaths: [WAVE_CONT_QA_ROLE_PROMPT_PATH],
+              ownedPaths: ["docs/plans/waves/reviews/wave-0-cont-qa.md"],
+            },
+            {
+              agentId: "A8",
+              prompt: integrationStewardPrompt,
+              rolePromptPaths: [
+                WAVE_INTEGRATION_ROLE_PROMPT_PATH,
+                WAVE_SECURITY_ROLE_PROMPT_PATH,
+              ],
+              ownedPaths: [
+                ".tmp/main-wave-launcher/integration/wave-0.json",
+                ".tmp/main-wave-launcher/integration/wave-0.md",
+              ],
+              capabilities: ["integration", "security-review"],
+            },
+            {
+              agentId: "A9",
+              prompt: documentationStewardPrompt,
+              rolePromptPaths: [WAVE_DOCUMENTATION_ROLE_PROMPT_PATH],
+              ownedPaths: starterDocumentationPaths,
+            },
+            {
+              agentId: "A1",
+              prompt: leapClawPrompt,
+              ownedPaths: ["go/example/file.go"],
+              components: Object.keys(starterComponentTargets),
+              componentTargets: starterComponentTargets,
+              exitContract: {
+                completion: "integrated",
+                durability: "none",
+                proof: "integration",
+                docImpact: "owned",
+              },
+            },
+          ],
+        },
+        { lane: "leap-claw" },
+      ),
+    ).toThrow(/must not overlap closure roles/);
+  });
+
   it("requires security reviewers to import the standing security role prompt", () => {
     expect(() =>
       validateWaveDefinition(

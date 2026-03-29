@@ -86,6 +86,12 @@ function runWaveCli(args, options = {}) {
   });
 }
 
+function repoLocalMarkdownLinks(markdown) {
+  return Array.from(markdown.matchAll(/\[[^\]]+\]\((\.[^)]+)\)/g))
+    .map((match) => String(match[1] || "").trim())
+    .filter((href) => href && !href.includes("#"));
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -110,6 +116,16 @@ describe("wave init", () => {
     expect(
       fs.existsSync(path.join(repoDir, "docs", "context7", "planner-agent", "manifest.json")),
     ).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "docs", "reference", "cli-reference.md"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "docs", "reference", "package-publishing-flow.md"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "docs", "reference", "npmjs-token-publishing.md"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "docs", "plans", "end-state-architecture.md"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "docs", "plans", "sandbox-end-state-architecture.md"))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir, "CHANGELOG.md"))).toBe(true);
+    const docsReadme = fs.readFileSync(path.join(repoDir, "docs", "README.md"), "utf8");
+    for (const relativeHref of repoLocalMarkdownLinks(docsReadme)) {
+      expect(fs.existsSync(path.resolve(path.join(repoDir, "docs"), relativeHref))).toBe(true);
+    }
     const installState = JSON.parse(
       fs.readFileSync(path.join(repoDir, ".wave", "install-state.json"), "utf8"),
     );
@@ -175,6 +191,7 @@ describe("wave init", () => {
     fs.mkdirSync(path.join(repoDir, "docs", "research"), { recursive: true });
     fs.writeFileSync(path.join(repoDir, ".gitignore"), ".tmp/\ndocs/research/cache/\ndocs/research/agent-context-cache/\ndocs/research/papers/\ndocs/research/articles/\n", "utf8");
     for (const relPath of [
+      "CHANGELOG.md",
       "wave.config.json",
       "docs/agents/wave-cont-qa-role.md",
       "docs/agents/wave-cont-eval-role.md",
@@ -202,15 +219,26 @@ describe("wave init", () => {
       "docs/evals/cases/wave-contradiction-conflict.json",
       "docs/evals/cases/wave-simultaneous-lockstep.json",
       "docs/evals/cases/wave-expert-routing-preservation.json",
+      "docs/guides/author-and-run-waves.md",
+      "docs/guides/monorepo-projects.md",
+      "docs/guides/recommendations-0.9.0.md",
+      "docs/guides/signal-wrappers.md",
       "docs/plans/component-cutover-matrix.json",
       "docs/plans/component-cutover-matrix.md",
+      "docs/plans/architecture-hardening-migration.md",
       "docs/plans/context7-wave-orchestrator.md",
       "docs/plans/current-state.md",
+      "docs/plans/end-state-architecture.md",
       "docs/plans/master-plan.md",
       "docs/plans/migration.md",
+      "docs/plans/sandbox-end-state-architecture.md",
       "docs/plans/wave-orchestrator.md",
       "docs/plans/waves/wave-0.md",
       "docs/plans/examples/wave-benchmark-improvement.md",
+      "docs/reference/cli-reference.md",
+      "docs/reference/npmjs-token-publishing.md",
+      "docs/reference/npmjs-trusted-publishing.md",
+      "docs/reference/package-publishing-flow.md",
       "docs/reference/wave-planning-lessons.md",
       "docs/reference/repository-guidance.md",
       "docs/research/agent-context-sources.md",

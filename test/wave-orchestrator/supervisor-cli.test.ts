@@ -10,6 +10,7 @@ import {
   reconcileSupervisorRun,
   submitLauncherRun,
   runSupervisorLoop,
+  waitForRunState,
 } from "../../scripts/wave-orchestrator/supervisor-cli.mjs";
 
 const cleanupPaths = [];
@@ -256,7 +257,7 @@ describe("supervisor-cli", () => {
     });
   });
 
-  it("recovers completion from canonical run-state when the launcher dies after wave completion", async () => {
+  it("does not recover completion from stale lane run-state when the launcher dies before terminal artifacts exist", () => {
     const config = loadWaveConfig();
     const lane = `test-supervisor-run-state-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
@@ -343,21 +344,33 @@ describe("supervisor-cli", () => {
       "utf8",
     );
 
-    await runSupervisorLoop({
-      project: config.defaultProject,
-      lane,
-      adhocRunId: null,
-      once: true,
-      pollMs: 20,
-    });
-
-    const finalState = JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8"));
-    expect(finalState).toMatchObject({
-      status: "completed",
-      terminalDisposition: "completed",
-      recoveryState: "recovered-from-run-state",
-      exitCode: 0,
-    });
+    const resumedState = reconcileSupervisorRun(
+      JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8")),
+      path.join(runDir, "state.json"),
+    );
+    try {
+      expect(resumedState.status).toBe("running");
+      expect(resumedState.recoveryState).toBe("resuming");
+      expect(resumedState.recoveryState).not.toBe("recovered-from-run-state");
+      expect(resumedState.launcherArgs).toEqual([
+        "--project",
+        config.defaultProject,
+        "--lane",
+        lane,
+        "--no-dashboard",
+        "--start-wave",
+        "1",
+        "--end-wave",
+        "1",
+        "--resume-control-state",
+      ]);
+    } finally {
+      try {
+        process.kill(resumedState.launcherPid, "SIGKILL");
+      } catch {
+        // no-op
+      }
+    }
   });
 
   it("resumes the active wave after launcher loss using preserved control state", async () => {
@@ -443,6 +456,115 @@ describe("supervisor-cli", () => {
     expect(events).toContain("\"type\":\"launcher-started\"");
     expect(events).toContain("\"resumed\":true");
   }, 30000);
+
+  it("reconciles launcher terminal artifacts before status reads", () => {
+    const config = loadWaveConfig();
+    const lane = `test-supervisor-status-read-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
+    trackCleanup(lanePaths.stateDir);
+    const supervisorPaths = buildSupervisorPaths(lanePaths);
+    const runId = `run-${Date.now()}-status-read`;
+    const runDir = path.join(supervisorPaths.runsDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(runDir, "state.json"),
+      JSON.stringify(
+        {
+          runId,
+          project: config.defaultProject,
+          lane,
+          status: "running",
+          submittedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          launcherArgs: ["--project", config.defaultProject, "--lane", lane, "--start-wave", "1", "--end-wave", "1"],
+          launcherPid: 999994,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "launcher-status.json"),
+      JSON.stringify({ exitCode: 0, completedAt: new Date().toISOString() }, null, 2),
+      "utf8",
+    );
+
+    const located = findSupervisorRunState(
+      runId,
+      { project: config.defaultProject, lane },
+      { reconcile: true },
+    );
+
+    expect(located?.state).toMatchObject({
+      status: "completed",
+      terminalDisposition: "completed",
+      exitCode: 0,
+    });
+  });
+
+  it("reconciles terminal artifacts before wait timing out", async () => {
+    const config = loadWaveConfig();
+    const lane = `test-supervisor-wait-read-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
+    trackCleanup(lanePaths.stateDir);
+    const supervisorPaths = buildSupervisorPaths(lanePaths);
+    const runId = `run-${Date.now()}-wait-read`;
+    const runDir = path.join(supervisorPaths.runsDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(runDir, "state.json"),
+      JSON.stringify(
+        {
+          runId,
+          project: config.defaultProject,
+          lane,
+          status: "running",
+          submittedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          launcherArgs: ["--project", config.defaultProject, "--lane", lane, "--start-wave", "2", "--end-wave", "3"],
+          launcherPid: 999993,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "launcher-progress.json"),
+      JSON.stringify(
+        {
+          runId,
+          waveNumber: 3,
+          attemptNumber: 1,
+          phase: "completed",
+          selectedAgentIds: [],
+          launchedAgentIds: [],
+          completedAgentIds: [],
+          finalized: true,
+          finalDisposition: "completed",
+          exitCode: 0,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const located = await waitForRunState({
+      runId,
+      project: config.defaultProject,
+      lane,
+      timeoutSeconds: 0,
+    });
+
+    expect(located.state).toMatchObject({
+      status: "completed",
+      terminalDisposition: "completed",
+      activeWave: 3,
+    });
+  });
 
   it("resumes the remaining explicit wave range instead of truncating a multi-wave submission", async () => {
     const config = loadWaveConfig();
@@ -533,6 +655,67 @@ describe("supervisor-cli", () => {
         // no-op
       }
     }
+  });
+
+  it("updates activeWave from launcher progress while the launcher is still healthy", () => {
+    const config = loadWaveConfig();
+    const lane = `test-supervisor-active-wave-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const lanePaths = buildLanePaths(lane, { config, project: config.defaultProject });
+    trackCleanup(lanePaths.stateDir);
+    const supervisorPaths = buildSupervisorPaths(lanePaths);
+    const runId = `run-${Date.now()}-active-wave`;
+    const runDir = path.join(supervisorPaths.runsDir, runId);
+    fs.mkdirSync(path.join(runDir, "agents"), { recursive: true });
+    fs.writeFileSync(
+      path.join(runDir, "state.json"),
+      JSON.stringify(
+        {
+          runId,
+          project: config.defaultProject,
+          lane,
+          status: "running",
+          submittedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          launcherArgs: ["--project", config.defaultProject, "--lane", lane, "--start-wave", "1", "--end-wave", "3"],
+          launcherPid: process.pid,
+          activeWave: 1,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "launcher-progress.json"),
+      JSON.stringify(
+        {
+          runId,
+          waveNumber: 2,
+          attemptNumber: 1,
+          phase: "attempt-running",
+          selectedAgentIds: ["A2"],
+          launchedAgentIds: ["A2"],
+          completedAgentIds: [],
+          finalized: false,
+          finalDisposition: null,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const reconciled = reconcileSupervisorRun(
+      JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8")),
+      path.join(runDir, "state.json"),
+    );
+
+    expect(reconciled).toMatchObject({
+      status: "running",
+      activeWave: 2,
+      terminalDisposition: "running",
+    });
   });
 
   it("does not recover auto-next runs from canonical run-state before the remaining waves execute", () => {

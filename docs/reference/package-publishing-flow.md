@@ -21,6 +21,7 @@ Registry publishing happens in GitHub Actions after the tag push:
 
 - [publish-npm.yml](../../.github/workflows/publish-npm.yml) publishes to npmjs
 - [publish-package.yml](../../.github/workflows/publish-package.yml) publishes to GitHub Packages
+- [npmjs-token-publishing.md](./npmjs-token-publishing.md) documents the npm token setup used by `publish-npm.yml`
 
 Both workflows run on tag pushes matching `v*`, and each workflow now fails fast unless `github.ref_name` exactly matches `v${package.json.version}`.
 

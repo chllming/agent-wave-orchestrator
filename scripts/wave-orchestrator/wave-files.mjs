@@ -68,6 +68,8 @@ import {
   resolveDesignReportPath,
   isSecurityRolePromptPath,
   isSecurityReviewAgent,
+  resolveAgentClosureRoleKeys,
+  resolveWaveRoleBindings,
   resolveSecurityReviewReportPath,
 } from "./role-helpers.mjs";
 import {
@@ -107,6 +109,13 @@ const COMPONENT_MATURITY_ORDER = Object.fromEntries(
 );
 const PROOF_CENTRIC_COMPONENT_LEVEL = "pilot-live";
 const RETRY_POLICY_VALUES = new Set(["sticky", "fallback-allowed"]);
+const CLOSURE_ROLE_LABELS = {
+  "cont-eval": "cont-EVAL",
+  "security-review": "security review",
+  integration: "integration steward",
+  documentation: "documentation steward",
+  "cont-qa": "cont-QA",
+};
 
 function resolveLaneProfileForOptions(options = {}) {
   if (options.laneProfile) {
@@ -1751,6 +1760,19 @@ export function validateWaveDefinition(wave, options = {}) {
       designAgent.components.length > 0
     ) {
       errors.push(`Design agent ${designAgent.agentId} must stay docs/spec-only unless it explicitly owns implementation files`);
+    }
+  }
+  const closureRoleBindings = resolveWaveRoleBindings(wave, laneProfile.roles, wave.agents);
+  for (const agent of wave.agents) {
+    const closureRoles = resolveAgentClosureRoleKeys(
+      agent,
+      closureRoleBindings,
+      laneProfile.roles,
+    );
+    if (closureRoles.length > 1) {
+      errors.push(
+        `Agent ${agent.agentId} must not overlap closure roles (${closureRoles.map((role) => CLOSURE_ROLE_LABELS[role] || role).join(", ")})`,
+      );
     }
   }
   if (integrationRuleActive) {

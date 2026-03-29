@@ -8,7 +8,6 @@ import { attachSession as attachTmuxSession } from "./tmux-adapter.mjs";
 import {
   readLauncherProgress,
 } from "./launcher-progress.mjs";
-import { readRunState as readWaveRunState } from "./wave-files.mjs";
 
 const DEFAULT_SUPERVISOR_POLL_MS = 2000;
 const DEFAULT_SUPERVISOR_LEASE_MS = 15000;
@@ -101,6 +100,17 @@ function agentRuntimeDirForRun(paths, runId) {
 
 export function supervisorAgentRuntimePathForRun(paths, runId, agentId) {
   return path.join(agentRuntimeDirForRun(paths, runId), `${agentId}.runtime.json`);
+}
+
+function supervisorPathsFromStatePath(statePath) {
+  const runDir = path.dirname(statePath);
+  const runsDir = path.dirname(runDir);
+  const rootDir = path.dirname(runsDir);
+  return {
+    rootDir,
+    runsDir,
+    lockPath: path.join(rootDir, "daemon.lock"),
+  };
 }
 
 function normalizeRunState(payload) {
@@ -329,6 +339,18 @@ function buildResumedLauncherArgs(state, progressJournal) {
   return resumedArgs;
 }
 
+function resolvedActiveWave(state, progressJournal) {
+  if (Number.isFinite(Number(progressJournal?.waveNumber))) {
+    return Number(progressJournal.waveNumber);
+  }
+  if (Number.isFinite(Number(state?.activeWave))) {
+    return Number(state.activeWave);
+  }
+  return deriveActiveWaveFromLauncherArgs(
+    Array.isArray(state?.launcherArgs) ? state.launcherArgs : [],
+  );
+}
+
 export function startSupervisorRun(
   state,
   statePath,
@@ -420,51 +442,19 @@ function runtimeRecordIndicatesLiveWork(runtimeRecord) {
   );
 }
 
-function recoverCompletedFromRunState(state, progressJournal, lanePaths) {
-  const selectedWaves = selectedWavesFromLauncherArgs(
-    Array.isArray(state?.launcherArgs) ? state.launcherArgs : [],
-  );
-  if (selectedWaves.length === 0) {
-    return null;
-  }
-  const progressPhase = String(progressJournal?.phase || "").trim().toLowerCase();
-  if (progressPhase && !["wave-completed", "completed"].includes(progressPhase)) {
-    return null;
-  }
-  const journalWaveNumber = Number.parseInt(String(progressJournal?.waveNumber ?? ""), 10);
-  const finalWaveNumber = selectedWaves[selectedWaves.length - 1];
-  if (Number.isFinite(journalWaveNumber) && journalWaveNumber !== finalWaveNumber) {
-    return null;
-  }
-  const runState = readWaveRunState(lanePaths.defaultRunStatePath);
-  const completedWaves = new Set(
-    (Array.isArray(runState?.completedWaves) ? runState.completedWaves : []).map((waveNumber) =>
-      Number(waveNumber),
-    ),
-  );
-  if (!selectedWaves.every((waveNumber) => completedWaves.has(Number(waveNumber)))) {
-    return null;
-  }
-  return {
-    selectedWaves,
-    finalWaveNumber,
-  };
-}
-
 export function reconcileSupervisorRun(state, statePath) {
   const runId = state?.runId || path.basename(path.dirname(statePath));
-  const lanePaths = buildLanePaths(state?.lane || "main", {
-    project: state?.project,
-    adhocRunId: state?.adhocRunId,
-  });
-  const paths = buildSupervisorPaths(lanePaths);
-  const launcherStatus = state?.launcherStatusPath ? readJsonOrNull(state.launcherStatusPath) : null;
+  const paths = supervisorPathsFromStatePath(statePath);
+  const effectiveLauncherStatusPath =
+    state?.launcherStatusPath || launcherStatusPathForRun(paths, runId);
+  const launcherStatus = readJsonOrNull(effectiveLauncherStatusPath);
   const runtimeRecords = readAgentRuntimeRecords(paths, runId);
   const liveRuntimeRecords = runtimeRecords.filter((record) => runtimeRecordIndicatesLiveWork(record));
   const progressJournal = readLauncherProgress(
     launcherProgressPathForRun(paths, runId),
     { runId, waveNumber: state?.activeWave ?? null },
   );
+  const activeWave = resolvedActiveWave(state, progressJournal);
   const launcherPid = Number.parseInt(String(state?.launcherPid ?? ""), 10);
   const launcherAlive = isProcessAlive(launcherPid);
   if (launcherStatus && typeof launcherStatus === "object") {
@@ -482,6 +472,7 @@ export function reconcileSupervisorRun(state, statePath) {
       updatedAt: toIsoTimestamp(),
       terminalDisposition: exitCode === 0 ? "completed" : "failed",
       agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+      activeWave,
       sessionBackend: "process",
       recoveryState: "healthy",
       resumeAction: null,
@@ -491,6 +482,7 @@ export function reconcileSupervisorRun(state, statePath) {
     return writeRunState(statePath, {
       ...state,
       updatedAt: toIsoTimestamp(),
+      activeWave,
       terminalDisposition: "running",
       agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
       sessionBackend: "process",
@@ -509,6 +501,7 @@ export function reconcileSupervisorRun(state, statePath) {
     return writeRunState(statePath, {
       ...state,
       updatedAt: toIsoTimestamp(),
+      activeWave,
       terminalDisposition: "launcher-lost-agents-running",
       agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
       sessionBackend: "process",
@@ -537,7 +530,7 @@ export function reconcileSupervisorRun(state, statePath) {
       updatedAt: toIsoTimestamp(),
       terminalDisposition: progressJournal.finalDisposition,
       agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
-      activeWave: progressJournal.waveNumber ?? state?.activeWave ?? null,
+      activeWave,
       sessionBackend: "process",
       recoveryState: "recovered-from-progress",
       resumeAction: null,
@@ -548,35 +541,12 @@ export function reconcileSupervisorRun(state, statePath) {
     });
   }
   if (state?.status === "running" && !launcherAlive) {
-    const recoveredCompletion = recoverCompletedFromRunState(state, progressJournal, lanePaths);
-    if (recoveredCompletion) {
-      appendSupervisorEvent(paths, runId, {
-        type: "launcher-status-reconciled",
-        runId,
-        exitCode: 0,
-        source: "run-state",
-      });
-      return writeRunState(statePath, {
-        ...state,
-        status: "completed",
-        exitCode: 0,
-        completedAt: toIsoTimestamp(),
-        updatedAt: toIsoTimestamp(),
-        terminalDisposition: "completed",
-        agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
-        activeWave: recoveredCompletion.finalWaveNumber,
-        sessionBackend: "process",
-        recoveryState: "recovered-from-run-state",
-        resumeAction: null,
-        detail: `Recovered completed supervisor state from canonical run-state after launcher exit for waves ${recoveredCompletion.selectedWaves.join(", ")}.`,
-      });
-    }
     const resumedArgs = buildResumedLauncherArgs(state, progressJournal);
     if (resumedArgs && Number(state?.resumeAttempts || 0) < DEFAULT_SUPERVISOR_RESUME_LIMIT) {
       return startSupervisorRun(
         {
           ...state,
-          activeWave: progressJournal?.waveNumber ?? state?.activeWave ?? null,
+          activeWave,
         },
         statePath,
         paths,
@@ -600,6 +570,7 @@ export function reconcileSupervisorRun(state, statePath) {
       completedAt: toIsoTimestamp(),
       updatedAt: toIsoTimestamp(),
       detail: "Launcher exited before writing supervisor status.",
+      activeWave,
       terminalDisposition: "launcher-lost-before-status",
       agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
       sessionBackend: "process",
@@ -613,6 +584,99 @@ export function reconcileSupervisorRun(state, statePath) {
   return writeRunState(statePath, {
     ...state,
     updatedAt: toIsoTimestamp(),
+    activeWave,
+    agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+    sessionBackend: "process",
+  });
+}
+
+function reconcileSupervisorReadState(state, statePath) {
+  const runId = state?.runId || path.basename(path.dirname(statePath));
+  const paths = supervisorPathsFromStatePath(statePath);
+  const effectiveLauncherStatusPath =
+    state?.launcherStatusPath || launcherStatusPathForRun(paths, runId);
+  const launcherStatus = readJsonOrNull(effectiveLauncherStatusPath);
+  const runtimeRecords = readAgentRuntimeRecords(paths, runId);
+  const liveRuntimeRecords = runtimeRecords.filter((record) => runtimeRecordIndicatesLiveWork(record));
+  const progressJournal = readLauncherProgress(
+    launcherProgressPathForRun(paths, runId),
+    { runId, waveNumber: state?.activeWave ?? null },
+  );
+  const activeWave = resolvedActiveWave(state, progressJournal);
+  const launcherPid = Number.parseInt(String(state?.launcherPid ?? ""), 10);
+  const launcherAlive = isProcessAlive(launcherPid);
+  if (launcherStatus && typeof launcherStatus === "object") {
+    const exitCode = Number.parseInt(String(launcherStatus.exitCode ?? ""), 10);
+    return writeRunState(statePath, {
+      ...state,
+      status: exitCode === 0 ? "completed" : "failed",
+      exitCode: Number.isFinite(exitCode) ? exitCode : null,
+      completedAt: launcherStatus.completedAt || toIsoTimestamp(),
+      updatedAt: toIsoTimestamp(),
+      terminalDisposition: exitCode === 0 ? "completed" : "failed",
+      agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+      activeWave,
+      sessionBackend: "process",
+      recoveryState: "healthy",
+      resumeAction: null,
+    });
+  }
+  if (
+    state?.status === "running" &&
+    progressJournal?.finalized === true &&
+    ["completed", "failed"].includes(String(progressJournal.finalDisposition || ""))
+  ) {
+    const exitCode = Number.parseInt(String(progressJournal.exitCode ?? ""), 10);
+    return writeRunState(statePath, {
+      ...state,
+      status: progressJournal.finalDisposition === "completed" ? "completed" : "failed",
+      exitCode: Number.isFinite(exitCode) ? exitCode : null,
+      completedAt: progressJournal.updatedAt || toIsoTimestamp(),
+      updatedAt: toIsoTimestamp(),
+      terminalDisposition: progressJournal.finalDisposition,
+      agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+      activeWave,
+      sessionBackend: "process",
+      recoveryState: "recovered-from-progress",
+      resumeAction: null,
+      detail:
+        progressJournal.finalDisposition === "completed"
+          ? "Recovered final supervisor state from launcher progress journal."
+          : "Recovered terminal failure from launcher progress journal.",
+    });
+  }
+  if (state?.status === "running" && launcherAlive) {
+    return writeRunState(statePath, {
+      ...state,
+      updatedAt: toIsoTimestamp(),
+      activeWave,
+      terminalDisposition: "running",
+      agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+      sessionBackend: "process",
+      recoveryState: "healthy",
+      resumeAction: null,
+    });
+  }
+  if (state?.status === "running" && liveRuntimeRecords.length > 0) {
+    return writeRunState(statePath, {
+      ...state,
+      updatedAt: toIsoTimestamp(),
+      activeWave,
+      terminalDisposition: "launcher-lost-agents-running",
+      agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
+      sessionBackend: "process",
+      recoveryState: "degraded",
+      resumeAction: "wait-for-live-agents",
+      detail: "Launcher exited while agent runtime work is still live.",
+    });
+  }
+  if (runtimeRecords.length === 0 && activeWave === state?.activeWave) {
+    return state;
+  }
+  return writeRunState(statePath, {
+    ...state,
+    updatedAt: toIsoTimestamp(),
+    activeWave,
     agentRuntimeSummary: buildAgentRuntimeSummary(runtimeRecords),
     sessionBackend: "process",
   });
@@ -629,15 +693,18 @@ function supervisorStatePathForRunId(runId, context = {}) {
   return statePathForRun(buildSupervisorPaths(lanePaths), runId);
 }
 
-export function findSupervisorRunState(runId, context = {}) {
+export function findSupervisorRunState(runId, context = {}, options = {}) {
   const statePath = supervisorStatePathForRunId(runId, context);
   if (!statePath || !fs.existsSync(statePath)) {
     return null;
   }
+  const state = readRunState(statePath);
+  const effectiveState =
+    options.reconcile && state ? reconcileSupervisorReadState(state, statePath) : state;
   return {
     statePath,
     runDir: path.dirname(statePath),
-    state: readRunState(statePath),
+    state: effectiveState,
   };
 }
 
@@ -957,7 +1024,7 @@ export async function runSupervisorLoop(options) {
 export async function waitForRunState(options) {
   const deadline = Date.now() + options.timeoutSeconds * 1000;
   while (true) {
-    const located = findSupervisorRunState(options.runId, options);
+    const located = findSupervisorRunState(options.runId, options, { reconcile: true });
     if (!located?.state) {
       throw new Error(`Run ${options.runId} not found.`);
     }
@@ -993,7 +1060,15 @@ export function summarizeSupervisorStateForWave(lanePaths, waveNumber, { agentId
   if (!fs.existsSync(paths.runsDir)) {
     return null;
   }
-  const matching = pendingRunStates(paths).filter((entry) => activeWaveFromState(entry.state) === Number(waveNumber));
+  const matching = pendingRunStates(paths)
+    .map((entry) => ({
+      ...entry,
+      state:
+        entry.state?.status === "running"
+          ? reconcileSupervisorReadState(entry.state, entry.statePath)
+          : entry.state,
+    }))
+    .filter((entry) => activeWaveFromState(entry.state) === Number(waveNumber));
   if (matching.length === 0) {
     return null;
   }
@@ -1032,7 +1107,7 @@ function runtimeRecordForAgent(runDir, agentId) {
 }
 
 async function attachAgentRuntimeSession(options) {
-  const located = findSupervisorRunState(options.runId, options);
+  const located = findSupervisorRunState(options.runId, options, { reconcile: true });
   if (!located?.state) {
     throw new Error(`Run ${options.runId} not found.`);
   }
@@ -1159,7 +1234,7 @@ export async function runSupervisorCli(command, argv) {
     if (!options.projectProvided || !options.laneProvided) {
       throw new Error("--project and --lane are required");
     }
-    const located = findSupervisorRunState(options.runId, options);
+    const located = findSupervisorRunState(options.runId, options, { reconcile: true });
     if (!located?.state) {
       throw new Error(`Run ${options.runId} not found.`);
     }

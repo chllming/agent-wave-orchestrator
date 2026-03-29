@@ -210,11 +210,20 @@ describe("release surface alignment", () => {
       path.join(repoRoot, "docs", "reference", "package-publishing-flow.md"),
       "utf8",
     );
+    const tokenPublishingGuide = fs.readFileSync(
+      path.join(repoRoot, "docs", "reference", "npmjs-token-publishing.md"),
+      "utf8",
+    );
+    const trustedPublishingStub = fs.readFileSync(
+      path.join(repoRoot, "docs", "reference", "npmjs-trusted-publishing.md"),
+      "utf8",
+    );
 
     expect(rootReadme).toContain("docs/reference/package-publishing-flow.md");
     expect(docsReadme).toContain("reference/package-publishing-flow.md");
     expect(publishingGuide).toContain("scripts/wave.mjs");
     expect(publishingGuide).toContain("scripts/wave-orchestrator/install.mjs");
+    expect(publishingGuide).toContain("npmjs-token-publishing.md");
     expect(publishingGuide).toContain("wave doctor");
     expect(publishingGuide).toContain("wave changelog");
     expect(publishingGuide).toContain("wave upgrade");
@@ -224,6 +233,8 @@ describe("release surface alignment", () => {
     expect(publishingGuide).toContain("pnpm publish --access public --no-git-checks");
     expect(publishingGuide).toContain("pnpm publish --registry=https://npm.pkg.github.com --no-git-checks");
     expect(publishingGuide).toContain("npm view @chllming/wave-orchestration version dist-tags --json");
+    expect(tokenPublishingGuide).toContain("NPM_TOKEN");
+    expect(trustedPublishingStub).toContain("does not currently use npm trusted publishing");
   });
 
   it("enforces tag and package version parity in publish workflows", () => {

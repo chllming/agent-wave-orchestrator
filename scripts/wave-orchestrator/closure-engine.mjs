@@ -17,7 +17,11 @@ import {
 } from "./gate-engine.mjs";
 import { applyLaunchResultToRun } from "./launcher-runtime.mjs";
 import { REPO_ROOT, toIsoTimestamp } from "./shared.mjs";
-import { isSecurityReviewAgentForLane, resolveWaveRoleBindings } from "./role-helpers.mjs";
+import {
+  isSecurityReviewAgentForLane,
+  resolveAgentClosureRoleKeys,
+  resolveWaveRoleBindings,
+} from "./role-helpers.mjs";
 import { summarizeResolvedSkills } from "./skills.mjs";
 
 function failureResultFromGate(gate, fallbackLogPath) {
@@ -358,14 +362,17 @@ export async function runClosureSweepPhase({
 }
 
 export function planClosureStages({ lanePaths, wave, closureRuns }) {
+  const roleBindings = resolveWaveRoleBindings(wave, lanePaths);
   const { contQaAgentId, contEvalAgentId, integrationAgentId, documentationAgentId } =
-    resolveWaveRoleBindings(wave, lanePaths);
+    roleBindings;
+  const runHasRole = (run, roleKey) =>
+    resolveAgentClosureRoleKeys(run.agent, roleBindings, lanePaths).includes(roleKey);
   return [
     {
       key: "cont-eval",
       agentId: contEvalAgentId,
       label: "cont-EVAL gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === contEvalAgentId),
+      runs: closureRuns.filter((run) => runHasRole(run, "cont-eval")),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve cont-EVAL tuning gaps before integration closure.`,
     },
@@ -373,7 +380,7 @@ export function planClosureStages({ lanePaths, wave, closureRuns }) {
       key: "security-review",
       agentId: "security",
       label: "Security review",
-      runs: closureRuns.filter((run) => isSecurityReviewAgentForLane(run.agent, lanePaths)),
+      runs: closureRuns.filter((run) => runHasRole(run, "security-review")),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve blocked security findings or missing approvals before integration closure.`,
     },
@@ -381,7 +388,7 @@ export function planClosureStages({ lanePaths, wave, closureRuns }) {
       key: "integration",
       agentId: integrationAgentId,
       label: "Integration gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === integrationAgentId),
+      runs: closureRuns.filter((run) => runHasRole(run, "integration")),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve integration contradictions or blockers before documentation and cont-QA closure.`,
     },
@@ -389,7 +396,7 @@ export function planClosureStages({ lanePaths, wave, closureRuns }) {
       key: "documentation",
       agentId: documentationAgentId,
       label: "Documentation closure",
-      runs: closureRuns.filter((run) => run.agent.agentId === documentationAgentId),
+      runs: closureRuns.filter((run) => runHasRole(run, "documentation")),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve the shared-plan or component-matrix closure state before cont-QA progression.`,
     },
@@ -397,7 +404,7 @@ export function planClosureStages({ lanePaths, wave, closureRuns }) {
       key: "cont-qa",
       agentId: contQaAgentId,
       label: "cont-QA gate",
-      runs: closureRuns.filter((run) => run.agent.agentId === contQaAgentId),
+      runs: closureRuns.filter((run) => runHasRole(run, "cont-qa")),
       actionRequested:
         `Lane ${lanePaths.lane} owners should resolve the cont-QA gate before wave progression.`,
     },

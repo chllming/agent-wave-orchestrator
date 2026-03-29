@@ -208,6 +208,30 @@ export function resolveWaveRoleBindings(wave = {}, lanePaths = {}, agents = wave
   };
 }
 
+export function resolveAgentClosureRoleKeys(agent, roleBindings = {}, lanePaths = {}) {
+  const roles = [];
+  if (agent?.agentId === roleBindings?.contEvalAgentId) {
+    roles.push("cont-eval");
+  }
+  if (
+    isSecurityReviewAgent(agent, {
+      securityRolePromptPath: lanePaths?.securityRolePromptPath,
+    })
+  ) {
+    roles.push("security-review");
+  }
+  if (agent?.agentId === roleBindings?.integrationAgentId) {
+    roles.push("integration");
+  }
+  if (agent?.agentId === roleBindings?.documentationAgentId) {
+    roles.push("documentation");
+  }
+  if (agent?.agentId === roleBindings?.contQaAgentId) {
+    roles.push("cont-qa");
+  }
+  return roles;
+}
+
 export function isClosureRoleAgentId(agentId, roleBindings) {
   return (roleBindings?.closureAgentIds || []).includes(agentId);
 }

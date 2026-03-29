@@ -126,6 +126,8 @@ export function writeWaveAttemptTraceProjection({
     capabilityAssignments: derivedState.capabilityAssignments,
     dependencySnapshot: derivedState.dependencySnapshot,
     securitySummary: derivedState.securitySummary,
+    corridorSummary: derivedState.corridorSummary,
+    corridorSummaryPath: derivedState.corridorSummaryPath,
     integrationSummary: derivedState.integrationSummary,
     integrationMarkdownPath: derivedState.integrationMarkdownPath,
     proofRegistryPath: lanePaths.proofDir ? waveProofRegistryPath(lanePaths, wave.wave) : null,
@@ -191,6 +193,7 @@ export function writeWaveRelaunchProjection({
 }
 
 function renderWaveSecuritySummaryMarkdown(securitySummary) {
+  const corridor = securitySummary?.corridor || null;
   return [
     `# Wave ${securitySummary.wave} Security Summary`,
     "",
@@ -199,7 +202,18 @@ function renderWaveSecuritySummaryMarkdown(securitySummary) {
     `- Total findings: ${securitySummary.totalFindings || 0}`,
     `- Total approvals: ${securitySummary.totalApprovals || 0}`,
     `- Reviewers: ${(securitySummary.agents || []).length}`,
+    `- Corridor: ${corridor ? (corridor.ok ? (corridor.blocking ? "blocking" : "clear") : "fetch-failed") : "not-configured"}`,
     "",
+    ...(corridor
+      ? [
+          "## Corridor",
+          `- Source: ${corridor.source || corridor.providerMode || "unknown"}`,
+          `- Matched findings: ${(corridor.matchedFindings || []).length}`,
+          `- Blocking findings: ${(corridor.blockingFindings || []).length}`,
+          ...(corridor.error ? [`- Error: ${corridor.error}`] : []),
+          "",
+        ]
+      : []),
     "## Reviews",
     ...((securitySummary.agents || []).length > 0
       ? securitySummary.agents.map(
@@ -220,6 +234,7 @@ function renderIntegrationSection(title, items) {
 }
 
 function renderIntegrationSummaryMarkdown(integrationSummary) {
+  const corridor = integrationSummary?.corridor || null;
   return [
     `# Wave ${integrationSummary.wave} Integration Summary`,
     "",
@@ -239,6 +254,7 @@ function renderIntegrationSummaryMarkdown(integrationSummary) {
     `- Inbound dependencies: ${(integrationSummary.inboundDependencies || []).length}`,
     `- Outbound dependencies: ${(integrationSummary.outboundDependencies || []).length}`,
     `- Helper assignments: ${(integrationSummary.helperAssignments || []).length}`,
+    `- Corridor blocking findings: ${(corridor?.blockingFindings || []).length}`,
     "",
     ...renderIntegrationSection("## Open Claims", integrationSummary.openClaims),
     ...renderIntegrationSection("## Conflicting Claims", integrationSummary.conflictingClaims),
@@ -251,6 +267,13 @@ function renderIntegrationSummaryMarkdown(integrationSummary) {
     ...renderIntegrationSection("## Proof Gaps", integrationSummary.proofGaps),
     ...renderIntegrationSection("## Deploy Risks", integrationSummary.deployRisks),
     ...renderIntegrationSection("## Security Findings", integrationSummary.securityFindings),
+    ...renderIntegrationSection(
+      "## Corridor Findings",
+      corridor?.matchedFindings?.map(
+        (finding) =>
+          `${finding.severity || "unknown"} ${finding.affectedFile || "unknown-file"}: ${finding.title || "finding"}`,
+      ) || [],
+    ),
     ...renderIntegrationSection("## Security Approvals", integrationSummary.securityApprovals),
     ...renderIntegrationSection("## Inbound Dependencies", integrationSummary.inboundDependencies),
     ...renderIntegrationSection("## Outbound Dependencies", integrationSummary.outboundDependencies),

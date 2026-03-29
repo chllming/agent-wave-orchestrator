@@ -1,0 +1,19 @@
+{
+  "name": "@wave-orchestration/wave-control-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "build:workspace": "WAVE_CONTROL_WEB_OUT_DIR=../../dist/wave-control-web vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "preview:workspace": "WAVE_CONTROL_WEB_OUT_DIR=../../dist/wave-control-web vite preview"
+  },
+  "dependencies": {
+    "@stackframe/js": "^2.8.78",
+    "lit": "^3.3.2"
+  },
+  "devDependencies": {
+    "vite": "8.0.0"
+  }
+}

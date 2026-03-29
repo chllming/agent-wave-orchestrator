@@ -279,6 +279,7 @@ export function buildLanePaths(laneInput = DEFAULT_WAVE_LANE, options = {}) {
     executors: laneProfile.executors,
     skills: laneProfile.skills,
     capabilityRouting: laneProfile.capabilityRouting,
+    externalProviders: laneProfile.externalProviders,
     projectId: buildTelemetryProjectId(laneProfile.waveControl || { projectId }),
     projectRootDir: path.join(REPO_ROOT, laneProfile.projectRootDir || "."),
     runtimeVersion: readRuntimeVersion(),

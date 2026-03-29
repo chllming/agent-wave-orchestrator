@@ -8,6 +8,7 @@ Use it when you need the full supported surface for:
 - `defaultProject` and `projects.<projectId>`
 - `lanes.<lane>.executors`
 - `waveControl`
+- `externalProviders`
 - `executors.profiles.<profile>`
 - per-agent `### Executor` blocks inside a wave file
 
@@ -219,7 +220,7 @@ Supported top-level fields:
 | `endpoint` | string | `https://wave-control.up.railway.app/api/v1` | Base URL for the Railway-hosted `services/wave-control` API |
 | `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
 | `projectId` | string | resolved project id | Stable project identity used for cross-workspace reporting and filtering |
-| `authTokenEnvVar` | string | `WAVE_CONTROL_AUTH_TOKEN` | Environment variable name holding the bearer token |
+| `authTokenEnvVar` | string | `WAVE_API_TOKEN` | Primary environment variable name holding the bearer token |
 | `reportMode` | string | `metadata-only` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
 | `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload when an artifact's upload policy requests a body |
 | `requestTimeoutMs` | integer | `5000` | Per-batch network timeout |
@@ -231,6 +232,8 @@ Supported top-level fields:
 | `captureBenchmarkRuns` | boolean | `true` | Emit `benchmark_run`, `benchmark_item`, `verification`, and `review` events |
 
 Lane overrides may refine the same keys under `lanes.<lane>.waveControl` or `projects.<projectId>.lanes.<lane>.waveControl`.
+
+Wave resolves the Wave Control bearer token from `authTokenEnvVar` first and keeps `WAVE_CONTROL_AUTH_TOKEN` as a compatibility fallback.
 
 One-run override:
 
@@ -257,6 +260,42 @@ Example:
 ```
 
 Runtime-emitted Wave Control events also attach:
+
+## External Providers
+
+Wave can resolve third-party auth directly in the repo runtime or through an owned Wave Control broker.
+
+```json
+{
+  "externalProviders": {
+    "context7": {
+      "mode": "direct",
+      "apiKeyEnvVar": "CONTEXT7_API_KEY"
+    },
+    "corridor": {
+      "enabled": false,
+      "mode": "direct",
+      "baseUrl": "https://app.corridor.dev/api",
+      "apiTokenEnvVar": "CORRIDOR_API_TOKEN",
+      "apiKeyFallbackEnvVar": "CORRIDOR_API_KEY",
+      "teamId": "team-id-for-direct-mode",
+      "projectId": "project-id-for-direct-mode",
+      "severityThreshold": "critical",
+      "findingStates": ["open", "potential"],
+      "requiredAtClosure": true
+    }
+  }
+}
+```
+
+- `direct`: use repo/runtime env vars directly
+- `broker`: use the owned Wave Control endpoint with `WAVE_API_TOKEN`
+- `hybrid`: try the broker first, then fall back to direct auth if broker setup fails or a broker request fails at runtime
+- Wave auto-loads an allowlisted repo-root `.env.local` for `CONTEXT7_API_KEY`, `CORRIDOR_API_TOKEN`, `CORRIDOR_API_KEY`, `WAVE_API_TOKEN`, and `WAVE_CONTROL_AUTH_TOKEN`
+- `wave doctor` now warns or fails early when brokered providers target the packaged default endpoint or no Wave Control auth token is available
+- Context7 remains fail-open
+- Corridor writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json` and can fail closure when the fetch fails or matched findings meet the configured threshold
+- Broker mode is intended for self-hosted or team-owned Wave Control only; the packaged default endpoint is rejected as a provider-secret proxy
 
 - `orchestratorId` from the active launcher or resident orchestrator
 - `runtimeVersion` from the installed Wave package metadata

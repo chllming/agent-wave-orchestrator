@@ -154,6 +154,19 @@ function resolveWaveControlConfig(lanePaths, overrides = {}) {
   };
 }
 
+function resolveWaveControlAuthToken(config) {
+  const authVars = Array.isArray(config.authTokenEnvVars)
+    ? config.authTokenEnvVars
+    : [config.authTokenEnvVar].filter(Boolean);
+  for (const envVar of authVars) {
+    const value = envVar ? String(process.env[envVar] || "").trim() : "";
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
 function buildWorkspaceId(lanePaths, config) {
   return normalizeText(config.workspaceId, buildWorkspaceTmuxToken(REPO_ROOT));
 }
@@ -505,7 +518,7 @@ export async function flushWaveControlQueue(lanePaths, options = {}) {
 
   try {
     const ingestUrl = resolveIngestUrl(config.endpoint);
-    const authToken = config.authTokenEnvVar ? process.env[config.authTokenEnvVar] || "" : "";
+    const authToken = resolveWaveControlAuthToken(config);
     await postBatch(
       ingestUrl,
       authToken,

@@ -73,12 +73,21 @@ export const DEFAULT_CODEX_SANDBOX_MODE = "danger-full-access";
 export const CODEX_SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
 export const DEFAULT_CLAUDE_COMMAND = "claude";
 export const DEFAULT_OPENCODE_COMMAND = "opencode";
-export const DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR = "WAVE_CONTROL_AUTH_TOKEN";
+export const DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR = "WAVE_API_TOKEN";
+export const LEGACY_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR = "WAVE_CONTROL_AUTH_TOKEN";
 export const DEFAULT_WAVE_CONTROL_ENDPOINT = "https://wave-control.up.railway.app/api/v1";
 export const DEFAULT_WAVE_CONTROL_REPORT_MODE = "metadata-only";
 export const DEFAULT_WAVE_CONTROL_REQUEST_TIMEOUT_MS = 5000;
 export const DEFAULT_WAVE_CONTROL_FLUSH_BATCH_SIZE = 25;
 export const DEFAULT_WAVE_CONTROL_MAX_PENDING_EVENTS = 1000;
+export const EXTERNAL_PROVIDER_MODES = ["direct", "broker", "hybrid"];
+export const DEFAULT_CONTEXT7_API_KEY_ENV_VAR = "CONTEXT7_API_KEY";
+export const DEFAULT_CORRIDOR_API_TOKEN_ENV_VAR = "CORRIDOR_API_TOKEN";
+export const DEFAULT_CORRIDOR_API_KEY_FALLBACK_ENV_VAR = "CORRIDOR_API_KEY";
+export const DEFAULT_CORRIDOR_BASE_URL = "https://app.corridor.dev/api";
+export const DEFAULT_CORRIDOR_SEVERITY_THRESHOLD = "critical";
+export const DEFAULT_CORRIDOR_FINDING_STATES = ["open", "potential"];
+export const CORRIDOR_SEVERITY_LEVELS = ["low", "medium", "high", "critical"];
 export const DEFAULT_WAVE_CONTROL_SELECTED_ARTIFACT_KINDS = [
   "trace-run-metadata",
   "trace-quality",
@@ -293,6 +302,103 @@ function normalizeOptionalJsonObject(value, label) {
     return JSON.parse(JSON.stringify(value));
   }
   throw new Error(`${label} must be a JSON object`);
+}
+
+function normalizeExternalProviderMode(value, label, fallback = "direct") {
+  const normalized = String(value || fallback)
+    .trim()
+    .toLowerCase();
+  if (!EXTERNAL_PROVIDER_MODES.includes(normalized)) {
+    throw new Error(`${label} must be one of: ${EXTERNAL_PROVIDER_MODES.join(", ")}`);
+  }
+  return normalized;
+}
+
+function normalizeCorridorSeverity(value, label, fallback = DEFAULT_CORRIDOR_SEVERITY_THRESHOLD) {
+  const normalized = String(value || fallback)
+    .trim()
+    .toLowerCase();
+  if (!CORRIDOR_SEVERITY_LEVELS.includes(normalized)) {
+    throw new Error(`${label} must be one of: ${CORRIDOR_SEVERITY_LEVELS.join(", ")}`);
+  }
+  return normalized;
+}
+
+function normalizeExternalProviders(rawExternalProviders = {}, label = "externalProviders") {
+  const externalProviders =
+    rawExternalProviders &&
+    typeof rawExternalProviders === "object" &&
+    !Array.isArray(rawExternalProviders)
+      ? rawExternalProviders
+      : {};
+  const context7 =
+    externalProviders.context7 &&
+    typeof externalProviders.context7 === "object" &&
+    !Array.isArray(externalProviders.context7)
+      ? externalProviders.context7
+      : {};
+  const corridor =
+    externalProviders.corridor &&
+    typeof externalProviders.corridor === "object" &&
+    !Array.isArray(externalProviders.corridor)
+      ? externalProviders.corridor
+      : {};
+  const context7Mode = normalizeExternalProviderMode(
+    context7.mode,
+    `${label}.context7.mode`,
+    "direct",
+  );
+  const corridorMode = normalizeExternalProviderMode(
+    corridor.mode,
+    `${label}.corridor.mode`,
+    "direct",
+  );
+  const normalized = {
+    context7: {
+      mode: context7Mode,
+      apiKeyEnvVar:
+        normalizeOptionalString(
+          context7.apiKeyEnvVar,
+          DEFAULT_CONTEXT7_API_KEY_ENV_VAR,
+        ) || DEFAULT_CONTEXT7_API_KEY_ENV_VAR,
+    },
+    corridor: {
+      enabled: normalizeOptionalBoolean(corridor.enabled, false),
+      mode: corridorMode,
+      baseUrl: normalizeOptionalString(corridor.baseUrl, DEFAULT_CORRIDOR_BASE_URL),
+      apiTokenEnvVar:
+        normalizeOptionalString(
+          corridor.apiTokenEnvVar,
+          DEFAULT_CORRIDOR_API_TOKEN_ENV_VAR,
+        ) || DEFAULT_CORRIDOR_API_TOKEN_ENV_VAR,
+      apiKeyFallbackEnvVar:
+        normalizeOptionalString(
+          corridor.apiKeyFallbackEnvVar,
+          DEFAULT_CORRIDOR_API_KEY_FALLBACK_ENV_VAR,
+        ) || DEFAULT_CORRIDOR_API_KEY_FALLBACK_ENV_VAR,
+      teamId: normalizeOptionalString(corridor.teamId, null),
+      projectId: normalizeOptionalString(corridor.projectId, null),
+      severityThreshold: normalizeCorridorSeverity(
+        corridor.severityThreshold,
+        `${label}.corridor.severityThreshold`,
+      ),
+      findingStates: normalizeOptionalStringArray(
+        corridor.findingStates,
+        DEFAULT_CORRIDOR_FINDING_STATES,
+      ),
+      requiredAtClosure: normalizeOptionalBoolean(corridor.requiredAtClosure, true),
+    },
+  };
+  if (
+    normalized.corridor.enabled &&
+    normalized.corridor.mode === "direct" &&
+    (!normalized.corridor.teamId || !normalized.corridor.projectId)
+  ) {
+    throw new Error(
+      `${label}.corridor.teamId and ${label}.corridor.projectId are required when corridor is enabled in direct mode`,
+    );
+  }
+  return normalized;
 }
 
 function normalizeExecutorBudget(rawBudget = {}, label = "budget") {
@@ -591,8 +697,24 @@ function normalizeWaveControl(rawWaveControl = {}, label = "waveControl") {
     workspaceId: normalizeOptionalString(waveControl.workspaceId, null),
     projectId: normalizeOptionalString(waveControl.projectId, null),
     authTokenEnvVar:
-      normalizeOptionalString(waveControl.authTokenEnvVar, DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR) ||
-      DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+      normalizeOptionalString(
+        waveControl.authTokenEnvVar,
+        DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+      ) || DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+    authTokenEnvVars: Array.from(
+      new Set(
+        normalizeOptionalStringArray(
+          waveControl.authTokenEnvVars,
+          [
+            normalizeOptionalString(
+              waveControl.authTokenEnvVar,
+              DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+            ) || DEFAULT_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+            LEGACY_WAVE_CONTROL_AUTH_TOKEN_ENV_VAR,
+          ],
+        ),
+      ),
+    ),
     reportMode,
     uploadArtifactKinds: normalizeOptionalStringArray(
       waveControl.uploadArtifactKinds,
@@ -1109,6 +1231,7 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
           capabilityRouting: rawProject.capabilityRouting || {},
           runtimePolicy: rawProject.runtimePolicy || {},
           waveControl: rawProject.waveControl || {},
+          externalProviders: rawProject.externalProviders || {},
           lanes: projectLanes,
           explicit: Boolean(rawProjects),
         },
@@ -1130,6 +1253,10 @@ export function loadWaveConfig(configPath = DEFAULT_WAVE_CONFIG_PATH) {
     capabilityRouting: normalizeCapabilityRouting(rawConfig.capabilityRouting),
     runtimePolicy: normalizeRuntimePolicy(rawConfig.runtimePolicy),
     waveControl: normalizeWaveControl(rawConfig.waveControl, "waveControl"),
+    externalProviders: normalizeExternalProviders(
+      rawConfig.externalProviders,
+      "externalProviders",
+    ),
     sharedPlanDocs,
     lanes: legacyLanes,
     projects,
@@ -1182,6 +1309,21 @@ export function resolveProjectProfile(config, projectInput = config.defaultProje
       ...config.runtimePolicy,
       ...(projectConfig.runtimePolicy || {}),
     }),
+    externalProviders: normalizeExternalProviders(
+      {
+        ...config.externalProviders,
+        ...(projectConfig.externalProviders || {}),
+        context7: {
+          ...(config.externalProviders?.context7 || {}),
+          ...(projectConfig.externalProviders?.context7 || {}),
+        },
+        corridor: {
+          ...(config.externalProviders?.corridor || {}),
+          ...(projectConfig.externalProviders?.corridor || {}),
+        },
+      },
+      `projects.${projectId}.externalProviders`,
+    ),
     waveControl: normalizeWaveControl(
       {
         ...config.waveControl,
@@ -1256,6 +1398,21 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane, proje
     },
     `${lane}.waveControl`,
   );
+  const externalProviders = normalizeExternalProviders(
+    {
+      ...projectProfile.externalProviders,
+      ...(laneConfig.externalProviders || {}),
+      context7: {
+        ...(projectProfile.externalProviders?.context7 || {}),
+        ...(laneConfig.externalProviders?.context7 || {}),
+      },
+      corridor: {
+        ...(projectProfile.externalProviders?.corridor || {}),
+        ...(laneConfig.externalProviders?.corridor || {}),
+      },
+    },
+    `${lane}.externalProviders`,
+  );
   return {
     projectId: projectProfile.projectId,
     projectName: projectProfile.projectName,
@@ -1276,6 +1433,7 @@ export function resolveLaneProfile(config, laneInput = config.defaultLane, proje
     skills,
     capabilityRouting,
     runtimePolicy,
+    externalProviders,
     waveControl,
     paths: {
       terminalsPath: normalizeRepoRelativePath(

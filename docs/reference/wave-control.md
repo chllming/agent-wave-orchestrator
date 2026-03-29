@@ -142,7 +142,7 @@ Upload policy meanings:
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "workspaceId": "my-workspace",
     "projectId": "app",
-    "authTokenEnvVar": "WAVE_CONTROL_AUTH_TOKEN",
+    "authTokenEnvVar": "WAVE_API_TOKEN",
     "reportMode": "metadata-only",
     "uploadArtifactKinds": [
       "trace-run-metadata",
@@ -161,6 +161,16 @@ Packaged defaults:
 - identity defaults to the resolved project, lane, wave, run kind, and run id
 
 This package is distributed with the author's personal Wave Control endpoint enabled by default. Repos that do not want telemetry delivered there must explicitly opt out.
+
+Wave Control can also act as an owned broker for Context7 and Corridor when that service-side surface is explicitly enabled. In that mode, the repo runtime authenticates once with `WAVE_API_TOKEN`, and the service uses deployment-owned provider secrets such as `WAVE_BROKER_CONTEXT7_API_KEY` and `WAVE_BROKER_CORRIDOR_API_TOKEN`. Broker routes are intentionally rejected on the packaged default endpoint.
+
+Wave Control now also supports a separate browser app and browser-authenticated app routes:
+
+- Stack Auth verifies internal-team browser users on the backend with `STACK_SECRET_SERVER_KEY`, and `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS` is required when that surface is enabled
+- internal/admin access comes from confirmed Stack team memberships, not `selected_team` or other team-shaped user payload fields
+- admin-team members can issue and revoke Wave Control PATs
+- PATs are intended for CLI/runtime use such as `WAVE_API_TOKEN`, with the allowlisted scopes `broker:read` and `ingest:write`
+- the frontend package lives at `services/wave-control-web`, persists the Stack browser session across reloads, and mirrors the Stack project's enabled auth methods
 
 Lane overrides may refine the same surface under `lanes.<lane>.waveControl` or `projects.<projectId>.lanes.<lane>.waveControl`.
 
@@ -196,6 +206,8 @@ Wave Control reporting should:
 The Railway-hosted `services/wave-control` service is an analysis surface, not the scheduler of record.
 
 The service package lives under `services/wave-control/`.
+
+The web frontend package lives under `services/wave-control-web/`.
 
 For durable telemetry retention, attach Railway Postgres to `wave-control` so the
 service receives `DATABASE_URL`. Without that variable, the service falls back to the

@@ -36,6 +36,8 @@ At runtime, those distinctions map onto separate modules:
 
 Closure roles are resolved from the wave definition first, then from starter defaults. In other words, integration, documentation, `cont-QA`, `cont-EVAL`, and security review keep the same semantics even when a wave overrides the default role ids such as `A8`, `A9`, `A0`, `E0`, or `A7`.
 
+If `externalProviders.corridor.enabled` is on, Wave also materializes a normalized Corridor artifact before security and integration run. Security review still owns the human-readable report and `[wave-security]` marker, but the security gate can fail closed when the saved Corridor artifact reports a fetch failure or matched blocking findings on implementation-owned paths.
+
 ## Durable State Surfaces
 
 The runtime writes several different artifacts, but they do different jobs:
@@ -56,6 +58,8 @@ The runtime writes several different artifacts, but they do different jobs:
   `.tmp/<lane>-wave-launcher/inboxes/wave-<n>/<agent>.md`
 - integration summary:
   `.tmp/<lane>-wave-launcher/integration/wave-<n>.json`
+- Corridor security context:
+  `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json`
 - wave dashboard:
   `.tmp/<lane>-wave-launcher/dashboards/wave-<n>.json`
 - run-state:

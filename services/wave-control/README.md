@@ -1,5 +1,13 @@
 # Wave Control
 
+Wave Control now supports:
+
+- telemetry ingest and analysis APIs
+- optional owned-deployment broker routes for Context7 and Corridor
+- Stack-authenticated internal app routes
+- Wave Control-issued personal access tokens for CLI and broker use
+- a separate slowfast-style Vite/Lit frontend under `../wave-control-web`
+
 `services/wave-control` is the Railway-hosted control plane for Wave telemetry.
 
 It ingests typed run and benchmark events, stores selected artifact metadata, and materializes read APIs plus a minimal operator UI for:
@@ -53,6 +61,16 @@ Other controls:
 - `WAVE_CONTROL_MAX_BATCH_EVENTS`
 - `WAVE_CONTROL_MAX_INLINE_ARTIFACT_BYTES`
 - `WAVE_CONTROL_UI_TITLE`
+- `WAVE_CONTROL_ALLOWED_ORIGINS`
+
+Stack/browser auth:
+
+- `WAVE_CONTROL_STACK_ENABLED=true`
+- `WAVE_CONTROL_STACK_PROJECT_ID`
+- `WAVE_CONTROL_STACK_PUBLISHABLE_CLIENT_KEY`
+- `STACK_SECRET_SERVER_KEY`
+- `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS` (required; app routes fail closed when it is unset, and internal/admin access is derived from confirmed Stack team memberships only)
+- `WAVE_CONTROL_STACK_ADMIN_TEAM_IDS`
 
 ## API
 
@@ -75,6 +93,18 @@ Authenticated reads:
 - `GET /api/v1/artifact`
 - `POST /api/v1/artifacts/signed-upload`
 
+Stack-authenticated internal app routes:
+
+- `GET /api/v1/app/me`
+- `GET /api/v1/app/overview`
+- `GET /api/v1/app/runs`
+- `GET /api/v1/app/run`
+- `GET /api/v1/app/benchmarks`
+- `GET /api/v1/app/benchmark`
+- `GET /api/v1/app/tokens`
+- `POST /api/v1/app/tokens`
+- `POST /api/v1/app/tokens/:id/revoke`
+
 ## Storage Model
 
 - Local Wave runtimes remain authoritative.
@@ -85,6 +115,77 @@ Authenticated reads:
 ## Indexed Identity Dimensions
 
 Wave Control stores and filters telemetry by the run identity carried on each event.
+
+## Owned Provider Broker
+
+Use this only on a self-hosted or team-owned deployment.
+
+- `WAVE_API_TOKEN` or `WAVE_API_TOKENS`: bearer tokens accepted by the service
+- `WAVE_BROKER_OWNED_DEPLOYMENT=true`: required to enable provider broker routes
+- `WAVE_BROKER_ENABLE_CONTEXT7=true`
+- `WAVE_BROKER_CONTEXT7_API_KEY=<key>`
+- `WAVE_BROKER_ENABLE_CORRIDOR=true`
+- `WAVE_BROKER_CORRIDOR_API_TOKEN=<token>`
+- `WAVE_BROKER_CORRIDOR_PROJECT_MAP=<json>`
+
+Broker routes:
+
+- `GET /api/v1/providers/context7/search`
+- `GET /api/v1/providers/context7/context`
+- `POST /api/v1/providers/corridor/context`
+
+`WAVE_BROKER_CORRIDOR_PROJECT_MAP` should map Wave project ids to Corridor ids, for example:
+
+```json
+{
+  "app": {
+    "teamId": "team-uuid",
+    "projectId": "corridor-project-uuid"
+  }
+}
+```
+
+These routes require the normal Wave bearer token and never return the upstream provider secrets.
+
+## Personal Access Tokens
+
+Wave Control PATs are opaque `wave_pat_*` tokens. The service stores only a SHA-256 hash plus metadata and shows the plaintext value once at creation time.
+
+Default token scopes for the internal token-issuance UI:
+
+- `broker:read`
+- `ingest:write`
+
+PAT scope requests outside that allowlist are rejected, including `*`.
+
+Static env tokens still work and keep full service access. PATs are intended for repo runtimes and the brokered provider path.
+
+## Web Frontend
+
+The new browser app lives in `services/wave-control-web` and mirrors the sibling `slowfast.ai` stack shape:
+
+- Vite
+- Lit
+- small runtime config module
+- static-shell styling, not server-rendered HTML
+
+Run it locally with:
+
+```bash
+cd services/wave-control-web
+pnpm install
+pnpm dev
+```
+
+Frontend env vars:
+
+- `VITE_WAVE_CONTROL_API_BASE_URL`
+- `VITE_STACK_PROJECT_ID`
+- `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
+
+The frontend also accepts `NEXT_PUBLIC_STACK_PROJECT_ID` and `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` as compatibility fallbacks.
+
+The browser app persists the Stack session across reloads, completes OAuth and magic-link callbacks on the same app path, and only renders sign-in methods that are enabled in the Stack project configuration.
 
 The core dimensions are:
 

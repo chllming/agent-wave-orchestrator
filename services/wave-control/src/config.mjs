@@ -34,7 +34,11 @@ function normalizeTokenList(value) {
 
 export function loadWaveControlServiceConfig(env = process.env) {
   const authTokens = normalizeTokenList(
-    env.WAVE_CONTROL_API_TOKENS || env.WAVE_CONTROL_API_TOKEN || "",
+    env.WAVE_API_TOKENS ||
+      env.WAVE_API_TOKEN ||
+      env.WAVE_CONTROL_API_TOKENS ||
+      env.WAVE_CONTROL_API_TOKEN ||
+      "",
   );
   return {
     host: normalizeText(env.HOST, "0.0.0.0"),
@@ -65,6 +69,42 @@ export function loadWaveControlServiceConfig(env = process.env) {
     },
     ui: {
       title: normalizeText(env.WAVE_CONTROL_UI_TITLE, "Wave Control"),
+    },
+    cors: {
+      allowedOrigins: normalizeTokenList(env.WAVE_CONTROL_ALLOWED_ORIGINS),
+    },
+    stack: {
+      enabled: normalizeBool(env.WAVE_CONTROL_STACK_ENABLED, false),
+      projectId: normalizeText(env.WAVE_CONTROL_STACK_PROJECT_ID || env.NEXT_PUBLIC_STACK_PROJECT_ID, ""),
+      publishableClientKey: normalizeText(
+        env.WAVE_CONTROL_STACK_PUBLISHABLE_CLIENT_KEY || env.NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY,
+        "",
+      ),
+      secretServerKey: normalizeText(env.STACK_SECRET_SERVER_KEY, ""),
+      internalTeamIds: normalizeTokenList(env.WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS),
+      adminTeamIds: normalizeTokenList(env.WAVE_CONTROL_STACK_ADMIN_TEAM_IDS),
+    },
+    broker: {
+      ownedDeployment: normalizeBool(env.WAVE_BROKER_OWNED_DEPLOYMENT, false),
+      context7Enabled: normalizeBool(env.WAVE_BROKER_ENABLE_CONTEXT7, false),
+      context7ApiKey: normalizeText(env.WAVE_BROKER_CONTEXT7_API_KEY, ""),
+      corridorEnabled: normalizeBool(env.WAVE_BROKER_ENABLE_CORRIDOR, false),
+      corridorApiToken: normalizeText(env.WAVE_BROKER_CORRIDOR_API_TOKEN, ""),
+      requestTimeoutMs: normalizeInt(env.WAVE_BROKER_REQUEST_TIMEOUT_MS, 10000),
+      maxRetries: normalizeInt(env.WAVE_BROKER_MAX_RETRIES, 1),
+      maxPages: normalizeInt(env.WAVE_BROKER_MAX_PAGES, 10),
+      corridorProjectMap: (() => {
+        const raw = normalizeText(env.WAVE_BROKER_CORRIDOR_PROJECT_MAP, "");
+        if (!raw) {
+          return {};
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+          return {};
+        }
+      })(),
     },
   };
 }

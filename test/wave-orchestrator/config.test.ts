@@ -427,6 +427,7 @@ describe("runtime configuration normalization", () => {
       workspaceId: "wave-control-workspace",
       projectId: "wave-orchestration",
       authTokenEnvVar: "CUSTOM_WAVE_CONTROL_TOKEN",
+      authTokenEnvVars: ["CUSTOM_WAVE_CONTROL_TOKEN", "WAVE_CONTROL_AUTH_TOKEN"],
       reportMode: "metadata-only",
       uploadArtifactKinds: ["trace-quality", "trace-outcome"],
       requestTimeoutMs: 9000,
@@ -439,6 +440,72 @@ describe("runtime configuration normalization", () => {
       projectId: "default",
       uploadArtifactKinds: ["trace-quality", "benchmark-results"],
       captureBenchmarkRuns: false,
+    });
+  });
+
+  it("normalizes external provider config with project and lane overrides", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          externalProviders: {
+            context7: {
+              mode: "broker",
+            },
+            corridor: {
+              enabled: true,
+              mode: "broker",
+              severityThreshold: "high",
+            },
+          },
+          projects: {
+            app: {
+              rootDir: ".",
+              externalProviders: {
+                corridor: {
+                  mode: "direct",
+                  teamId: "team-1",
+                  projectId: "project-1",
+                },
+              },
+              lanes: {
+                main: {
+                  externalProviders: {
+                    context7: {
+                      mode: "hybrid",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main", "app");
+
+    expect(lane.externalProviders).toMatchObject({
+      context7: {
+        mode: "hybrid",
+        apiKeyEnvVar: "CONTEXT7_API_KEY",
+      },
+      corridor: {
+        enabled: true,
+        mode: "direct",
+        teamId: "team-1",
+        projectId: "project-1",
+        severityThreshold: "high",
+        requiredAtClosure: true,
+      },
     });
   });
 

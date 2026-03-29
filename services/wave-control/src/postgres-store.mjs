@@ -146,6 +146,24 @@ export class PostgresWaveControlStore {
         PRIMARY KEY (event_id, artifact_id)
       );
     `);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS wave_control_pat_tokens (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        label TEXT NOT NULL,
+        owner_stack_user_id TEXT,
+        owner_email TEXT,
+        created_by_stack_user_id TEXT,
+        scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL,
+        last_used_at TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ
+      );
+    `);
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS wave_control_pat_owner_idx
+      ON wave_control_pat_tokens (owner_stack_user_id, created_at DESC);
+    `);
   }
 
   async close() {
@@ -324,6 +342,121 @@ export class PostgresWaveControlStore {
               content: upload.inline_content,
             }
           : null,
+    };
+  }
+
+  async listPersonalAccessTokens({ ownerStackUserId } = {}) {
+    const values = [];
+    let where = "";
+    if (ownerStackUserId) {
+      values.push(ownerStackUserId);
+      where = `WHERE owner_stack_user_id = $${values.length}`;
+    }
+    const result = await this.pool.query(
+      `
+        SELECT id, label, owner_stack_user_id, owner_email, created_by_stack_user_id, scopes, created_at, last_used_at, revoked_at
+        FROM wave_control_pat_tokens
+        ${where}
+        ORDER BY created_at DESC
+      `,
+      values,
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      ownerStackUserId: row.owner_stack_user_id,
+      ownerEmail: row.owner_email,
+      createdByStackUserId: row.created_by_stack_user_id,
+      scopes: Array.isArray(row.scopes) ? row.scopes : [],
+      createdAt: row.created_at?.toISOString?.() || row.created_at || null,
+      lastUsedAt: row.last_used_at?.toISOString?.() || row.last_used_at || null,
+      revokedAt: row.revoked_at?.toISOString?.() || row.revoked_at || null,
+    }));
+  }
+
+  async createPersonalAccessToken(record) {
+    await this.pool.query(
+      `
+        INSERT INTO wave_control_pat_tokens (
+          id, token_hash, label, owner_stack_user_id, owner_email, created_by_stack_user_id, scopes, created_at, last_used_at, revoked_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
+      `,
+      [
+        record.id,
+        record.tokenHash,
+        record.label,
+        record.ownerStackUserId,
+        record.ownerEmail,
+        record.createdByStackUserId,
+        JSON.stringify(record.scopes || []),
+        record.createdAt,
+        record.lastUsedAt,
+        record.revokedAt,
+      ],
+    );
+    return record;
+  }
+
+  async findPersonalAccessTokenByHash(tokenHash) {
+    const result = await this.pool.query(
+      `
+        SELECT id, token_hash, label, owner_stack_user_id, owner_email, created_by_stack_user_id, scopes, created_at, last_used_at, revoked_at
+        FROM wave_control_pat_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+      `,
+      [tokenHash],
+    );
+    const row = result.rows[0] || null;
+    if (!row) {
+      return null;
+    }
+    return {
+      id: row.id,
+      tokenHash: row.token_hash,
+      label: row.label,
+      ownerStackUserId: row.owner_stack_user_id,
+      ownerEmail: row.owner_email,
+      createdByStackUserId: row.created_by_stack_user_id,
+      scopes: Array.isArray(row.scopes) ? row.scopes : [],
+      createdAt: row.created_at?.toISOString?.() || row.created_at || null,
+      lastUsedAt: row.last_used_at?.toISOString?.() || row.last_used_at || null,
+      revokedAt: row.revoked_at?.toISOString?.() || row.revoked_at || null,
+    };
+  }
+
+  async touchPersonalAccessTokenLastUsed(id, usedAt) {
+    await this.pool.query(
+      `UPDATE wave_control_pat_tokens SET last_used_at = $2 WHERE id = $1`,
+      [id, usedAt],
+    );
+  }
+
+  async revokePersonalAccessToken(id, revokedAt) {
+    const result = await this.pool.query(
+      `
+        UPDATE wave_control_pat_tokens
+        SET revoked_at = $2
+        WHERE id = $1
+        RETURNING id, label, owner_stack_user_id, owner_email, created_by_stack_user_id, scopes, created_at, last_used_at, revoked_at
+      `,
+      [id, revokedAt],
+    );
+    const row = result.rows[0] || null;
+    if (!row) {
+      return null;
+    }
+    return {
+      id: row.id,
+      label: row.label,
+      ownerStackUserId: row.owner_stack_user_id,
+      ownerEmail: row.owner_email,
+      createdByStackUserId: row.created_by_stack_user_id,
+      scopes: Array.isArray(row.scopes) ? row.scopes : [],
+      createdAt: row.created_at?.toISOString?.() || row.created_at || null,
+      lastUsedAt: row.last_used_at?.toISOString?.() || row.last_used_at || null,
+      revokedAt: row.revoked_at?.toISOString?.() || row.revoked_at || null,
     };
   }
 }

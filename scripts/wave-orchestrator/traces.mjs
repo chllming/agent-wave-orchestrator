@@ -798,6 +798,8 @@ export function writeTraceBundle({
   capabilityAssignments = [],
   dependencySnapshot = null,
   securitySummary = null,
+  corridorSummary = null,
+  corridorSummaryPath = null,
   integrationSummary,
   integrationMarkdownPath,
   proofRegistryPath = null,
@@ -860,6 +862,28 @@ export function writeTraceBundle({
     "json",
     true,
   );
+  const corridorArtifact =
+    corridorSummaryPath || corridorSummary
+      ? corridorSummaryPath
+        ? copyArtifactDescriptor(
+            dir,
+            corridorSummaryPath,
+            path.join(dir, "corridor.json"),
+            false,
+          )
+        : writeArtifactDescriptor(
+            dir,
+            path.join(dir, "corridor.json"),
+            corridorSummary || {},
+            "json",
+            false,
+          )
+      : {
+          path: "corridor.json",
+          required: false,
+          present: false,
+          sha256: null,
+        };
   const integrationArtifact = writeArtifactDescriptor(
     dir,
     path.join(dir, "integration.json"),
@@ -1023,6 +1047,7 @@ export function writeTraceBundle({
       capabilityAssignments: capabilityAssignmentsArtifact,
       dependencySnapshot: dependencySnapshotArtifact,
       security: securityArtifact,
+      corridor: corridorArtifact,
       integration: integrationArtifact,
       integrationMarkdown: integrationMarkdownArtifact,
       proofRegistry: proofRegistryArtifact,

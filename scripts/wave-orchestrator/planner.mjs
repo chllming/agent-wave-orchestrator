@@ -2625,6 +2625,7 @@ async function runAgenticDraftFlow(options = {}) {
     request,
   });
   const plannerContext7Prefetch = await prefetchContext7ForSelection(plannerContext7Selection, {
+    lanePaths,
     cacheDir: lanePaths.context7CacheDir,
   });
   const promptText = buildPlannerPromptText({

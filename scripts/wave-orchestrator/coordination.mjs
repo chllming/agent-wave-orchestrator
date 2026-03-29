@@ -197,6 +197,8 @@ export function buildExecutionPrompt({
   inboxPath = null,
   inboxText = "",
   context7 = null,
+  corridorContextPath = null,
+  corridorContextText = "",
   componentPromotions = null,
   evalTargets = null,
   benchmarkCatalogPath = null,
@@ -215,6 +217,9 @@ export function buildExecutionPrompt({
     ? path.relative(REPO_ROOT, sharedSummaryPath)
     : null;
   const relativeInboxPath = inboxPath ? path.relative(REPO_ROOT, inboxPath) : null;
+  const relativeCorridorContextPath = corridorContextPath
+    ? path.relative(REPO_ROOT, corridorContextPath)
+    : null;
   const relativeSignalStatePath = signalStatePath
     ? path.relative(REPO_ROOT, signalStatePath)
     : null;
@@ -537,6 +542,12 @@ export function buildExecutionPrompt({
           `Agent inbox repo-relative path: ${relativeInboxPath}`,
         ]
       : []),
+    ...(corridorContextPath
+      ? [
+          `Corridor context absolute path: ${corridorContextPath}`,
+          `Corridor context repo-relative path: ${relativeCorridorContextPath}`,
+        ]
+      : []),
     ...(signalStatePath
       ? [
           `Signal state absolute path: ${signalStatePath}`,
@@ -551,6 +562,9 @@ export function buildExecutionPrompt({
       : []),
     ...(inboxText
       ? ["Current agent inbox:", "```markdown", inboxText, "```", ""]
+      : []),
+    ...(corridorContextText
+      ? ["Current Corridor context:", "```text", corridorContextText, "```", ""]
       : []),
     ...(signalStatePath
       ? [

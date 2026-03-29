@@ -14,6 +14,7 @@ export class MemoryWaveControlStore {
   constructor() {
     this.events = [];
     this.artifactUploads = new Map();
+    this.personalAccessTokens = [];
   }
 
   async init() {}
@@ -77,5 +78,38 @@ export class MemoryWaveControlStore {
       metadata: artifact,
       inlineContent: inline ? upload : null,
     };
+  }
+
+  async listPersonalAccessTokens({ ownerStackUserId } = {}) {
+    return this.personalAccessTokens.filter(
+      (record) => !ownerStackUserId || record.ownerStackUserId === ownerStackUserId,
+    );
+  }
+
+  async createPersonalAccessToken(record) {
+    this.personalAccessTokens.push(JSON.parse(JSON.stringify(record)));
+    return record;
+  }
+
+  async findPersonalAccessTokenByHash(tokenHash) {
+    return this.personalAccessTokens.find(
+      (record) => record.tokenHash === tokenHash && !record.revokedAt,
+    ) || null;
+  }
+
+  async touchPersonalAccessTokenLastUsed(id, usedAt) {
+    const record = this.personalAccessTokens.find((entry) => entry.id === id);
+    if (record) {
+      record.lastUsedAt = usedAt;
+    }
+  }
+
+  async revokePersonalAccessToken(id, revokedAt) {
+    const record = this.personalAccessTokens.find((entry) => entry.id === id);
+    if (!record) {
+      return null;
+    }
+    record.revokedAt = revokedAt;
+    return record;
   }
 }

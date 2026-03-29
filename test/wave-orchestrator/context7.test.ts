@@ -17,6 +17,7 @@ function makeTempDir() {
 }
 
 afterEach(() => {
+  delete process.env.WAVE_API_TOKEN;
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -55,6 +56,22 @@ function writeBundleIndex(dir) {
     "utf8",
   );
   return indexPath;
+}
+
+function makeHybridLanePaths() {
+  return {
+    externalProviders: {
+      context7: {
+        mode: "hybrid",
+        apiKeyEnvVar: "CONTEXT7_API_KEY",
+      },
+    },
+    waveControl: {
+      endpoint: "https://wave-control.internal/api/v1",
+      authTokenEnvVar: "WAVE_API_TOKEN",
+      authTokenEnvVars: ["WAVE_API_TOKEN"],
+    },
+  };
 }
 
 describe("Context7 selection resolution", () => {
@@ -180,5 +197,131 @@ describe("Context7 prefetch", () => {
     });
     expect(cached.mode).toBe("cached");
     expect(cached.promptText).toContain("Temporal docs snippet");
+  });
+
+  it("falls back to direct mode when a hybrid broker request fails at runtime", async () => {
+    process.env.WAVE_API_TOKEN = "wave-token";
+    const selection = {
+      bundleId: "core-go",
+      query: "Temporal schedules",
+      libraries: [{ libraryName: "temporal", libraryId: null, queryHint: null }],
+      indexHash: "index",
+    };
+    const seenUrls = [];
+    const fetchImpl = async (url) => {
+      const normalized = String(url);
+      seenUrls.push(normalized);
+      if (normalized.includes("/providers/context7/search")) {
+        return new Response(JSON.stringify({ error: "broker unavailable" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (normalized.includes("/providers/context7/context")) {
+        throw new Error("broker context should not be used after fallback");
+      }
+      if (normalized.includes("/libs/search")) {
+        return new Response(JSON.stringify([{ id: "/temporalio/temporal", name: "Temporal" }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("Temporal direct docs snippet", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    };
+
+    const result = await prefetchContext7ForSelection(selection, {
+      lanePaths: makeHybridLanePaths(),
+      cacheDir: makeTempDir(),
+      apiKey: "ctx7sk-direct",
+      fetchImpl,
+      nowMs: Date.UTC(2026, 0, 2),
+    });
+
+    expect(result.mode).toBe("fetched");
+    expect(result.warning).toContain("fell back to direct auth");
+    expect(result.promptText).toContain("Temporal direct docs snippet");
+    expect(seenUrls.filter((url) => url.includes("/providers/context7/search"))).toHaveLength(1);
+    expect(seenUrls.filter((url) => url.includes("context7.com/api/v2/libs/search"))).toHaveLength(1);
+    expect(seenUrls.filter((url) => url.includes("context7.com/api/v2/context"))).toHaveLength(1);
+  });
+
+  it("falls back to direct mode when a hybrid broker response is malformed", async () => {
+    process.env.WAVE_API_TOKEN = "wave-token";
+    const selection = {
+      bundleId: "core-go",
+      query: "Temporal schedules",
+      libraries: [{ libraryName: "temporal", libraryId: null, queryHint: null }],
+      indexHash: "index",
+    };
+    const fetchImpl = async (url) => {
+      const normalized = String(url);
+      if (normalized.includes("/providers/context7/search")) {
+        return {
+          ok: true,
+          json: async () => {
+            throw new Error("invalid broker json");
+          },
+          headers: new Headers(),
+        };
+      }
+      if (normalized.includes("/providers/context7/context")) {
+        throw new Error("broker context should not be used after malformed fallback");
+      }
+      if (normalized.includes("/libs/search")) {
+        return new Response(JSON.stringify([{ id: "/temporalio/temporal", name: "Temporal" }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("Temporal direct docs snippet", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    };
+
+    const result = await prefetchContext7ForSelection(selection, {
+      lanePaths: makeHybridLanePaths(),
+      cacheDir: makeTempDir(),
+      apiKey: "ctx7sk-direct",
+      fetchImpl,
+      nowMs: Date.UTC(2026, 0, 3),
+    });
+
+    expect(result.mode).toBe("fetched");
+    expect(result.warning).toContain("invalid broker json");
+    expect(result.promptText).toContain("Temporal direct docs snippet");
+  });
+
+  it("returns an error when hybrid broker fallback has no direct API key available", async () => {
+    process.env.WAVE_API_TOKEN = "wave-token";
+    const selection = {
+      bundleId: "core-go",
+      query: "Temporal schedules",
+      libraries: [{ libraryName: "temporal", libraryId: null, queryHint: null }],
+      indexHash: "index",
+    };
+
+    const result = await prefetchContext7ForSelection(selection, {
+      lanePaths: makeHybridLanePaths(),
+      cacheDir: makeTempDir(),
+      apiKey: "",
+      fetchImpl: async (url) => {
+        if (String(url).includes("/providers/context7/search")) {
+          return new Response(JSON.stringify({ error: "broker unavailable" }), {
+            status: 401,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected URL: ${String(url)}`);
+      },
+      nowMs: Date.UTC(2026, 0, 4),
+    });
+
+    expect(result.mode).toBe("error");
+    expect(result.warning).toContain("direct fallback is unavailable");
+    expect(result.warning).toContain("CONTEXT7_API_KEY is not set");
   });
 });

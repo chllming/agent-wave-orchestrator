@@ -1505,6 +1505,49 @@ describe("trace bundles", () => {
     expect(files).toEqual([]);
   });
 
+  it("copies the saved Corridor artifact into the trace bundle manifest", () => {
+    const dir = makeTempDir();
+    const tracesDir = path.join(dir, "traces");
+    const componentMatrixJsonPath = path.join(dir, "component-cutover-matrix.json");
+    const componentMatrixDocPath = path.join(dir, "component-cutover-matrix.md");
+    writeJson(componentMatrixJsonPath, { components: [] });
+    writeText(componentMatrixDocPath, "# Component cutover\n");
+    const lanePaths = makeLanePaths(dir, componentMatrixJsonPath, componentMatrixDocPath);
+    const corridorSourcePath = path.join(dir, "security", "wave-0-corridor.json");
+    writeJson(corridorSourcePath, {
+      ok: true,
+      blocking: true,
+      blockingFindings: [{ id: "f1" }],
+    });
+
+    const traceDir = writeTraceBundle({
+      tracesDir,
+      lanePaths,
+      launcherOptions: { dryRun: false, timeoutMinutes: 30, maxRetriesPerWave: 1 },
+      wave: { wave: 0, file: "docs/plans/waves/wave-0.md", agents: [] },
+      attempt: 1,
+      manifest: { generatedAt: "2026-03-28T00:00:00.000Z", docs: [], waves: [] },
+      coordinationLogPath: null,
+      coordinationState: { records: [], latestRecords: [] },
+      ledger: {},
+      docsQueue: { wave: 0, lane: "main", items: [] },
+      securitySummary: {},
+      corridorSummaryPath: corridorSourcePath,
+      integrationSummary: { wave: 0, recommendation: "needs-more-work" },
+      integrationMarkdownPath: null,
+      clarificationTriage: {},
+      agentRuns: [],
+      quality: {},
+      structuredSignals: {},
+      gateSnapshot: null,
+    });
+
+    const bundle = loadTraceBundle(traceDir);
+    expect(bundle.metadata.artifacts.corridor.present).toBe(true);
+    expect(bundle.metadata.artifacts.corridor.path).toBe("corridor.json");
+    expect(fs.existsSync(path.join(traceDir, "corridor.json"))).toBe(true);
+  });
+
   it(
     "replays a launcher-generated local trace hermetically after live repo drift",
     () => {

@@ -107,17 +107,19 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.9.1`
-- Release tag: [`v0.9.1`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.1)
+- `@chllming/wave-orchestration@0.9.2`
+- Release tag: [`v0.9.2`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.2)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.9.1`:
+Highlights in `0.9.2`:
 
 - Live agent execution now uses detached process runners by default, which reduces tmux churn and memory pressure during wider orchestration bursts. Tmux is now optional and dashboard-only.
 - The sandbox-safe runtime path is now `wave submit`, `wave supervise`, `wave status`, `wave wait`, and `wave attach`, which behaves better under short-lived exec clients such as LEAPclaw, OpenClaw, and Nemoshell.
 - Supervisor recovery, launcher progress journaling, and exact-context reads are now hardier for multi-wave runs, reruns, and daemon/client loss in containerized or sandboxed environments.
-- Release docs, migration guidance, sandbox setup guides, the versioned recommendations guide, the manifest, and the tracked install-state fixtures now all point at the `0.9.1` surface.
+- Owned Wave Control deployments now support Stack-authenticated browser access, Wave-managed approval states and provider grants, personal access tokens, dedicated service tokens, encrypted per-user credential leasing, and the separate `services/wave-control-web` operator frontend.
+- Corridor is now documented as a first-class security input: it can run direct or through an owned Wave Control broker, materialize per-wave security context on implementation-owned paths, and block closure before integration when fetches fail or matched findings cross the configured threshold.
+- Release docs, migration guidance, runtime-config and closure references, Wave Control docs, the new Corridor reference, the manifest, and the tracked install-state fixtures now all point at the `0.9.2` surface.
 
 Requirements:
 
@@ -126,7 +128,8 @@ Requirements:
 - optional: `tmux` on `PATH` for dashboarded runs
 - at least one executor on `PATH`: `codex`, `claude`, or `opencode`
 - optional: `CONTEXT7_API_KEY` for launcher-side prefetch
-- optional: `WAVE_CONTROL_AUTH_TOKEN` for remote Wave Control reporting
+- optional: `WAVE_API_TOKEN` for owned Wave Control reporting, brokered provider access, and runtime credential leasing
+- compatibility fallback: `WAVE_CONTROL_AUTH_TOKEN`
 
 Telemetry defaults:
 
@@ -134,6 +137,13 @@ Telemetry defaults:
 - packaged default mode: `metadata-only`
 - default identity fields include `projectId`, `lane`, `wave`, `runKind`, and related benchmark ids
 - opt out explicitly with `waveControl.enabled: false`, `waveControl.reportMode: "disabled"`, or `wave launch --no-telemetry`
+
+Owned Wave Control and security features:
+
+- the packaged default endpoint is metadata-first and intentionally rejects provider-broker and credential-leasing routes
+- owned deployments can add the authenticated `wave-control` app surface: Stack-backed browser sign-in, Wave-managed approval states, provider grants, PATs, service tokens, and encrypted per-user credential leasing
+- `externalProviders.corridor` can run in `direct`, `broker`, or `hybrid` mode, writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json`, and can fail closure on fetch errors or matched blocking findings when `requiredAtClosure` stays enabled
+- see [docs/reference/wave-control.md](./docs/reference/wave-control.md), [docs/reference/corridor.md](./docs/reference/corridor.md), and [docs/reference/coordination-and-closure.md](./docs/reference/coordination-and-closure.md)
 
 ## Recommended Setup
 
@@ -202,6 +212,7 @@ Useful docs:
 - `docs/guides/monorepo-projects.md`
 - `docs/guides/planner.md`
 - `docs/reference/runtime-config/README.md`
+- `docs/reference/corridor.md`
 - `docs/reference/wave-control.md`
 ```
 
@@ -355,7 +366,8 @@ codex mcp list
 - [docs/plans/architecture-hardening-migration.md](./docs/plans/architecture-hardening-migration.md): historical record of the completed architecture hardening stages
 - [docs/plans/context7-wave-orchestrator.md](./docs/plans/context7-wave-orchestrator.md): Context7 setup and bundle authoring
 - [docs/reference/runtime-config/README.md](./docs/reference/runtime-config/README.md): executor, runtime, and skill-projection configuration
-- [docs/reference/wave-control.md](./docs/reference/wave-control.md): local-first telemetry contract and Railway control-plane model
+- [docs/reference/corridor.md](./docs/reference/corridor.md): direct, brokered, and hybrid Corridor security context plus closure semantics
+- [docs/reference/wave-control.md](./docs/reference/wave-control.md): local-first telemetry contract, owned deployment model, auth surfaces, and credential/broker routes
 - [docs/reference/package-publishing-flow.md](./docs/reference/package-publishing-flow.md): end-to-end package publishing flow, workflows, and lifecycle scripts
 - [docs/reference/proof-metrics.md](./docs/reference/proof-metrics.md): README failure cases mapped to concrete telemetry and benchmark evidence
 - [docs/reference/skills.md](./docs/reference/skills.md): skill bundle format, resolution order, and runtime projection

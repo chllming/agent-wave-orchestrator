@@ -88,4 +88,4 @@ The current roadmap is a release-direction document, not a backlog of planner ph
 - typed values in planner output
 - better environment modeling
 
-The stricter execution semantics are still future work, not a hidden already-finished feature in `0.9.1`.
+The stricter execution semantics are still future work, not a hidden already-finished feature in `0.9.2`.

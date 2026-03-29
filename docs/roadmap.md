@@ -2,39 +2,33 @@
 
 This roadmap is intentionally short and current. The older planner-foundation and ad-hoc-run phase list has been removed because that work no longer describes the actual shipping direction for this package.
 
-## Current Release: 0.9.1
+## Current Release: 0.9.2
 
-`0.9.1` is the runtime-hardening release.
+`0.9.2` is the current packaged surface.
 
-It focuses on:
+It includes:
 
 - detached process-backed agent execution instead of tmux-heavy live execution
 - lower steady-state memory pressure and less terminal churn during long runs
 - better behavior in constrained sandboxes such as LEAPclaw, OpenClaw, Nemoshell, and Docker-based operator environments
 - a safer `submit -> supervise -> status/wait -> attach` control path for long-running agentic orchestration
 - tighter supervisor recovery, progress journaling, and closure/retry correctness
+- the current protected Wave Control model: Stack-authenticated browser access, Wave-managed approval states and provider grants, PATs, service tokens, encrypted per-user credentials, and runtime env leasing
+- owned Context7 and Corridor broker routes plus the Corridor-backed security context that can gate closure before integration
 
-## Next Release: Final Planned Feature Release On This Line
+## Near-Term Direction On This Node Line
 
-The next planned release after `0.9.1`, aside from bug fixes and release-surface maintenance, is the final feature release for this standalone Node-based line.
-
-That release is focused on Wave Control authentication:
-
-- token-based auth for `wave-control`
-- web auth for the Wave Control operator surface
-- a cleaner control-plane boundary between the local orchestrator runtime and authenticated operator access
-- documentation and setup guidance for protected control surfaces in local, containerized, and hosted environments
-
-After that release, this package should move into maintenance mode:
+This standalone Node line should now be treated as maintenance-oriented:
 
 - bug fixes
 - compatibility updates
+- operational hardening
 - documentation updates
 - release-surface alignment work
 
 ## Strategic Direction: LEAPclaw Execution Model
 
-After the Wave Control auth release, the main execution roadmap moves away from expanding this Node runtime and toward the LEAPclaw execution model.
+With the authenticated Wave Control surface now present, the main execution roadmap moves away from expanding this Node runtime and toward the LEAPclaw execution model.
 
 The target shape is:
 
@@ -62,7 +56,6 @@ That line is expected to carry:
 
 For this repository, the practical sequence is:
 
-1. Ship `0.9.1` with the sandbox/runtime hardening and aligned docs.
-2. Ship the Wave Control token/web auth release as the last planned feature release on this Node line.
-3. Keep this package maintained for bug fixes, compatibility, and release-surface sync.
-4. Move long-term execution investment to the LEAPclaw + Go + Temporal architecture and the Rust standalone runtime.
+1. Ship `0.9.2` with the sandbox/runtime hardening and aligned docs.
+2. Maintain this Node package for bug fixes, compatibility, operational hardening, and release-surface sync rather than a broad new feature wave.
+3. Move long-term execution investment to the LEAPclaw + Go + Temporal architecture and the Rust standalone runtime.

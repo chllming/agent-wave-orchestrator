@@ -222,7 +222,7 @@ describe("wave init", () => {
       "docs/evals/cases/wave-expert-routing-preservation.json",
       "docs/guides/author-and-run-waves.md",
       "docs/guides/monorepo-projects.md",
-      "docs/guides/recommendations-0.9.1.md",
+      "docs/guides/recommendations-0.9.2.md",
       "docs/guides/sandboxed-environments.md",
       "docs/guides/signal-wrappers.md",
       "docs/plans/component-cutover-matrix.json",

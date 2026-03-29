@@ -1,12 +1,15 @@
 # Current State
 
-- The published package is `0.9.1`; that release keeps the shipped monorepo, design-role, and signal-hygiene surfaces, but now also moves live agent execution to detached process runners, reduces tmux and memory pressure during wide orchestration bursts, and hardens the sandbox-safe supervisor path for LEAPclaw, OpenClaw, Nemoshell, Docker, and similar short-lived exec environments.
+- The published package is `0.9.2`; that release keeps the shipped monorepo, design-role, and signal-hygiene surfaces, but now also moves live agent execution to detached process runners, reduces tmux and memory pressure during wide orchestration bursts, hardens the sandbox-safe supervisor path for LEAPclaw, OpenClaw, Nemoshell, Docker, and similar short-lived exec environments, and documents the current authenticated Wave Control plus Corridor-backed security surface that already ships in this repo.
 - The canonical shipped runtime architecture is documented in `docs/plans/end-state-architecture.md`; the sandbox-runtime companion is `docs/plans/sandbox-end-state-architecture.md`; historical cutover notes remain in `docs/plans/architecture-hardening-migration.md`.
 - The repository contains the published `@chllming/wave-orchestration` package plus the starter scaffold used by `wave init`.
 - The runtime is package-first and non-destructive for adopting repos: `wave init --adopt-existing` records existing repo-owned plans, waves, prompts, and config without overwriting them, and `wave upgrade` writes only `.wave/install-state.json` plus `.wave/upgrade-history/`.
-- The recommended `0.9.1` operating stance is documented in `docs/guides/recommendations-0.9.1.md`: keep proof and closure strict, keep generic `budget.turns` advisory, and use softer coordination states only for non-proof follow-up.
+- The recommended `0.9.2` operating stance is documented in `docs/guides/recommendations-0.9.2.md`: keep proof and closure strict, keep generic `budget.turns` advisory, and use softer coordination states only for non-proof follow-up.
 - Sandbox-safe setup guidance now ships in `docs/guides/sandboxed-environments.md`: use `wave submit/supervise/status/wait/attach` for short-lived clients, keep `tmux` optional and dashboard-only, and preserve `.tmp/` plus `.wave/` when running inside Nemoshell or Docker.
 - Runtime launch entrypoints now perform a best-effort npmjs version check, cache the result under `.wave/package-update-check.json`, and point operators at `pnpm exec wave self-update` when a newer published package exists.
+- The companion control plane now ships in two packages:
+  - `services/wave-control/` is the backend for typed telemetry, Stack-authenticated app users, Wave-managed approval states and provider grants, PATs, dedicated service tokens, encrypted per-user credential storage, runtime env leasing, and owned broker routes for Context7 or Corridor
+  - `services/wave-control-web/` is the Vite/Lit browser frontend that signs in through Stack, persists the browser session, exposes overview/runs/benchmarks/tokens, and adds superuser-only user, provider-grant, and write-only credential management
 - This source repo is itself kept as an adopted Wave workspace, so `node scripts/wave.mjs doctor --json` should pass from the repo root.
 - The default lane is `main`.
 - Planner foundation is now shipped:
@@ -55,6 +58,9 @@
   - authoritative proof registries projected to `.tmp/<lane>-wave-launcher/proof/` for compatibility, while preserving proof bundle lifecycle state so revoked or superseded operator evidence cannot keep satisfying closure
   - optional Wave Control telemetry under `.tmp/<lane>-wave-launcher/control-plane/telemetry/` for the implicit default project, or `.tmp/projects/<projectId>/<lane>-wave-launcher/control-plane/telemetry/` for explicit projects
   - packaged telemetry defaults now point at `https://wave-control.up.railway.app/api/v1` with `reportMode: metadata-only`, and repos must opt out explicitly if they do not want default project/lane/wave metadata delivery
+  - an optional `externalProviders.corridor` surface with `direct`, `broker`, and `hybrid` modes that writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json` for the implicit default project, or `.tmp/projects/<projectId>/<lane>-wave-launcher/security/wave-<n>-corridor.json` for explicit projects
+  - closure-stage Corridor gating that can fail as `corridor-fetch-failed` or `corridor-blocked` before integration when the provider fetch fails or matched implementation-owned findings meet the configured threshold
+  - security and integration summaries that keep matched Corridor findings visible alongside the human security review instead of replacing the reviewer with provider output
   - reducer-driven live state snapshots plus persisted machine-readable shadow diffs for helper-assignment, blocker, contradiction, closure, and retry slices
   - reducer-authoritative helper-assignment blocking, retry target selection, and resume planning, with live gate and closure reads now driven from validated result envelopes
   - optional design agents that publish validated design packets under `docs/plans/waves/design/wave-<n>-<agent>.md`, gate implementation through `designGate`, and run before code-owning implementation agents

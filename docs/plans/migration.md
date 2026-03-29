@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.9.1` surface.
+This page is the practical repo-upgrade guide for the current `0.9.2` surface.
 
 Use it when you are:
 
@@ -12,22 +12,24 @@ For the completed internal architecture cutover record, see [architecture-harden
 
 For the sandbox-specific long-running execution target, including async `submit/status/wait` semantics and daemon ownership goals, see [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
 
-## What `0.9.1` Changes
+## What `0.9.2` Changes
 
-The current `0.9.1` surface keeps the packaged operator-guidance alignment, monorepo project support, and project-aware default telemetry from `0.9.0`, but adds a more sandbox-friendly execution model and lower-overhead live orchestration.
+The current `0.9.2` surface keeps the packaged operator-guidance alignment, monorepo project support, and project-aware default telemetry from `0.9.0`, but adds a more sandbox-friendly execution model and lower-overhead live orchestration.
 
 The practical changes are:
 
 - live agent execution now uses detached process runners instead of per-agent tmux execution sessions, which reduces tmux churn and lowers memory pressure during broader fan-out
 - `wave submit`, `wave supervise`, `wave status`, `wave wait`, and `wave attach` are now the preferred path for short-lived clients and sandbox automation
 - supervisor recovery now reconciles launcher status and progress more conservatively, preserves the correct remaining wave range during multi-wave reruns, and keeps read-side status/wait calls aligned even after daemon loss
+- the packaged docs now cover the actual shipped owned-deployment Wave Control surface: Stack-authenticated browser access, Wave-managed approval states and provider grants, PATs, service tokens, encrypted per-user credentials, runtime env leasing, and the separate `services/wave-control-web` frontend
+- Corridor is now documented as a first-class security input, including direct versus broker versus hybrid mode, implementation-owned path matching, generated artifact paths, and the closure-gate interaction with the human security reviewer
 - a dedicated setup guide now ships for LEAPclaw, OpenClaw, Nemoshell, Docker, and similar constrained environments
 - the `0.9.0` monorepo and project-aware state layout remains part of the release surface, including `defaultProject`, `projects.<projectId>`, project-scoped state roots, and project-aware CLI routing
-- the current release surface and tracked install-state fixtures now all move together on `0.9.1`
+- the current release surface and tracked install-state fixtures now all move together on `0.9.2`
 
-If your repo copied starter docs, shell automation, runbooks, or `wave.config.json` defaults, these are the areas most likely to need a sync before the `0.9.1` package cut.
+If your repo copied starter docs, shell automation, runbooks, or `wave.config.json` defaults, these are the areas most likely to need a sync before the `0.9.2` package cut.
 
-For a practical `0.9.1` operating stance after the upgrade, read [../guides/recommendations-0.9.1.md](../guides/recommendations-0.9.1.md).
+For a practical `0.9.2` operating stance after the upgrade, read [../guides/recommendations-0.9.2.md](../guides/recommendations-0.9.2.md).
 For the concrete operator setup in Nemoshell, Docker, and other sandboxed shells, also read [../guides/sandboxed-environments.md](../guides/sandboxed-environments.md).
 
 ## What `0.8.6` Changes
@@ -95,7 +97,7 @@ pnpm exec wave upgrade
 
 ### 3. Sync repo-owned starter surface only if you copied it
 
-The most common sync set for `0.9.1` is:
+The most common sync set for `0.9.2` is:
 
 - `docs/agents/wave-launcher-role.md`
 - `docs/agents/wave-orchestrator-role.md`
@@ -116,8 +118,10 @@ The most common sync set for `0.9.1` is:
 - `docs/context7/planner-agent/`
 - `docs/reference/wave-planning-lessons.md`
 - `docs/reference/cli-reference.md`
+- `docs/reference/corridor.md`
 - `docs/reference/skills.md`
 - `docs/reference/sample-waves.md`
+- `docs/reference/wave-control.md`
 - `docs/plans/current-state.md`
 - `docs/plans/end-state-architecture.md`
 - `docs/plans/wave-orchestrator.md`
@@ -146,20 +150,22 @@ pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 
 Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a tmux-backed dashboard after the upgrade.
 
-## `0.9.1` Release Model
+## `0.9.2` Release Model
 
-The current `0.9.1` surface is five changes together:
+The current `0.9.2` surface combines these strands:
 
-- the detached process-runner and sandbox supervisor hardening released in `0.9.1`
+- the detached process-runner and sandbox supervisor hardening released in `0.9.2`
 - the shipped `0.9.0` monorepo project support and project-aware runtime isolation
 - the shipped `design` worker role and hybrid design-steward flow introduced in `0.8.5`
 - the signal-driven long-running-agent and wrapper model introduced in `0.8.6`
 - the policy-consistency, targeted-recovery, capability-specific routing, and stable per-wave session reuse hardening introduced in `0.8.7`
-- the packaged recommendations guide, sandbox setup guide, and install-state alignment follow-up released in `0.9.1`
+- the current owned-deployment Wave Control surface: Stack-authenticated app access, provider grants, PATs, service tokens, encrypted per-user credentials, and runtime credential leasing
+- the Corridor-backed security surface: direct or brokered provider fetches, normalized per-wave artifacts, and closure gating before integration
+- the packaged recommendations guide, sandbox setup guide, and release-surface alignment follow-up that make the current docs describe that combined surface consistently
 
 ### Sandbox-safe execution and lower-overhead live runs
 
-This is the main new behavior in `0.9.1`.
+This is the main new behavior in `0.9.2`.
 
 The runtime now:
 
@@ -168,7 +174,7 @@ The runtime now:
 - keeps `wave attach --agent` usable through log-follow attach even when no live interactive terminal session exists
 - uses `wave submit/supervise/status/wait/attach` as the preferred sandbox-safe surface for short-lived clients
 
-If your repo copied sandbox, CI, or container runbooks, this is the main sync set to apply from `0.9.1`:
+If your repo copied sandbox, CI, or container runbooks, this is the main sync set to apply from `0.9.2`:
 
 - `README.md`
 - `docs/README.md`
@@ -176,6 +182,24 @@ If your repo copied sandbox, CI, or container runbooks, this is the main sync se
 - `docs/guides/terminal-surfaces.md`
 - `docs/reference/cli-reference.md`
 - `docs/plans/sandbox-end-state-architecture.md`
+
+### Authenticated Wave Control and Corridor-backed security
+
+The same `0.9.2` doc surface also now describes the current control-plane and security model as shipped:
+
+- owned Wave Control deployments use Stack for browser sign-in, then apply Wave-managed approval states and provider grants on top of that identity
+- approved users and superusers can issue PATs for scoped repo-runtime access, while dedicated service tokens keep machine-admin workflows separate from user-owned runtime credentials
+- arbitrary stored credentials are encrypted at rest and only returned through explicit runtime lease responses
+- `externalProviders.corridor` can run direct, brokered through an owned Wave Control deployment, or hybrid; the result is persisted as a normalized security artifact and can block closure before integration
+
+If your repo copied release docs, security runbooks, or Wave Control setup docs, this is the main sync set to apply from `0.9.2`:
+
+- `README.md`
+- `docs/README.md`
+- `docs/reference/runtime-config/README.md`
+- `docs/reference/coordination-and-closure.md`
+- `docs/reference/corridor.md`
+- `docs/reference/wave-control.md`
 
 ### Signal-driven waiting and wrapper model
 
@@ -359,9 +383,9 @@ If the repo copied starter `wave.config.json` defaults, also sync:
 - if the repo uses hybrid design stewards, confirm the same agent rejoins implementation only when the authored wave explicitly gives it code ownership
 - if the repo uses long-running agents or shell automation, confirm the new wrapper exit contract and ack-loop semantics before relying on an older polling script
 
-## Upgrading From `0.8.3` To `0.9.1`
+## Upgrading From `0.8.3` To `0.9.2`
 
-Treat this as one move to the current `0.9.1` surface.
+Treat this as one move to the current `0.9.2` surface.
 
 ### What changed across that range
 
@@ -394,7 +418,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.9.1`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.9.2`
 
 This is the main migration path for older adopted repos.
 
@@ -435,7 +459,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.9.1`
+## Upgrading From `0.5.x` Or Earlier To `0.9.2`
 
 Do not treat this as a tiny patch bump.
 
@@ -545,4 +569,4 @@ For repos that depend on replay parity, replay at least:
 
 ## Summary
 
-The current `0.9.1` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.
+The current `0.9.2` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

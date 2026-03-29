@@ -3,21 +3,40 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.2",
+      "date": "2026-03-29",
+      "summary": "0.9.2 release cut for the documented Corridor and Wave Control surface, plus aligned publish artifacts.",
+      "features": [
+        "The packaged version now advances to `0.9.2` so the documented Corridor, Wave Control auth, and security surfaces can be tagged and published without colliding with the existing `0.9.1` npm release and git tag.",
+        "Release docs, migration guidance, runtime-config docs, coordination docs, Wave Control docs, package publishing docs, tracked install-state fixtures, and the release manifest now all point at the same `0.9.2` surface.",
+        "The shipped versioned operating guide is now `docs/guides/recommendations-0.9.2.md`, and starter install seeding plus install regression coverage now use that exact path.",
+        "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.2` release surface.",
+        "Push the `v0.9.2` tag after the release commit so the GitHub publish workflow can publish the matching npm package version.",
+        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, `docs/reference/corridor.md`, `docs/reference/wave-control.md`, and `docs/guides/recommendations-0.9.2.md` so local guidance matches the packaged release."
+      ],
+      "breaking": false
+    },
+    {
       "version": "0.9.1",
       "date": "2026-03-29",
-      "summary": "Detached process-backed agent execution, sandbox-safe supervisor hardening, lower memory pressure, and 0.9.1 release-surface alignment.",
+      "summary": "Detached process-backed agent execution, authenticated Wave Control, Corridor-backed security context, and 0.9.1 release-surface alignment.",
       "features": [
         "Live agent execution now uses detached process runners by default instead of per-agent tmux execution sessions, which reduces tmux churn and lowers memory use during wide orchestration bursts while keeping tmux as an optional dashboard projection layer.",
         "The sandbox-facing path is now `wave submit`, `wave supervise`, `wave status`, `wave wait`, and `wave attach`, with exact-context lookup, read-side launcher-status reconciliation, progress journaling, degraded-run handling, and log-follow attach behavior suited to LEAPclaw, OpenClaw, Nemoshell, and similar short-lived exec environments.",
         "Supervisor recovery now relies on run-owned terminal artifacts and finalized progress instead of lane-global completion history, preserving the correct remaining wave range and final active wave during multi-wave reruns and launcher-loss recovery.",
         "Ordinary runs, closure runs, and resident orchestrator runs now all preserve process-runtime metadata for timeout and cleanup, while process-backed resident orchestrators terminate cleanly and rate-limit retry detection stays scoped to the current attempt output.",
+        "Owned `wave-control` deployments now expose the shipped auth surface: Stack-backed browser access, Wave-managed approval states and provider grants, PATs, dedicated service tokens, encrypted per-user credential storage, runtime env leasing, and the separate `services/wave-control-web` frontend.",
+        "Corridor is now documented as a first-class security input with `direct`, `broker`, and `hybrid` runtime modes, normalized per-wave security artifacts, owned-path matching rules, and closure gating that can fail before integration on fetch failures or matched blocking findings.",
         "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target.",
-        "A dedicated setup guide now ships for sandboxed and containerized operation, including Nemoshell and Docker guidance, while README, migration docs, terminal-surface docs, runtime-config docs, coordination docs, and the renamed recommendations guide `docs/guides/recommendations-0.9.1.md` now describe the same sandbox-safe release surface."
+        "A dedicated setup guide now ships for sandboxed and containerized operation, and README, migration docs, terminal-surface docs, runtime-config docs, coordination docs, Wave Control docs, the new Corridor reference, and the renamed recommendations guide `docs/guides/recommendations-0.9.1.md` now describe the same current release surface."
       ],
       "manualSteps": [
         "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.1` release surface.",
         "If your repo runs Wave inside LEAPclaw, OpenClaw, Nemoshell, Docker, or another short-lived exec sandbox, move long-running orchestration to `wave supervise`, use `wave submit/status/wait/attach` from disposable clients, and set Codex sandbox defaults in `wave.config.json` instead of relying on per-command overrides.",
-        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, `docs/guides/sandboxed-environments.md`, `docs/guides/terminal-surfaces.md`, and `docs/guides/recommendations-0.9.1.md` so local guidance matches the packaged release."
+        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, `docs/reference/corridor.md`, `docs/reference/wave-control.md`, `docs/guides/sandboxed-environments.md`, `docs/guides/terminal-surfaces.md`, and `docs/guides/recommendations-0.9.1.md` so local guidance matches the packaged release."
       ],
       "breaking": false
     },

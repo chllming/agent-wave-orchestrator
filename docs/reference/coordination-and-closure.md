@@ -58,6 +58,10 @@ The runtime writes several different artifacts, but they do different jobs:
   `.tmp/<lane>-wave-launcher/inboxes/wave-<n>/<agent>.md`
 - integration summary:
   `.tmp/<lane>-wave-launcher/integration/wave-<n>.json`
+- security summary:
+  `.tmp/<lane>-wave-launcher/security/wave-<n>.json`
+- security markdown summary:
+  `.tmp/<lane>-wave-launcher/security/wave-<n>.md`
 - Corridor security context:
   `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json`
 - wave dashboard:
@@ -138,7 +142,7 @@ Practical rule:
 
 That means a targeted helper request only blocks while it remains open *and* still has blocking severity in coordination state.
 
-For the practical `0.9.1` recommendation on when to keep records blocking versus when to downgrade them to `soft`, `stale`, or `advisory`, see [../guides/recommendations-0.9.1.md](../guides/recommendations-0.9.1.md).
+For the practical `0.9.2` recommendation on when to keep records blocking versus when to downgrade them to `soft`, `stale`, or `advisory`, see [../guides/recommendations-0.9.2.md](../guides/recommendations-0.9.2.md).
 
 This page is documenting runtime semantics first. The important contract is that closure follows the durable coordination state, not that a particular human or agent used one exact command path to mutate it.
 
@@ -395,6 +399,15 @@ If present, security review must emit a final `[wave-security]` marker and publi
 - `blocked` stops the wave before integration
 - `concerns` remains visible in summaries and traces
 - `clear` is only valid when no unresolved findings or approvals remain
+
+Corridor does not replace that review. When `externalProviders.corridor.enabled` is on:
+
+- Wave first materializes the normalized Corridor artifact
+- `requiredAtClosure: true` turns provider fetch failures into `corridor-fetch-failed`
+- matched findings at or above the configured threshold turn the gate into `corridor-blocked`
+- matched findings still stay visible in security and integration summaries even when the human reviewer reports only advisory concerns
+
+Only implementation-owned non-doc, non-`.tmp/`, non-markdown paths are eligible for Corridor matching. See [corridor.md](./corridor.md) for the provider-specific rules.
 
 ### Integration
 

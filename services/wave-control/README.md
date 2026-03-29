@@ -1,41 +1,81 @@
 # Wave Control
 
-Wave Control now supports:
+`services/wave-control` is the backend control plane for Wave telemetry, owned provider brokers, and the authenticated operator surface.
+
+The shipped backend now supports:
 
 - telemetry ingest and analysis APIs
 - optional owned-deployment broker routes for Context7 and Corridor
 - Stack-authenticated internal app routes
-- Wave-managed user approval, superusers, and per-user provider grants
-- Wave Control-issued personal access tokens for CLI, broker, and runtime credential leasing
+- Wave-managed app-user approval states, roles, and provider grants
+- Wave Control-issued personal access tokens for repo runtimes and API clients
 - dedicated service tokens for machine-admin workflows
 - encrypted per-user arbitrary credentials with write-only management and runtime leasing
-- a separate slowfast-style Vite/Lit frontend under `../wave-control-web`
+- a separate Vite/Lit frontend under `../wave-control-web`
 
-`services/wave-control` is the Railway-hosted control plane for Wave telemetry.
+The core design rule is unchanged:
 
-It ingests typed run and benchmark events, stores selected artifact metadata, and materializes read APIs plus a minimal operator UI for:
+- local Wave runtime state stays authoritative
+- remote delivery is best-effort
+- the control plane stores typed envelopes and selected artifact metadata rather than becoming the scheduler of record
 
-- run timelines
-- proof bundles
-- gate and closure review
-- benchmark validity review
-- artifact inspection
+## Local Development
 
-## Run Locally
+Backend:
 
 ```bash
 cd services/wave-control
 pnpm install
-pnpm start
+pnpm dev
 ```
 
-The service listens on `HOST` and `PORT` and defaults to `0.0.0.0:3000`.
+Tests:
+
+```bash
+cd services/wave-control
+pnpm test
+```
+
+Frontend:
+
+```bash
+cd services/wave-control-web
+pnpm install
+pnpm dev
+```
+
+The backend listens on `HOST` and `PORT` and defaults to `0.0.0.0:3000`.
+
+## Deployment Profiles
+
+### Packaged Default Endpoint
+
+The published Wave package defaults to `https://wave-control.up.railway.app/api/v1` with `reportMode: "metadata-only"`.
+
+Use that default only for the packaged telemetry surface.
+
+- typed run and benchmark event ingest
+- metadata-first query and artifact inspection
+- no provider-secret brokering
+- no deployment-owned credential leasing
+
+### Owned Deployment
+
+Use an owned deployment when you want the full control-plane surface:
+
+- Stack-authenticated browser access
+- Wave-managed approval states and provider grants
+- PATs and service tokens
+- encrypted per-user credential storage
+- runtime env leasing
+- Context7 and Corridor brokering
 
 ## Core Environment
 
-Required for authenticated ingest:
+Static API tokens for ingest and trusted service-to-service calls:
 
-- `WAVE_CONTROL_API_TOKEN` or `WAVE_CONTROL_API_TOKENS`
+- `WAVE_CONTROL_API_TOKEN` or `WAVE_API_TOKEN`
+- `WAVE_CONTROL_API_TOKENS` or `WAVE_API_TOKENS`
 
 Optional Postgres:
 
@@ -43,9 +83,7 @@ Optional Postgres:
 - `PGSSL`
 - `WAVE_CONTROL_DB_MAX_CONNECTIONS`
 
-For production on Railway, attach a Postgres service and expose its `DATABASE_URL` to
-`wave-control`. When `DATABASE_URL` is unset, the service falls back to the in-memory
-store and telemetry is not durable across restarts.
+For production on Railway, attach a Postgres service and expose its `DATABASE_URL` to `wave-control`. When `DATABASE_URL` is unset, the service falls back to the in-memory store and telemetry is not durable across restarts.
 
 Optional S3-compatible bucket:
 
@@ -65,27 +103,208 @@ Other controls:
 - `WAVE_CONTROL_MAX_INLINE_ARTIFACT_BYTES`
 - `WAVE_CONTROL_UI_TITLE`
 - `WAVE_CONTROL_ALLOWED_ORIGINS`
-- `WAVE_CONTROL_SERVICE_TOKENS_JSON` (JSON array of dedicated machine tokens and `service:*` scopes)
-- `WAVE_CONTROL_SECRET_ENCRYPTION_KEY` (base64-encoded 32-byte AES-256-GCM key required for stored user credentials)
+- `WAVE_CONTROL_LOG_LEVEL`
 
-Stack/browser auth:
+## Stack Browser Auth
+
+Required when enabling the browser-app surface:
 
 - `WAVE_CONTROL_STACK_ENABLED=true`
 - `WAVE_CONTROL_STACK_PROJECT_ID`
 - `WAVE_CONTROL_STACK_PUBLISHABLE_CLIENT_KEY`
 - `STACK_SECRET_SERVER_KEY`
-- `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS` (required; app routes fail closed when it is unset, and internal access is derived from confirmed Stack team memberships only)
-- `WAVE_CONTROL_BOOTSTRAP_SUPERUSER_EMAILS` (comma-separated emails that auto-provision as approved Wave Control superusers on first Stack sign-in)
+- `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS`
 
-Wave Control now uses its own app-user state on top of Stack identity:
+Optional:
 
-- Stack remains the login system
-- only Stack-authenticated members of `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS` can reach the app surface
-- Wave Control then decides whether that internal user is `pending`, `approved`, `rejected`, or `revoked`
-- approved users have a Wave role of `member` or `superuser`
-- only Wave superusers can approve users, manage roles, and change provider grants
+- `WAVE_CONTROL_BOOTSTRAP_SUPERUSER_EMAILS`
 
-## API
+Wave Control uses Stack only for browser identity. It then applies its own internal app-user state:
+
+- access states: `pending`, `approved`, `rejected`, `revoked`
+- roles: `member`, `superuser`
+- provider grants: `anthropic`, `context7`, `corridor`, `openai`
+
+Important distinction:
+
+- Stack proves that the browser user is a confirmed internal user
+- Wave Control decides whether that internal user is approved and which providers they may access
+
+## Tokens And Secrets
+
+### Personal Access Tokens
+
+PATs are opaque `wave_pat_*` tokens.
+
+- the service stores only a SHA-256 hash plus metadata
+- plaintext is shown once at creation time
+- allowed scopes are `broker:read`, `credential:read`, and `ingest:write`
+- members may issue PATs for themselves
+- superusers may issue or revoke PATs for other approved users
+- PAT owners must be bound to a Stack user
+- every PAT request is clamped to the owner's current approval state and provider grants
+
+### Service Tokens
+
+`WAVE_CONTROL_SERVICE_TOKENS_JSON` defines separate machine-admin tokens with `service:*` scopes.
+
+Example:
+
+```json
+[
+  {
+    "label": "ops-bot",
+    "token": "replace-me",
+    "scopes": ["service:read", "service:user:write", "service:credential:write", "service:token:write"]
+  }
+]
+```
+
+Service tokens are intentionally separate from PATs:
+
+- they manage `/api/v1/service/*`
+- they can manage users, provider grants, credentials, and PAT issuance for bound users
+- they cannot use owner-scoped runtime credential leasing
+
+### Encrypted Stored Credentials
+
+Required for stored per-user credentials and owner-scoped leasing:
+
+- `WAVE_CONTROL_SECRET_ENCRYPTION_KEY`
+
+This must be a base64-encoded 32-byte AES-256-GCM key.
+
+Stored credentials are:
+
+- write-only through admin and service APIs
+- encrypted at rest
+- never returned through list endpoints
+- only revealed through explicit runtime lease responses
+
+## Owned Provider Broker
+
+Use this only on a self-hosted or team-owned deployment.
+
+Base flags:
+
+- `WAVE_BROKER_OWNED_DEPLOYMENT=true`
+- `WAVE_BROKER_REQUEST_TIMEOUT_MS`
+- `WAVE_BROKER_MAX_RETRIES`
+- `WAVE_BROKER_MAX_PAGES`
+
+Context7:
+
+- `WAVE_BROKER_ENABLE_CONTEXT7=true`
+- `WAVE_BROKER_CONTEXT7_API_KEY=<key>`
+
+Corridor:
+
+- `WAVE_BROKER_ENABLE_CORRIDOR=true`
+- `WAVE_BROKER_CORRIDOR_API_TOKEN=<token>`
+- `WAVE_BROKER_CORRIDOR_PROJECT_MAP=<json>`
+
+Deployment-owned provider env leasing:
+
+- `WAVE_BROKER_ENABLE_OPENAI=true`
+- `WAVE_BROKER_OPENAI_API_KEY=<key>`
+- `WAVE_BROKER_ENABLE_ANTHROPIC=true`
+- `WAVE_BROKER_ANTHROPIC_API_KEY=<key>`
+
+Broker and runtime routes:
+
+- `GET /api/v1/providers/context7/search`
+- `GET /api/v1/providers/context7/context`
+- `POST /api/v1/providers/corridor/context`
+- `POST /api/v1/runtime/provider-env`
+- `POST /api/v1/runtime/credential-env`
+
+### Corridor Project Mapping
+
+`WAVE_BROKER_CORRIDOR_PROJECT_MAP` maps Wave project ids to Corridor project ids.
+
+Example:
+
+```json
+{
+  "app": {
+    "teamId": "team-uuid",
+    "projectId": "corridor-project-uuid"
+  }
+}
+```
+
+The broker route accepts:
+
+```json
+{
+  "projectId": "app",
+  "ownedPaths": ["src/auth", "src/session"],
+  "severityThreshold": "critical",
+  "findingStates": ["open", "potential"]
+}
+```
+
+Notes:
+
+- if `findingStates` is omitted, the service defaults to `open` and `potential`
+- if the caller sends `findingStates: []`, the service queries all states
+- the response is a normalized summary with `guardrails`, `matchedFindings`, `blockingFindings`, `blocking`, and `error`
+- upstream Corridor credentials never leave the service
+
+## Runtime Credential Leasing
+
+### Provider Env Leasing
+
+`POST /api/v1/runtime/provider-env` returns deployment-owned provider credentials as env vars.
+
+Currently supported:
+
+- `openai` -> `OPENAI_API_KEY`
+- `anthropic` -> `ANTHROPIC_API_KEY`
+
+Requirements:
+
+- owned deployment only
+- provider is enabled on the deployment
+- caller has `credential:read`
+- caller holds the matching provider grant unless it is a trusted env token
+
+### Owner-Scoped Arbitrary Credential Leasing
+
+`POST /api/v1/runtime/credential-env` leases stored user credentials under explicit env var names.
+
+Example:
+
+```json
+{
+  "credentials": [{ "id": "github_pat", "envVar": "GITHUB_TOKEN" }]
+}
+```
+
+Requirements:
+
+- approved browser user or the owner's PAT
+- `WAVE_CONTROL_SECRET_ENCRYPTION_KEY` configured
+- credential already stored for that owner
+
+Service tokens and static env tokens cannot use this route.
+
+## Access Model
+
+| Principal | Main routes | Notes |
+| --- | --- | --- |
+| Static env token | ingest, query, provider brokers, provider env leasing | trusted deployment credential; bypasses provider grants; not a browser or service principal |
+| Approved Stack user | `/api/v1/app/*`, runtime leasing | browser identity plus Wave approval state |
+| PAT | ingest, provider brokers, runtime leasing | scopes and provider grants are both enforced |
+| Service token | `/api/v1/service/*` | machine-admin only |
+
+One subtle but important rule:
+
+- browser users do not receive `broker:read`
+
+That means broker routes are for PATs or trusted env tokens, while approved browser users are for the app surface and owner-scoped runtime leasing.
+
+## API Surface
 
 Public:
 
@@ -106,7 +325,7 @@ Authenticated reads:
 - `GET /api/v1/artifact`
 - `POST /api/v1/artifacts/signed-upload`
 
-Stack-authenticated internal app routes:
+Stack-authenticated app routes:
 
 - `GET /api/v1/app/session`
 - `POST /api/v1/app/access-request`
@@ -149,136 +368,7 @@ Service-token machine routes:
 - Inline artifact uploads are persisted in Postgres when bucket storage is unavailable.
 - When a bucket is configured, inline artifact bodies are moved to object storage and exposed through signed or public download URLs.
 
-## Indexed Identity Dimensions
-
-Wave Control stores and filters telemetry by the run identity carried on each event.
-
-## Owned Provider Broker
-
-Use this only on a self-hosted or team-owned deployment.
-
-- `WAVE_API_TOKEN` or `WAVE_API_TOKENS`: bearer tokens accepted by the service
-- `WAVE_BROKER_OWNED_DEPLOYMENT=true`: required to enable provider broker routes
-- `WAVE_BROKER_ENABLE_CONTEXT7=true`
-- `WAVE_BROKER_CONTEXT7_API_KEY=<key>`
-- `WAVE_BROKER_ENABLE_CORRIDOR=true`
-- `WAVE_BROKER_CORRIDOR_API_TOKEN=<token>`
-- `WAVE_BROKER_CORRIDOR_PROJECT_MAP=<json>`
-- `WAVE_BROKER_ENABLE_OPENAI=true`
-- `WAVE_BROKER_OPENAI_API_KEY=<key>`
-- `WAVE_BROKER_ENABLE_ANTHROPIC=true`
-- `WAVE_BROKER_ANTHROPIC_API_KEY=<key>`
-
-Broker routes:
-
-- `GET /api/v1/providers/context7/search`
-- `GET /api/v1/providers/context7/context`
-- `POST /api/v1/providers/corridor/context`
-- `POST /api/v1/runtime/provider-env`
-- `POST /api/v1/runtime/credential-env`
-
-`WAVE_BROKER_CORRIDOR_PROJECT_MAP` should map Wave project ids to Corridor ids, for example:
-
-```json
-{
-  "app": {
-    "teamId": "team-uuid",
-    "projectId": "corridor-project-uuid"
-  }
-}
-```
-
-These routes require the normal Wave bearer token. Context7 and Corridor remain broker-only: the service never returns those upstream secrets.
-
-`POST /api/v1/runtime/provider-env` is the fixed-provider credential-leasing route. It accepts a provider list and returns only the enabled, granted environment variables for env-leased providers:
-
-- `openai` -> `OPENAI_API_KEY`
-- `anthropic` -> `ANTHROPIC_API_KEY`
-
-Runtime leasing requires:
-
-- a PAT or env token with `credential:read`
-- the caller to hold the matching provider grant
-- the provider to be enabled on the owned deployment
-
-`POST /api/v1/runtime/credential-env` is the arbitrary per-user credential-leasing route. It accepts an explicit list of `{ id, envVar }` mappings and returns only the caller's own stored secrets under those env var names. Service tokens cannot call this route.
-
-Stored user credentials are:
-
-- write-only through the admin and service management APIs
-- encrypted at rest with `WAVE_CONTROL_SECRET_ENCRYPTION_KEY`
-- returned only through lease responses, never through list or management reads
-
-`WAVE_CONTROL_SERVICE_TOKENS_JSON` configures the separate machine-admin surface. Example:
-
-```json
-[
-  {
-    "label": "ops-bot",
-    "token": "replace-me",
-    "scopes": ["service:read", "service:user:write", "service:credential:write", "service:token:write"]
-  }
-]
-```
-
-## Personal Access Tokens
-
-Wave Control PATs are opaque `wave_pat_*` tokens. The service stores only a SHA-256 hash plus metadata and shows the plaintext value once at creation time.
-
-PATs are user-owned and are clamped to the owner's current approval state and provider grants.
-
-Scope behavior:
-
-- approved-user PAT scopes: `broker:read`, `credential:read`, `ingest:write`
-- members may issue PATs for themselves
-- superusers may issue or revoke PATs for any approved user
-- PAT scope requests outside the allowlist are rejected, including `*`
-- PAT lease and broker requests still re-check the owner's current provider grants and approval state on every request
-
-Broker routes also require a matching provider grant:
-
-- `context7` grant for Context7 broker reads
-- `corridor` grant for Corridor broker reads
-
-Static env tokens still work and keep full service access. PATs are intended for repo runtimes and the owned broker / credential-leasing path.
-
-## Web Frontend
-
-The new browser app lives in `services/wave-control-web` and mirrors the sibling `slowfast.ai` stack shape:
-
-- Vite
-- Lit
-- small runtime config module
-- static-shell styling, not server-rendered HTML
-
-Run it locally with:
-
-```bash
-cd services/wave-control-web
-pnpm install
-pnpm dev
-```
-
-Frontend env vars:
-
-- `VITE_WAVE_CONTROL_API_BASE_URL`
-- `VITE_STACK_PROJECT_ID`
-- `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
-
-The frontend also accepts `NEXT_PUBLIC_STACK_PROJECT_ID` and `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` as compatibility fallbacks.
-`VITE_WAVE_CONTROL_API_BASE_URL` may be set to either the service origin (for example
-`https://control.example.test`) or the full API base ending in `/api/v1`; the web app normalizes the
-configured value before appending its route paths.
-
-The browser app persists the Stack session across reloads, completes OAuth and magic-link callbacks on the same app path, and only renders sign-in methods that are enabled in the Stack project configuration.
-
-After sign-in, the app loads `/api/v1/app/session` first:
-
-- approved users continue into the main control-plane UI
-- internal users who are not yet approved see the request-access flow
-- superusers get an additional Users tab for approvals, role changes, provider grants, and write-only user credential rotation
-
-The core dimensions are:
+Wave Control stores and filters telemetry by the run identity carried on each event:
 
 - `workspaceId`
 - `projectId`
@@ -291,9 +381,37 @@ The core dimensions are:
 - `benchmarkRunId`
 - `benchmarkItemId`
 
-This allows the service to separate telemetry by repository/workspace, product/project,
-resident orchestrator identity, and installed Wave runtime version without relying on
-free-form event payloads.
+## Web Frontend
+
+The browser app lives in `services/wave-control-web` and mirrors the sibling `slowfast.ai` stack shape:
+
+- Vite
+- Lit
+- small runtime config module
+- static-shell styling, not server-rendered HTML
+
+Frontend env vars:
+
+- `VITE_WAVE_CONTROL_API_BASE_URL`
+- `VITE_STACK_PROJECT_ID`
+- `VITE_STACK_PUBLISHABLE_CLIENT_KEY`
+- `WAVE_CONTROL_WEB_BASE_PATH`
+
+Compatibility fallbacks:
+
+- `NEXT_PUBLIC_STACK_PROJECT_ID`
+- `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY`
+
+`VITE_WAVE_CONTROL_API_BASE_URL` may be set to either the service origin or the full API base ending in `/api/v1`; the web app normalizes the configured value before appending route paths.
+
+The browser app:
+
+- persists the Stack session across reloads
+- completes OAuth and magic-link callbacks on the same app path
+- only renders sign-in methods enabled in the Stack project
+- loads `/api/v1/app/session` first after sign-in
+- shows access-request flows for internal users who are not yet approved
+- exposes a superuser-only Users tab for approvals, role changes, provider grants, and write-only user credential rotation
 
 ## Railway Notes
 
@@ -308,5 +426,5 @@ node src/server.mjs
 Recommended Railway service variables:
 
 - `DATABASE_URL` from the attached Postgres service
-- `WAVE_CONTROL_API_TOKEN` for authenticated ingest
+- `WAVE_CONTROL_API_TOKEN` or `WAVE_API_TOKEN` for authenticated ingest
 - optional `PGSSL=true` if your connection mode requires it

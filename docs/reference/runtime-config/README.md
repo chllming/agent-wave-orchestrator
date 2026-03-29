@@ -191,7 +191,7 @@ Practical guidance:
 - prefer `budget.minutes` for normal synthesis, integration, and closure work
 - use generic `budget.turns` as a planning hint, not a hard failure trigger
 - only set `claude.maxTurns` or `opencode.steps` when you deliberately want a hard ceiling for that runtime
-- see [../../guides/recommendations-0.9.1.md](../../guides/recommendations-0.9.1.md) for the recommended `0.9.1` operating stance that combines advisory turn budgets with softer non-proof coordination states
+- see [../../guides/recommendations-0.9.2.md](../../guides/recommendations-0.9.2.md) for the recommended `0.9.2` operating stance that combines advisory turn budgets with softer non-proof coordination states
 
 ## Runtime Pages
 
@@ -203,7 +203,7 @@ Practical guidance:
 
 `wave.config.json` may also declare a `waveControl` block for local-first telemetry delivery.
 
-Packaged defaults in `@chllming/wave-orchestration@0.9.1`:
+Packaged defaults in `@chllming/wave-orchestration@0.9.2`:
 
 - `endpoint`: `https://wave-control.up.railway.app/api/v1`
 - `reportMode`: `metadata-only`
@@ -221,6 +221,7 @@ Supported top-level fields:
 | `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
 | `projectId` | string | resolved project id | Stable project identity used for cross-workspace reporting and filtering |
 | `authTokenEnvVar` | string | `WAVE_API_TOKEN` | Primary environment variable name holding the bearer token |
+| `authTokenEnvVars` | string[] | `["WAVE_API_TOKEN", "WAVE_CONTROL_AUTH_TOKEN"]` | Ordered fallback env var list consulted when Wave resolves a bearer token for owned Wave Control routes |
 | `credentialProviders` | string[] | `[]` | Allowlisted runtime credential leases requested from an owned Wave Control deployment before executor launch. Supported values: `openai`, `anthropic` |
 | `credentials` | `{ id, envVar }[]` | `[]` | Arbitrary per-user credential leases requested from an owned Wave Control deployment before executor launch |
 | `reportMode` | string | `metadata-only` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
@@ -235,7 +236,7 @@ Supported top-level fields:
 
 Lane overrides may refine the same keys under `lanes.<lane>.waveControl` or `projects.<projectId>.lanes.<lane>.waveControl`.
 
-Wave resolves the Wave Control bearer token from `authTokenEnvVar` first and keeps `WAVE_CONTROL_AUTH_TOKEN` as a compatibility fallback.
+Wave resolves the Wave Control bearer token from `authTokenEnvVars` when that list is present. Otherwise it resolves `authTokenEnvVar` first and keeps `WAVE_CONTROL_AUTH_TOKEN` as a compatibility fallback.
 
 One-run override:
 
@@ -298,11 +299,14 @@ Wave can resolve third-party auth directly in the repo runtime or through an own
 - `direct`: use repo/runtime env vars directly
 - `broker`: use the owned Wave Control endpoint with `WAVE_API_TOKEN`
 - `hybrid`: try the broker first, then fall back to direct auth if broker setup fails or a broker request fails at runtime
+- direct Corridor mode requires both `teamId` and `projectId` in config; broker mode instead requires a matching `WAVE_BROKER_CORRIDOR_PROJECT_MAP` entry on the owned Wave Control deployment
 - Wave auto-loads an allowlisted repo-root `.env.local` for `CONTEXT7_API_KEY`, `CORRIDOR_API_TOKEN`, `CORRIDOR_API_KEY`, `WAVE_API_TOKEN`, and `WAVE_CONTROL_AUTH_TOKEN`
 - `wave doctor` now warns or fails early when brokered providers target the packaged default endpoint or no Wave Control auth token is available
 - Context7 remains fail-open
-- Corridor writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json` and can fail closure when the fetch fails or matched findings meet the configured threshold
+- Corridor writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json`, filters findings down to the wave's implementation-owned non-doc, non-`.tmp/`, non-markdown paths, and can fail closure when the fetch fails or matched findings meet the configured threshold
 - Broker mode is intended for self-hosted or team-owned Wave Control only; the packaged default endpoint is rejected as a provider-secret proxy
+- if `findingStates` is omitted or set to `[]`, Wave does not apply a state filter and the provider may return all states
+- for the full Corridor lifecycle, including broker mapping, generated artifact shape, and gate semantics, see [../corridor.md](../corridor.md)
 
 `waveControl.credentialProviders` is related but separate from `externalProviders`:
 

@@ -629,7 +629,7 @@ Interactive draft currently offers worker role kinds:
 - `research`
 - `security`
 
-Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.9.1` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
+Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.9.2` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
 
 ## Ad-Hoc Task Commands
 

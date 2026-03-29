@@ -1357,7 +1357,7 @@ The `wave-control-schema.mjs` module normalizes these entity types:
     "enabled": true,
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "reportMode": "metadata-only",
-    "authTokenEnv": "WAVE_CONTROL_AUTH_TOKEN"
+    "authTokenEnvVar": "WAVE_API_TOKEN"
   }
 }
 ```

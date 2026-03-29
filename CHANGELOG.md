@@ -2,18 +2,34 @@
 
 ## Unreleased
 
+## 0.9.2 - 2026-03-29
+
+### Changed
+
+- Promoted the current packaged surface to `0.9.2` so the documented Corridor, Wave Control auth and security model, release manifest, tracked install-state fixtures, and package publishing docs can be tagged and published cleanly without reusing the existing `0.9.1` npm release and git tag.
+- Renamed the versioned operating guide to `docs/guides/recommendations-0.9.2.md` and updated release-surface references, install seeding, and regression coverage to match the new package version exactly.
+
+### Testing And Validation
+
+- `pnpm exec vitest run --config vitest.config.ts test/wave-orchestrator/install.test.ts`
+- `pnpm exec vitest run --config vitest.config.ts test/wave-orchestrator/release-surface.test.ts`
+- `node scripts/wave.mjs doctor --json`
+- `node scripts/wave.mjs launch --lane main --dry-run --no-dashboard`
+- `pnpm test -- test/wave-orchestrator/release-surface.test.ts`
+
 ## 0.9.1 - 2026-03-29
 
 ### Added
 
 - A dedicated sandbox setup guide at `docs/guides/sandboxed-environments.md` covering LEAPclaw/OpenClaw-style short-lived exec sandboxes, Nemoshell, and Docker or containerized operator setups.
 - Starter-surface and install coverage for the renamed recommendations guide `docs/guides/recommendations-0.9.1.md`, plus seeded docs that now point fresh workspaces at the sandbox-safe submit or supervise path.
+- A dedicated Corridor reference at `docs/reference/corridor.md` covering direct, brokered, and hybrid provider modes, owned-path matching, generated security artifacts, and closure-stage blocking behavior.
 
 ### Changed
 
 - Live agent execution now defaults to detached process runners instead of per-agent tmux execution sessions. Tmux remains an optional dashboard and operator projection surface only, which reduces session churn and lowers memory pressure during wider fan-outs.
 - The sandbox-facing runtime path is now `wave submit`, `wave supervise`, `wave status`, `wave wait`, and `wave attach`, with read-side reconciliation and log-follow attach behavior designed for short-lived clients and long-running daemon ownership.
-- README, migration guidance, current-state notes, coordination docs, runtime-config docs, package publishing docs, install fixtures, and the versioned recommendations guide now all point at the `0.9.1` surface.
+- README, migration guidance, current-state notes, runtime-config docs, coordination docs, Wave Control docs, the new Corridor reference, package publishing docs, roadmap notes, install fixtures, and the versioned recommendations guide now all point at the `0.9.1` surface and describe the current authenticated Wave Control plus security surface consistently.
 
 ### Fixed And Hardened
 

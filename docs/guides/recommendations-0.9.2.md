@@ -1,15 +1,15 @@
 ---
-title: "0.9.1 Recommendations"
-summary: "How to use 0.9.1's softer blocker states, advisory turn budgets, and targeted recovery without weakening proof and closure."
+title: "0.9.2 Recommendations"
+summary: "How to use 0.9.2's softer blocker states, advisory turn budgets, and targeted recovery without weakening proof and closure."
 ---
 
-# 0.9.1 Recommendations
+# 0.9.2 Recommendations
 
-Use this guide when you are adopting `0.9.1` and want one practical operating stance for the softer blocker states, advisory turn-budget behavior, and targeted recovery flow that the current package line ships.
+Use this guide when you are adopting `0.9.2` and want one practical operating stance for the softer blocker states, advisory turn-budget behavior, and targeted recovery flow that the current package line ships.
 
 ## Recommended Default
 
-For most repos, the safest `0.9.1` default is:
+For most repos, the safest `0.9.2` default is:
 
 - bound work with `budget.minutes`
 - leave generic `budget.turns` as advisory metadata
@@ -76,7 +76,7 @@ Only set a hard runtime ceiling when you deliberately want the runtime itself to
 
 ## 2. Softer Coordination States
 
-`0.9.1` keeps “still visible” separate from “still blocking”.
+`0.9.2` keeps “still visible” separate from “still blocking”.
 
 Use these states intentionally:
 
@@ -112,7 +112,7 @@ If the current wave cannot truthfully close without the answer, keep it blocking
 
 ## 4. Recovery Recommendation
 
-My recommendation after reviewing the current `0.9.1` code path is:
+My recommendation after reviewing the current `0.9.2` code path is:
 
 - let timeout, max-turn, rate-limit, and missing-status failures go through the built-in targeted recovery path first
 - inspect the queued rerun or resume request before manually relaunching the whole wave

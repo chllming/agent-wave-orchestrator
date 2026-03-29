@@ -51,6 +51,23 @@ describe("runtime dry-run harness", () => {
 
     const initResult = runWaveCli(["init"], repoDir);
     expect(initResult.status).toBe(0);
+    const configPath = path.join(repoDir, "wave.config.json");
+    const waveConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    waveConfig.externalProviders = {
+      ...(waveConfig.externalProviders || {}),
+      context7: {
+        ...(waveConfig.externalProviders?.context7 || {}),
+        mode: "direct",
+      },
+      corridor: {
+        ...(waveConfig.externalProviders?.corridor || {}),
+        enabled: true,
+        mode: "direct",
+        teamId: "team-1",
+        projectId: "corridor-project",
+      },
+    };
+    fs.writeFileSync(configPath, `${JSON.stringify(waveConfig, null, 2)}\n`, "utf8");
 
     const wavePath = path.join(repoDir, "docs", "plans", "waves", "wave-0.md");
     fs.writeFileSync(
@@ -226,7 +243,7 @@ File ownership (only touch these paths):
     );
 
     const dryRunResult = runWaveCli(
-      ["launch", "--lane", "main", "--dry-run", "--no-dashboard", "--no-context7"],
+      ["launch", "--lane", "main", "--dry-run", "--no-dashboard"],
       repoDir,
     );
     expect(dryRunResult.status).toBe(0);
@@ -242,6 +259,19 @@ File ownership (only touch these paths):
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a0.prompt.md"))).toBe(true);
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a8.prompt.md"))).toBe(true);
     expect(fs.existsSync(path.join(dryRunRoot, "prompts", "wave-0-0-a9.prompt.md"))).toBe(true);
+    const implementationPrompt = fs.readFileSync(
+      path.join(dryRunRoot, "prompts", "wave-0-0-a1.prompt.md"),
+      "utf8",
+    );
+    expect(implementationPrompt).toContain("Context7 prefetch skipped during dry-run preview.");
+    expect(fs.readdirSync(path.join(dryRunRoot, "context7-cache"))).toEqual([]);
+    const integrationPrompt = fs.readFileSync(
+      path.join(dryRunRoot, "prompts", "wave-0-0-a8.prompt.md"),
+      "utf8",
+    );
+    expect(integrationPrompt).toContain("Corridor context omitted in dry-run preview.");
+    expect(integrationPrompt).not.toContain("Corridor context absolute path:");
+    expect(fs.existsSync(path.join(dryRunRoot, "security", "wave-0-corridor.json"))).toBe(false);
 
     const codexPreview = JSON.parse(
       fs.readFileSync(

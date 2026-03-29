@@ -47,6 +47,10 @@ import {
   describeContext7Libraries,
   loadContext7BundleIndex,
 } from "./context7.mjs";
+import {
+  readWaveCorridorContext,
+  waveCorridorContextPath,
+} from "./corridor.mjs";
 
 export function waveCoordinationLogPath(lanePaths, waveNumber) {
   return path.join(lanePaths.coordinationDir, `wave-${waveNumber}.jsonl`);
@@ -212,6 +216,7 @@ export function buildWaveSecuritySummary({
   wave,
   attempt,
   summariesByAgentId = {},
+  corridorSummary = null,
 }) {
   const createdAt = toIsoTimestamp();
   const securityAgents = (wave.agents || []).filter((agent) =>
@@ -275,7 +280,9 @@ export function buildWaveSecuritySummary({
   const totalFindings = agents.reduce((sum, entry) => sum + (entry.findings || 0), 0);
   const totalApprovals = agents.reduce((sum, entry) => sum + (entry.approvals || 0), 0);
   const detail =
-    overallState === "blocked"
+    corridorSummary?.blocking
+      ? `Corridor matched blocking findings for implementation-owned paths.`
+      : overallState === "blocked"
       ? `Security review blocked by ${blockedAgentIds.join(", ")}.`
       : overallState === "pending"
         ? `Security review output is incomplete for ${pendingAgentIds.join(", ")}.`
@@ -292,6 +299,17 @@ export function buildWaveSecuritySummary({
     concernAgentIds,
     blockedAgentIds,
     detail,
+    corridor: corridorSummary
+      ? {
+          ok: corridorSummary.ok === true,
+          providerMode: corridorSummary.providerMode || null,
+          source: corridorSummary.source || null,
+          blocking: corridorSummary.blocking === true,
+          blockingFindings: corridorSummary.blockingFindings || [],
+          matchedFindings: corridorSummary.matchedFindings || [],
+          error: corridorSummary.error || null,
+        }
+      : null,
     agents,
     createdAt,
     updatedAt: createdAt,
@@ -492,6 +510,15 @@ function buildIntegrationEvidence({
       );
     }
   }
+  for (const finding of securitySummary?.corridor?.matchedFindings || []) {
+    securityFindingEntries.push(
+      summarizeGap(
+        "corridor",
+        `${finding.severity || "unknown"} ${finding.affectedFile || "unknown-file"}: ${finding.title || "finding"}`,
+        "Corridor matched a relevant finding.",
+      ),
+    );
+  }
 
   return {
     openClaims: uniqueStringEntries(openClaims),
@@ -508,6 +535,13 @@ function buildIntegrationEvidence({
     securityState: securitySummary?.overallState || "not-applicable",
     securityFindings: uniqueStringEntries(securityFindingEntries),
     securityApprovals: uniqueStringEntries(securityApprovalEntries),
+    corridorState: securitySummary?.corridor?.blocking
+      ? "blocked"
+      : securitySummary?.corridor?.ok === false
+        ? "error"
+        : securitySummary?.corridor
+          ? "clear"
+          : "not-configured",
   };
 }
 
@@ -683,6 +717,7 @@ export function buildWaveDerivedState({
     wave,
     attempt,
     summariesByAgentId,
+    corridorSummary: readWaveCorridorContext(lanePaths, wave.wave),
   });
   const integrationSummary = buildWaveIntegrationSummary({
     lanePaths,
@@ -762,6 +797,8 @@ export function buildWaveDerivedState({
     dependencySnapshotMarkdownPath: waveDependencySnapshotMarkdownPath(lanePaths, wave.wave),
     securitySummary,
     securitySummaryPath: waveSecurityPath(lanePaths, wave.wave),
+    corridorSummary: readWaveCorridorContext(lanePaths, wave.wave),
+    corridorSummaryPath: waveCorridorContextPath(lanePaths, wave.wave),
     integrationSummary,
     integrationSummaryPath: waveIntegrationPath(lanePaths, wave.wave),
     integrationMarkdownPath: waveIntegrationMarkdownPath(lanePaths, wave.wave),

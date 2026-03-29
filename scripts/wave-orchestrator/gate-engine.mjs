@@ -1414,6 +1414,25 @@ export function readWaveSecurityGatePure(wave, agentResults, options = {}) {
   const securityAgents = agents.filter((agent) =>
     isSecurityReviewAgentWithOptions(agent, options),
   );
+  const corridorSummary = options.derivedState?.corridorSummary || null;
+  if (corridorSummary?.ok === false && corridorSummary?.requiredAtClosure !== false) {
+    return {
+      ok: false,
+      agentId: null,
+      statusCode: "corridor-fetch-failed",
+      detail: corridorSummary.error || "Corridor context fetch failed.",
+      logPath: null,
+    };
+  }
+  if (corridorSummary?.blocking) {
+    return {
+      ok: false,
+      agentId: null,
+      statusCode: "corridor-blocked",
+      detail: `Corridor matched ${corridorSummary.blockingFindings?.length || 0} blocking finding(s) on implementation-owned paths.`,
+      logPath: null,
+    };
+  }
   if (securityAgents.length === 0) {
     return { ok: true, agentId: null, statusCode: "pass",
       detail: "No security reviewer declared for this wave.", logPath: null };
@@ -1526,6 +1545,7 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
     contEvalAgentId: laneConfig.contEvalAgentId, mode: validationMode,
     evalTargets: wave.evalTargets, benchmarkCatalogPath: laneConfig.benchmarkCatalogPath });
   const securityGate = readWaveSecurityGatePure(wave, agentResults, {
+    derivedState,
     securityRolePromptPath: laneConfig.securityRolePromptPath,
   });
   const contQaGate = readWaveContQaGatePure(wave, agentResults, {

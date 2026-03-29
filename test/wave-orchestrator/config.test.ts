@@ -283,6 +283,8 @@ describe("runtime configuration normalization", () => {
             workspaceId: "wave-control-workspace",
             projectId: "wave-orchestration",
             authTokenEnvVar: "CUSTOM_WAVE_CONTROL_TOKEN",
+            credentialProviders: ["openai"],
+            credentials: [{ id: "github_pat", envVar: "GITHUB_TOKEN" }],
             uploadArtifactKinds: ["trace-quality", "trace-outcome"],
             requestTimeoutMs: 9000,
             flushBatchSize: 12,
@@ -290,6 +292,8 @@ describe("runtime configuration normalization", () => {
           lanes: {
             main: {
               waveControl: {
+                credentialProviders: ["anthropic"],
+                credentials: [{ id: "npm_token", envVar: "NPM_TOKEN" }],
                 uploadArtifactKinds: ["trace-quality", "benchmark-results"],
                 captureBenchmarkRuns: false,
               },
@@ -427,6 +431,9 @@ describe("runtime configuration normalization", () => {
       workspaceId: "wave-control-workspace",
       projectId: "wave-orchestration",
       authTokenEnvVar: "CUSTOM_WAVE_CONTROL_TOKEN",
+      authTokenEnvVars: ["CUSTOM_WAVE_CONTROL_TOKEN", "WAVE_CONTROL_AUTH_TOKEN"],
+      credentialProviders: ["openai"],
+      credentials: [{ id: "github_pat", envVar: "GITHUB_TOKEN" }],
       reportMode: "metadata-only",
       uploadArtifactKinds: ["trace-quality", "trace-outcome"],
       requestTimeoutMs: 9000,
@@ -437,8 +444,154 @@ describe("runtime configuration normalization", () => {
       endpoint: "https://wave-control.example/api/v1",
       workspaceId: "wave-control-workspace",
       projectId: "default",
+      credentialProviders: ["anthropic"],
+      credentials: [{ id: "npm_token", envVar: "NPM_TOKEN" }],
       uploadArtifactKinds: ["trace-quality", "benchmark-results"],
       captureBenchmarkRuns: false,
+    });
+  });
+
+  it("rejects unknown waveControl credential providers", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          waveControl: {
+            credentialProviders: ["openai", "context7"],
+          },
+          lanes: {
+            main: {},
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    expect(() => loadWaveConfig(configPath)).toThrow(/waveControl\.credentialProviders\[1\]/);
+  });
+
+  it("normalizes waveControl credential env leases and rejects duplicate env vars", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          waveControl: {
+            credentials: [
+              { id: "github_pat", envVar: "GITHUB_TOKEN" },
+              { id: "npm-token", envVar: "NPM_TOKEN" },
+            ],
+          },
+          lanes: {
+            main: {},
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    expect(config.waveControl.credentials).toEqual([
+      { id: "github_pat", envVar: "GITHUB_TOKEN" },
+      { id: "npm-token", envVar: "NPM_TOKEN" },
+    ]);
+
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          waveControl: {
+            credentials: [
+              { id: "github_pat", envVar: "GITHUB_TOKEN" },
+              { id: "another", envVar: "GITHUB_TOKEN" },
+            ],
+          },
+          lanes: {
+            main: {},
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    expect(() => loadWaveConfig(configPath)).toThrow(/duplicate envVar mappings/i);
+  });
+
+  it("normalizes external provider config with project and lane overrides", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          externalProviders: {
+            context7: {
+              mode: "broker",
+            },
+            corridor: {
+              enabled: true,
+              mode: "broker",
+              severityThreshold: "high",
+            },
+          },
+          projects: {
+            app: {
+              rootDir: ".",
+              externalProviders: {
+                corridor: {
+                  mode: "direct",
+                  teamId: "team-1",
+                  projectId: "project-1",
+                },
+              },
+              lanes: {
+                main: {
+                  externalProviders: {
+                    context7: {
+                      mode: "hybrid",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main", "app");
+
+    expect(lane.externalProviders).toMatchObject({
+      context7: {
+        mode: "hybrid",
+        apiKeyEnvVar: "CONTEXT7_API_KEY",
+      },
+      corridor: {
+        enabled: true,
+        mode: "direct",
+        teamId: "team-1",
+        projectId: "project-1",
+        severityThreshold: "high",
+        requiredAtClosure: true,
+      },
     });
   });
 

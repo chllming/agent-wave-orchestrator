@@ -16,6 +16,10 @@ import {
   WAVE_PACKAGE_NAME,
 } from "./package-version.mjs";
 import { loadWaveConfig } from "./config.mjs";
+import {
+  isDefaultWaveControlEndpoint,
+  resolveWaveControlAuthToken,
+} from "./provider-runtime.mjs";
 import { applyExecutorSelectionsToWave, parseWaveFiles, validateWaveDefinition } from "./wave-files.mjs";
 import { validateLaneSkillConfiguration } from "./skills.mjs";
 
@@ -421,6 +425,32 @@ export function runDoctor() {
   if (config) {
     try {
       const lanePaths = buildLanePaths(config.defaultLane, { config });
+      const context7Mode = lanePaths.externalProviders?.context7?.mode || "direct";
+      const corridor = lanePaths.externalProviders?.corridor || {};
+      const corridorMode = corridor.mode || "direct";
+      const usesBroker =
+        context7Mode === "broker" ||
+        context7Mode === "hybrid" ||
+        corridorMode === "broker" ||
+        corridorMode === "hybrid";
+      if (usesBroker && isDefaultWaveControlEndpoint(lanePaths.waveControl?.endpoint)) {
+        const message =
+          "Brokered external providers require an owned Wave Control endpoint; the packaged default endpoint must not be used as a shared broker.";
+        if (context7Mode === "broker" || corridorMode === "broker") {
+          errors.push(message);
+        } else {
+          warnings.push(message);
+        }
+      }
+      if (usesBroker && !resolveWaveControlAuthToken(lanePaths.waveControl)) {
+        const message =
+          "Brokered external providers require a Wave Control auth token. Set WAVE_API_TOKEN or the configured legacy auth token env var.";
+        if (context7Mode === "broker" || corridorMode === "broker") {
+          errors.push(message);
+        } else {
+          warnings.push(message);
+        }
+      }
       if (!fs.existsSync(path.join(REPO_ROOT, "wave.config.json"))) {
         errors.push("Missing wave.config.json.");
       }

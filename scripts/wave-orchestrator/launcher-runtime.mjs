@@ -2,6 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildExecutionPrompt } from "./coordination.mjs";
 import {
+  materializeWaveCorridorContext,
+  renderCorridorPromptContext,
+  waveCorridorContextPath,
+} from "./corridor.mjs";
+import {
   DEFAULT_AGENT_RATE_LIMIT_BASE_DELAY_SECONDS,
   DEFAULT_AGENT_RATE_LIMIT_MAX_DELAY_SECONDS,
   DEFAULT_WAIT_PROGRESS_INTERVAL_MS,
@@ -15,7 +20,12 @@ import {
 import { readStatusCodeIfPresent } from "./dashboard-state.mjs";
 import { buildExecutorLaunchSpec } from "./executors.mjs";
 import { hashAgentPromptFingerprint, prefetchContext7ForSelection } from "./context7.mjs";
-import { isDesignAgent, resolveDesignReportPath, resolveWaveRoleBindings } from "./role-helpers.mjs";
+import {
+  isDesignAgent,
+  isSecurityReviewAgent,
+  resolveDesignReportPath,
+  resolveWaveRoleBindings,
+} from "./role-helpers.mjs";
 import {
   resolveAgentSkills,
   summarizeResolvedSkills,
@@ -30,6 +40,44 @@ import {
   spawnAgentProcessRunner,
   terminateAgentProcessRuntime,
 } from "./agent-process-runner.mjs";
+import {
+  requestWaveControlCredentialEnv,
+  requestWaveControlProviderEnv,
+} from "./provider-runtime.mjs";
+
+function redactPreviewEnv(env = {}, redactedKeys = []) {
+  const output = { ...(env || {}) };
+  for (const key of redactedKeys) {
+    if (Object.prototype.hasOwnProperty.call(output, key)) {
+      output[key] = "[redacted]";
+    }
+  }
+  return output;
+}
+
+function buildDryRunContext7Preview(selection) {
+  if (
+    !selection ||
+    selection.bundleId === "none" ||
+    !Array.isArray(selection.libraries) ||
+    selection.libraries.length === 0
+  ) {
+    return {
+      mode: "none",
+      selection,
+      promptText: "",
+      snippetHash: "",
+      warning: "",
+    };
+  }
+  return {
+    mode: "dry-run",
+    selection,
+    promptText: "",
+    snippetHash: "",
+    warning: "Context7 prefetch skipped during dry-run preview.",
+  };
+}
 
 export function refreshResolvedSkillsForRun(runInfo, waveDefinition, lanePaths) {
   runInfo.agent.skillsResolved = resolveAgentSkills(
@@ -141,13 +189,31 @@ export async function launchAgentSession(
     fs.rmSync(runtimePath, { force: true });
   }
 
-  const context7 = await prefetchContext7ForSelection(agent.context7Resolved, {
-    cacheDir: lanePaths.context7CacheDir,
-    disabled: !context7Enabled,
-  });
+  const resolvedWaveDefinition = waveDefinition || { deployEnvironments: [] };
+  const context7 = dryRun
+    ? buildDryRunContext7Preview(agent.context7Resolved || null)
+    : await prefetchContext7ForSelection(agent.context7Resolved, {
+        lanePaths,
+        cacheDir: lanePaths.context7CacheDir,
+        disabled: !context7Enabled,
+      });
+  const integrationAgentId =
+    waveDefinition?.integrationAgentId || lanePaths.integrationAgentId || "A8";
+  const shouldLoadCorridorContext =
+    lanePaths.externalProviders?.corridor?.enabled === true &&
+    (isSecurityReviewAgent(agent) || agent.agentId === integrationAgentId);
+  const corridorContext = !dryRun && shouldLoadCorridorContext
+    ? await materializeWaveCorridorContext(lanePaths, resolvedWaveDefinition)
+    : null;
+  const corridorContextPath = !dryRun && shouldLoadCorridorContext
+    ? waveCorridorContextPath(lanePaths, wave)
+    : null;
+  const corridorContextText =
+    dryRun && shouldLoadCorridorContext
+      ? "Corridor context omitted in dry-run preview."
+      : renderCorridorPromptContext(corridorContext);
   const overlayDir = path.join(lanePaths.executorOverlaysDir, `wave-${wave}`, agent.slug);
   ensureDirectory(overlayDir);
-  const resolvedWaveDefinition = waveDefinition || { deployEnvironments: [] };
   const skillsResolved =
     agent.skillsResolved ||
     resolveAgentSkills(agent, resolvedWaveDefinition, {
@@ -176,6 +242,8 @@ export async function launchAgentSession(
       inboxPath,
       inboxText,
       context7,
+      corridorContextPath,
+      corridorContextText,
       componentPromotions: resolvedWaveDefinition.componentPromotions,
       evalTargets: resolvedWaveDefinition.evalTargets,
       benchmarkCatalogPath: lanePaths.laneProfile?.paths?.benchmarkCatalogPath,
@@ -201,11 +269,45 @@ export async function launchAgentSession(
     overlayDir,
     skillProjection: agent.skillsResolved,
   });
+  const requestedCredentialProviders = Array.isArray(lanePaths.waveControl?.credentialProviders)
+    ? lanePaths.waveControl.credentialProviders
+    : [];
+  const requestedCredentials = Array.isArray(lanePaths.waveControl?.credentials)
+    ? lanePaths.waveControl.credentials
+    : [];
+  const leasedProviderEnv =
+    !dryRun && requestedCredentialProviders.length > 0
+      ? await requestWaveControlProviderEnv(fetch, lanePaths.waveControl, requestedCredentialProviders)
+      : {};
+  const leasedCredentialEnv =
+    !dryRun && requestedCredentials.length > 0
+      ? await requestWaveControlCredentialEnv(fetch, lanePaths.waveControl, requestedCredentials)
+      : {};
+  const overlappingLeasedEnvVars = Object.keys(leasedProviderEnv).filter((key) =>
+    Object.prototype.hasOwnProperty.call(leasedCredentialEnv, key),
+  );
+  if (overlappingLeasedEnvVars.length > 0) {
+    throw new Error(
+      `Wave Control leased duplicate environment variables: ${overlappingLeasedEnvVars.join(", ")}.`,
+    );
+  }
+  const leasedEnv = {
+    ...leasedProviderEnv,
+    ...leasedCredentialEnv,
+  };
+  if (Object.keys(leasedEnv).length > 0) {
+    launchSpec.env = {
+      ...(launchSpec.env || {}),
+      ...leasedEnv,
+    };
+  }
   const resolvedExecutorMode = launchSpec.executorId || agent.executorResolved?.id || "codex";
   writeJsonAtomic(path.join(overlayDir, "launch-preview.json"), {
     executorId: resolvedExecutorMode,
     command: launchSpec.command,
-    env: launchSpec.env || {},
+    env: redactPreviewEnv(launchSpec.env || {}, Object.keys(leasedEnv)),
+    credentialProviders: requestedCredentialProviders,
+    credentials: requestedCredentials,
     useRateLimitRetries: launchSpec.useRateLimitRetries === true,
     invocationLines: launchSpec.invocationLines,
     limits: launchSpec.limits || null,
@@ -215,6 +317,7 @@ export async function launchAgentSession(
     return {
       promptHash,
       context7,
+      corridorContext,
       executorId: resolvedExecutorMode,
       launchSpec,
       dryRun: true,
@@ -339,6 +442,7 @@ export async function launchAgentSession(
   return {
     promptHash,
     context7,
+    corridorContext,
     executorId: resolvedExecutorMode,
     skills: summarizeResolvedSkills(agent.skillsResolved),
     runtimePath,

@@ -8,6 +8,7 @@ Use it when you need the full supported surface for:
 - `defaultProject` and `projects.<projectId>`
 - `lanes.<lane>.executors`
 - `waveControl`
+- `externalProviders`
 - `executors.profiles.<profile>`
 - per-agent `### Executor` blocks inside a wave file
 
@@ -219,7 +220,9 @@ Supported top-level fields:
 | `endpoint` | string | `https://wave-control.up.railway.app/api/v1` | Base URL for the Railway-hosted `services/wave-control` API |
 | `workspaceId` | string | derived from repo path | Stable workspace identity used across runs |
 | `projectId` | string | resolved project id | Stable project identity used for cross-workspace reporting and filtering |
-| `authTokenEnvVar` | string | `WAVE_CONTROL_AUTH_TOKEN` | Environment variable name holding the bearer token |
+| `authTokenEnvVar` | string | `WAVE_API_TOKEN` | Primary environment variable name holding the bearer token |
+| `credentialProviders` | string[] | `[]` | Allowlisted runtime credential leases requested from an owned Wave Control deployment before executor launch. Supported values: `openai`, `anthropic` |
+| `credentials` | `{ id, envVar }[]` | `[]` | Arbitrary per-user credential leases requested from an owned Wave Control deployment before executor launch |
 | `reportMode` | string | `metadata-only` | `disabled`, `metadata-only`, `metadata-plus-selected`, or `full-artifact-upload` |
 | `uploadArtifactKinds` | string[] | selected proof/trace/benchmark kinds | Artifact classes eligible for body upload when an artifact's upload policy requests a body |
 | `requestTimeoutMs` | integer | `5000` | Per-batch network timeout |
@@ -231,6 +234,8 @@ Supported top-level fields:
 | `captureBenchmarkRuns` | boolean | `true` | Emit `benchmark_run`, `benchmark_item`, `verification`, and `review` events |
 
 Lane overrides may refine the same keys under `lanes.<lane>.waveControl` or `projects.<projectId>.lanes.<lane>.waveControl`.
+
+Wave resolves the Wave Control bearer token from `authTokenEnvVar` first and keeps `WAVE_CONTROL_AUTH_TOKEN` as a compatibility fallback.
 
 One-run override:
 
@@ -246,6 +251,8 @@ Example:
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "workspaceId": "wave-main",
     "projectId": "app",
+    "credentialProviders": ["openai"],
+    "credentials": [{ "id": "github_pat", "envVar": "GITHUB_TOKEN" }],
     "reportMode": "metadata-only",
     "uploadArtifactKinds": [
       "trace-run-metadata",
@@ -260,6 +267,53 @@ Runtime-emitted Wave Control events also attach:
 
 - `orchestratorId` from the active launcher or resident orchestrator
 - `runtimeVersion` from the installed Wave package metadata
+
+## External Providers
+
+Wave can resolve third-party auth directly in the repo runtime or through an owned Wave Control broker.
+
+```json
+{
+  "externalProviders": {
+    "context7": {
+      "mode": "direct",
+      "apiKeyEnvVar": "CONTEXT7_API_KEY"
+    },
+    "corridor": {
+      "enabled": false,
+      "mode": "direct",
+      "baseUrl": "https://app.corridor.dev/api",
+      "apiTokenEnvVar": "CORRIDOR_API_TOKEN",
+      "apiKeyFallbackEnvVar": "CORRIDOR_API_KEY",
+      "teamId": "team-id-for-direct-mode",
+      "projectId": "project-id-for-direct-mode",
+      "severityThreshold": "critical",
+      "findingStates": ["open", "potential"],
+      "requiredAtClosure": true
+    }
+  }
+}
+```
+
+- `direct`: use repo/runtime env vars directly
+- `broker`: use the owned Wave Control endpoint with `WAVE_API_TOKEN`
+- `hybrid`: try the broker first, then fall back to direct auth if broker setup fails or a broker request fails at runtime
+- Wave auto-loads an allowlisted repo-root `.env.local` for `CONTEXT7_API_KEY`, `CORRIDOR_API_TOKEN`, `CORRIDOR_API_KEY`, `WAVE_API_TOKEN`, and `WAVE_CONTROL_AUTH_TOKEN`
+- `wave doctor` now warns or fails early when brokered providers target the packaged default endpoint or no Wave Control auth token is available
+- Context7 remains fail-open
+- Corridor writes `.tmp/<lane>-wave-launcher/security/wave-<n>-corridor.json` and can fail closure when the fetch fails or matched findings meet the configured threshold
+- Broker mode is intended for self-hosted or team-owned Wave Control only; the packaged default endpoint is rejected as a provider-secret proxy
+
+`waveControl.credentialProviders` is related but separate from `externalProviders`:
+
+- use `externalProviders.context7` and `externalProviders.corridor` for brokered or direct API access during planning / closure flows
+- use `waveControl.credentialProviders` only when an executor needs env vars leased into its runtime
+- use `waveControl.credentials` when an executor needs arbitrary user-owned secrets leased into env vars such as `GITHUB_TOKEN` or `NPM_TOKEN`
+- only `openai` and `anthropic` are valid leased providers today
+- `context7` and `corridor` remain broker-only and are never returned as raw env secrets
+- `waveControl.credentials[*].id` must match `/^[a-z0-9][a-z0-9._-]*$/`
+- `waveControl.credentials[*].envVar` must match `/^[A-Z_][A-Z0-9_]*$/`
+- when provider or arbitrary credentials are leased, Wave injects them into the live executor environment and redacts those keys in `launch-preview.json`
 
 Those fields are queryable in the `wave-control` service alongside `workspaceId`,
 `projectId`, `runKind`, `runId`, `lane`, and benchmark ids.

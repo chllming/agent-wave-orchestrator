@@ -142,7 +142,9 @@ Upload policy meanings:
     "endpoint": "https://wave-control.up.railway.app/api/v1",
     "workspaceId": "my-workspace",
     "projectId": "app",
-    "authTokenEnvVar": "WAVE_CONTROL_AUTH_TOKEN",
+    "authTokenEnvVar": "WAVE_API_TOKEN",
+    "credentialProviders": ["openai"],
+    "credentials": [{ "id": "github_pat", "envVar": "GITHUB_TOKEN" }],
     "reportMode": "metadata-only",
     "uploadArtifactKinds": [
       "trace-run-metadata",
@@ -161,6 +163,42 @@ Packaged defaults:
 - identity defaults to the resolved project, lane, wave, run kind, and run id
 
 This package is distributed with the author's personal Wave Control endpoint enabled by default. Repos that do not want telemetry delivered there must explicitly opt out.
+
+Wave Control can also act as an owned broker for Context7 and Corridor when that service-side surface is explicitly enabled. In that mode, the repo runtime authenticates once with `WAVE_API_TOKEN`, and the service uses deployment-owned provider secrets such as `WAVE_BROKER_CONTEXT7_API_KEY` and `WAVE_BROKER_CORRIDOR_API_TOKEN`. Broker routes are intentionally rejected on the packaged default endpoint.
+
+Owned deployments can also lease runtime credentials for allowlisted env providers. In v1 that surface is:
+
+- `openai` -> leases `OPENAI_API_KEY`
+- `anthropic` -> leases `ANTHROPIC_API_KEY`
+
+The repo runtime opts into that by setting `waveControl.credentialProviders`. Wave requests those values from `POST /api/v1/runtime/provider-env` before executor launch, injects them into the live launch environment, and redacts them in `launch-preview.json`.
+
+Owned deployments can also store arbitrary per-user credentials and lease them into runtime env vars through `waveControl.credentials`. Wave requests those values from `POST /api/v1/runtime/credential-env`, injects them into the live launch environment, and redacts them in `launch-preview.json`.
+
+Wave Control now also supports a separate browser app and browser-authenticated app routes:
+
+- Stack Auth verifies internal-team browser users on the backend with `STACK_SECRET_SERVER_KEY`, and `WAVE_CONTROL_STACK_INTERNAL_TEAM_IDS` is required when that surface is enabled
+- internal-team access comes from confirmed Stack memberships only, not `selected_team` or other team-shaped user payload fields
+- Stack identity is only the first gate; Wave Control then applies its own app-user access states: `pending`, `approved`, `rejected`, and `revoked`
+- `WAVE_CONTROL_BOOTSTRAP_SUPERUSER_EMAILS` auto-provisions the first approved Wave superusers on sign-in
+- approved `superuser` users can approve members, pre-add users by email, and change provider grants
+- `WAVE_CONTROL_SERVICE_TOKENS_JSON` defines separate machine-admin service tokens with the scoped `service:*` API surface
+- `WAVE_CONTROL_SECRET_ENCRYPTION_KEY` is required for encrypted stored user credentials and credential lease routes
+- PATs are intended for CLI/runtime use such as `WAVE_API_TOKEN`, with the allowlisted scopes `broker:read`, `credential:read`, and `ingest:write`
+- PATs and browser users must also hold the matching provider grant before they can use broker routes or provider env leasing
+- arbitrary stored credential leasing is owner-scoped and does not expose raw secrets through the admin APIs
+- the frontend package lives at `services/wave-control-web`, persists the Stack browser session across reloads, and mirrors the Stack project's enabled auth methods
+- `VITE_WAVE_CONTROL_API_BASE_URL` for the browser app may point either at the Wave Control origin or the full `/api/v1` base; the frontend normalizes either form before appending route paths
+
+The key app routes are:
+
+- `GET /api/v1/app/session` for the signed-in Wave app session, approval state, and provider catalog
+- `POST /api/v1/app/access-request` for internal users who need approval
+- `GET /api/v1/app/admin/users` plus the `POST /api/v1/app/admin/users*` management routes for superusers
+- `GET|PUT|DELETE /api/v1/app/admin/users/:id/credentials/*` for superuser write-only credential management
+- `POST /api/v1/runtime/provider-env` for repo runtime credential leasing
+- `POST /api/v1/runtime/credential-env` for repo runtime arbitrary credential leasing
+- `GET /api/v1/service/session` plus the `/api/v1/service/*` management routes for dedicated machine-admin service tokens
 
 Lane overrides may refine the same surface under `lanes.<lane>.waveControl` or `projects.<projectId>.lanes.<lane>.waveControl`.
 
@@ -196,6 +234,8 @@ Wave Control reporting should:
 The Railway-hosted `services/wave-control` service is an analysis surface, not the scheduler of record.
 
 The service package lives under `services/wave-control/`.
+
+The web frontend package lives under `services/wave-control-web/`.
 
 For durable telemetry retention, attach Railway Postgres to `wave-control` so the
 service receives `DATABASE_URL`. Without that variable, the service falls back to the

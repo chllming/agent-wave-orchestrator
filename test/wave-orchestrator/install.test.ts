@@ -437,6 +437,29 @@ describe("wave doctor", () => {
     expect(combinedErrors).toContain("docs/context7/bundles.json#planner-agentic");
     expect(combinedErrors).not.toContain("Missing planner file:");
   });
+
+  it("fails doctor when brokered providers target the packaged default endpoint", () => {
+    const repoDir = makeTempRepo();
+    expect(runWaveCli(["init"], { cwd: repoDir }).status).toBe(0);
+    const configPath = path.join(repoDir, "wave.config.json");
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    config.externalProviders = {
+      context7: {
+        mode: "broker",
+      },
+    };
+    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+    const doctorResult = runWaveCli(["doctor", "--json"], { cwd: repoDir });
+    expect(doctorResult.status).toBe(0);
+    const payload = JSON.parse(doctorResult.stdout);
+    expect(payload.ok).toBe(false);
+    expect(payload.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Brokered external providers require an owned Wave Control endpoint"),
+      ]),
+    );
+  });
 });
 
 describe("workspace package manager detection", () => {

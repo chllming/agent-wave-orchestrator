@@ -69,7 +69,7 @@ export const STARTER_TEMPLATE_PATHS = [
   "docs/guides/author-and-run-waves.md",
   "docs/guides/monorepo-projects.md",
   "docs/guides/planner.md",
-  "docs/guides/recommendations-0.9.2.md",
+  "docs/guides/recommendations-0.9.3.md",
   "docs/guides/sandboxed-environments.md",
   "docs/guides/signal-wrappers.md",
   "docs/guides/terminal-surfaces.md",

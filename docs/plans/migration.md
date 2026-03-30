@@ -282,7 +282,7 @@ The interactive `wave draft` flow supports `design` as a worker role and scaffol
 
 ## Version-Specific Upgrade Guidance
 
-## Upgrading From `0.8.5` To `0.8.6`
+## Upgrading From `0.8.5` To `0.9.3`
 
 This is the smallest upgrade, but it changes the live wait-loop contract for external automation and intentionally long-running agents.
 
@@ -319,7 +319,7 @@ If the repo copied starter surface, sync:
 - if the repo uses long-running watchers, confirm they can write the ack file where the prompt tells them to
 - reroute one targeted feedback or coordination request and confirm the resident signal version changes even when the signal kind stays the same
 
-## Upgrading From `0.8.4` To `0.8.6`
+## Upgrading From `0.8.4` To `0.9.3`
 
 ### What changed
 
@@ -357,54 +357,7 @@ If your repo copied starter config defaults, also sync the `designRolePromptPath
 - hybrid design stewards rejoin implementation when they explicitly own code
 - long-running prompts receive signal-state and ack paths when the repo uses the new waiting model
 
-## Upgrading From `0.8.3` To `0.8.6`
-
-This is the most common one-step package upgrade path.
-
-### What changed across that range
-
-- `0.8.4` tightened contradiction replay, component-promotion threshold handling, and projection persistence boundaries
-- `0.8.5` ships the `design` worker role, the `role-design` and `tui-design` starter bundles, and the hybrid design-steward runtime model as part of the published package
-- `0.8.6` adds versioned signal snapshots, `signal-hygiene`, prompt-injected signal ack loops, and the seeded operator wrappers
-- current operator and planner docs now describe the shipped surface directly instead of splitting behavior between a published package and newer `main`-only additions
-
-### Required repo changes
-
-Usually none if the repo does not copy starter prompts, skills, planning docs, or wrapper scripts.
-
-### Strongly recommended sync
-
-If the repo copied starter surface, sync:
-
-- `docs/agents/wave-design-role.md`
-- `skills/role-design/`
-- `skills/tui-design/`
-- `skills/signal-hygiene/`
-- `scripts/wave-status.sh`
-- `scripts/wave-watch.sh`
-- `docs/guides/author-and-run-waves.md`
-- `docs/guides/signal-wrappers.md`
-- `docs/guides/planner.md`
-- `docs/reference/skills.md`
-- `docs/reference/sample-waves.md`
-- `docs/plans/current-state.md`
-- `docs/plans/wave-orchestrator.md`
-- `docs/plans/end-state-architecture.md`
-
-If the repo copied starter `wave.config.json` defaults, also sync:
-
-- `roles.designRolePromptPath`
-- `skills.byRole.design`
-- `executors.profiles.design-pass`
-
-### Validation focus
-
-- confirm contradiction-blocked replay cases still compare cleanly if the repo keeps replay fixtures
-- if the repo uses design stewards, confirm packet-only design waves still block implementation until `ready-for-implementation`
-- if the repo uses hybrid design stewards, confirm the same agent rejoins implementation only when the authored wave explicitly gives it code ownership
-- if the repo uses long-running agents or shell automation, confirm the new wrapper exit contract and ack-loop semantics before relying on an older polling script
-
-## Upgrading From `0.8.3` To `0.9.2`
+## Upgrading From `0.8.3` To `0.9.3`
 
 Treat this as one move to the current `0.9.2` surface.
 
@@ -439,7 +392,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.9.2`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.9.3`
 
 This is the main migration path for older adopted repos.
 
@@ -480,7 +433,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.9.2`
+## Upgrading From `0.5.x` Or Earlier To `0.9.3`
 
 Do not treat this as a tiny patch bump.
 

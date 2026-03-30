@@ -486,6 +486,10 @@ class PromptSession {
     }
   }
 
+  describe(text) {
+    stderr.write(`  ${text}\n`);
+  }
+
   async close() {
     this.interface?.close();
   }
@@ -2925,7 +2929,13 @@ async function runProjectSetupFlow(options = {}) {
     const laneChoices = Array.from(
       new Set([config.defaultLane, ...projectLanes, ...Object.keys(config.lanes || {})].filter(Boolean)),
     );
+    stderr.write("\n  Wave project setup — answer a few questions so Wave can tailor defaults for this repo.\n  Press Enter to accept the default shown in [brackets].\n\n");
+    prompt.describe("Is this a fresh start, or has Wave been used in this repo before?");
     const newProject = await prompt.askBoolean("Treat this repository as a new project?", base.newProject);
+
+    prompt.describe("\nShould you review agent progress yourself, or let them run autonomously?");
+    prompt.describe("  oversight    — you review progress and approve risky steps (recommended)");
+    prompt.describe("  dark-factory — agents run end-to-end without human checkpoints");
     const defaultOversightMode = normalizeOversightMode(
       await prompt.askChoice(
         "Default execution posture",
@@ -2933,6 +2943,10 @@ async function runProjectSetupFlow(options = {}) {
         base.defaultOversightMode,
       ),
     );
+
+    prompt.describe("\nHow do you want to watch agent sessions?");
+    prompt.describe("  vscode — agent sessions appear as VS Code terminal tabs");
+    prompt.describe("  tmux   — agent sessions run in tmux panes (terminal-native)");
     const defaultTerminalSurface = normalizeTerminalSurface(
       await prompt.askChoice(
         "Default terminal surface",
@@ -2940,6 +2954,12 @@ async function runProjectSetupFlow(options = {}) {
         base.defaultTerminalSurface,
       ),
     );
+
+    prompt.describe("\nWhat kind of work will waves usually do?");
+    prompt.describe("  implementation — building features, fixing bugs, writing code (most common)");
+    prompt.describe("  qa             — test coverage, test infrastructure, validation work");
+    prompt.describe("  infra          — deployment, CI/CD, infrastructure changes");
+    prompt.describe("  release        — versioning, changelog, release coordination");
     const template = normalizeDraftTemplate(
       await prompt.askChoice(
         "Default draft template",
@@ -2947,11 +2967,20 @@ async function runProjectSetupFlow(options = {}) {
         base.plannerDefaults.template,
       ),
     );
+
+    prompt.describe("\nWhich lane should new waves go into? A lane is just an ordered sequence of waves.");
+    prompt.describe("'main' is the default and usually fine to start with.");
     const lane = await prompt.askChoice(
       "Default draft lane",
       laneChoices,
       base.plannerDefaults.lane,
     );
+
+    prompt.describe("\nDo you have deploy environments (e.g. staging, production) you want Wave to know about?");
+    prompt.describe("This helps Wave attach the right deployment skills when agents do infra or release work.");
+    prompt.describe("Supported providers: railway, docker-compose, kubernetes, ssh-manual.");
+    prompt.describe("Use 'custom' for anything else (GitHub Actions, Vercel, Cloudflare, etc.).");
+    prompt.describe("You can skip this now (enter 0) and add them later with 'wave project setup'.");
     const deployEnvironmentCount = await prompt.askInteger(
       "How many deploy environments should the planner remember?",
       base.deployEnvironments.length,

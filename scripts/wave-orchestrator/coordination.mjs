@@ -253,7 +253,7 @@ export function buildExecutionPrompt({
       ? [
           `- Because you are Agent ${contQaAgentId}, your cont-QA report must end with exactly one standalone line in the form \`Verdict: PASS\`, \`Verdict: CONCERNS\`, or \`Verdict: BLOCKED\`.`,
           "- Also emit one matching structured marker in your terminal output: `[wave-verdict] pass`, `[wave-verdict] concerns`, or `[wave-verdict] blocked`.",
-          "- Emit one final structured gate marker: `[wave-gate] architecture=<pass|concerns|blocked> integration=<pass|concerns|blocked> durability=<pass|concerns|blocked> live=<pass|concerns|blocked> docs=<pass|concerns|blocked> detail=<short-note>`.",
+          "- Emit one final structured gate marker: `[wave-gate] architecture=<pass|concerns|blocked|gap> integration=<pass|concerns|blocked|gap> durability=<pass|concerns|blocked|gap> live=<pass|concerns|blocked|gap> docs=<pass|concerns|blocked|gap> detail=<short-note>`.",
           "- Only use `Verdict: PASS` when the wave is coherent enough to unblock the next wave.",
           `- Do not declare PASS until the documentation gate is closed: impacted implementation-owned docs must exist, ${sharedPlanDocList} must reflect plan-affecting outcomes, and no unresolved architecture-versus-plans drift remains.`,
           "- If shared-plan reconciliation is still active inside the wave, require the exact remaining doc delta and an explicit `closed` or `no-change` note from the documentation steward or named owner before finalizing. Do not treat ownership handoff alone as the blocker.",

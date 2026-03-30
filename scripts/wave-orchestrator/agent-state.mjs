@@ -50,7 +50,7 @@ const WAVE_SECURITY_REGEX =
 const WAVE_DESIGN_REGEX =
   /^\[wave-design\]\s*state=(ready-for-implementation|needs-clarification|blocked)\s+decisions=(\d+)\s+assumptions=(\d+)\s+open_questions=(\d+)\s*(?:detail=(.*))?$/gim;
 const WAVE_GATE_REGEX =
-  /^\[wave-gate\]\s*architecture=(pass|concerns|blocked)\s+integration=(pass|concerns|blocked)\s+durability=(pass|concerns|blocked)\s+live=(pass|concerns|blocked)\s+docs=(pass|concerns|blocked)\s*(?:detail=(.*))?$/gim;
+  /^\[wave-gate\]\s*architecture=(pass|concerns|blocked|gap)\s+integration=(pass|concerns|blocked|gap)\s+durability=(pass|concerns|blocked|gap)\s+live=(pass|concerns|blocked|gap)\s+docs=(pass|concerns|blocked|gap)\s*(?:detail=(.*))?$/gim;
 const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
 const WAVE_COMPONENT_REGEX =
@@ -1268,16 +1268,33 @@ export function validateContQaSummary(agent, summary, options = {}) {
       detail: summary.verdict.detail || "Verdict read from cont-QA report.",
     };
   }
+  const hardBlockers = [];
+  const documentedGaps = [];
   for (const key of ["architecture", "integration", "durability", "live", "docs"]) {
-    if (summary.gate[key] !== "pass") {
-      return {
-        ok: false,
-        statusCode: `gate-${key}-${summary.gate[key]}`,
-        detail:
-          summary.gate.detail ||
-          `Final cont-QA gate did not pass ${key}; got ${summary.gate[key]}.`,
-      };
+    if (summary.gate[key] === "gap") {
+      documentedGaps.push(key);
+    } else if (summary.gate[key] !== "pass") {
+      hardBlockers.push(key);
     }
+  }
+  if (hardBlockers.length > 0) {
+    const key = hardBlockers[0];
+    return {
+      ok: false,
+      statusCode: `gate-${key}-${summary.gate[key]}`,
+      detail:
+        summary.gate.detail ||
+        `Final cont-QA gate did not pass ${key}; got ${summary.gate[key]}.`,
+    };
+  }
+  if (documentedGaps.length > 0) {
+    return {
+      ok: true,
+      statusCode: "conditional-pass",
+      detail:
+        summary.gate.detail ||
+        `cont-QA gate passed with documented gaps in: ${documentedGaps.join(", ")}.`,
+    };
   }
   return {
     ok: true,

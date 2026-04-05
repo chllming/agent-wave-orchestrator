@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.9.5 - 2026-04-05
+
+### Fixed
+- Pass `lanePaths` to `reconcileFailuresAgainstSharedComponentState` to fix `ReferenceError` crash on repos without Integration Steward (A8).
+
 ## 0.9.4 - 2026-04-05
 
 - Laddered gate modes: bootstrap/standard/strict per wave number

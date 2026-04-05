@@ -3,6 +3,17 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.5",
+      "date": "2026-04-05",
+      "summary": "Hotfix: pass lanePaths to reconcileFailuresAgainstSharedComponentState, fixing launcher crash on repos without Integration Steward.",
+      "features": [
+        "Fixed ReferenceError where `lanePaths` was used as a free variable in `reconcileFailuresAgainstSharedComponentState` instead of being passed as a parameter.",
+        "planner-agentic bundle placeholder remains available for adopted repos."
+      ],
+      "manualSteps": [],
+      "breaking": false
+    },
+    {
       "version": "0.9.4",
       "date": "2026-03-30",
       "summary": "Gap-value wave-gate fix and first-time project setup UX improvements.",

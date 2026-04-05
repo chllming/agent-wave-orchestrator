@@ -276,7 +276,7 @@ export function applySharedComponentWaitStateToDashboard(componentGate, dashboar
   }
 }
 
-export function reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures) {
+export function reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures, lanePaths) {
   if (!Array.isArray(failures) || failures.length === 0) {
     return failures;
   }

@@ -1787,7 +1787,7 @@ export async function runLauncherCli(argv) {
           syncWaveSignals();
           lastLiveCoordinationRefreshAt = Date.now();
           emitCoordinationAlertEvents(derivedState);
-          failures = reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures);
+          failures = reconcileFailuresAgainstSharedComponentState(wave, agentRuns, failures, lanePaths);
           for (const failure of failures) {
             if (failure.statusCode === "shared-component-sibling-pending") {
               applySharedComponentWaitStateToDashboard(failure, dashboardState);

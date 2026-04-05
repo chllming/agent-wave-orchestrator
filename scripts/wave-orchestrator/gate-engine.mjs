@@ -138,6 +138,46 @@ function validateEnvelopeForRun(runInfo, envelope, options = {}) {
   };
 }
 
+
+// --- Laddered gate modes (0.9.4) ---
+export function resolveGateMode(waveNumber, thresholds) {
+  if (!thresholds) return "strict";
+  if (waveNumber < (thresholds.standard ?? 4)) return "bootstrap";
+  if (waveNumber < (thresholds.strict ?? 10)) return "standard";
+  return "strict";
+}
+
+export function evaluateBootstrapGate(wave, agentRuns, options = {}) {
+  const conditions = options.bootstrapPassConditions ?? {};
+  const summaries = options.summaries ?? new Map();
+  
+  // Check implementation agents (non-A0, non-A8, non-A9)
+  const implAgents = agentRuns.filter(a => 
+    !["A0", "E0", "A8", "A9"].includes(a.agentId)
+  );
+  
+  for (const agent of implAgents) {
+    const summary = summaries.get(agent.agentId);
+    if (!summary) continue;
+    
+    // Must have exit code 0
+    if (conditions.requireExitCodeZero !== false && summary.exitCode !== 0) {
+      return { ok: false, statusCode: "blocked", detail: `${agent.agentId} exit code ${summary.exitCode}` };
+    }
+    
+    // Check deliverables exist
+    if (conditions.requireDeliverablesExist !== false && summary.deliverables) {
+      const missing = summary.deliverables.filter(d => !d.exists);
+      if (missing.length > 0) {
+        return { ok: false, statusCode: "concerns", detail: `${agent.agentId} missing deliverables: ${missing.map(d=>d.path).join(", ")}` };
+      }
+    }
+  }
+  
+  return { ok: true, statusCode: "pass", detail: "bootstrap-pass: impl agents completed with deliverables" };
+}
+// --- End laddered gate modes ---
+
 export function materializeAgentExecutionSummaryForRun(wave, runInfo, options = {}) {
   const statusRecord = readStatusRecordIfPresent(runInfo.statusPath);
   if (!statusRecord) {

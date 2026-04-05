@@ -31,51 +31,69 @@
     "profiles": {
       "implement-fast": {
         "id": "codex",
-        "tags": ["implementation"],
+        "tags": [
+          "implementation"
+        ],
         "budget": {
-          "turns": 12,
           "minutes": 45
         }
       },
       "deep-review": {
         "id": "claude",
-        "tags": ["integration", "review"],
+        "tags": [
+          "integration",
+          "review"
+        ],
         "budget": {
-          "turns": 10,
           "minutes": 30
         }
       },
       "eval-tuning": {
         "id": "codex",
-        "tags": ["eval", "tuning"],
+        "tags": [
+          "eval",
+          "tuning"
+        ],
         "budget": {
-          "turns": 14,
           "minutes": 45
         }
       },
       "docs-pass": {
         "id": "claude",
-        "tags": ["documentation"],
+        "tags": [
+          "documentation"
+        ],
         "budget": {
-          "turns": 8,
           "minutes": 20
         }
       },
       "design-pass": {
         "id": "claude",
-        "tags": ["design", "review"],
+        "tags": [
+          "design",
+          "review"
+        ],
         "budget": {
-          "turns": 10,
           "minutes": 30
         },
         "claude": {
-          "allowedTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"]
+          "allowedTools": [
+            "Read",
+            "Edit",
+            "Write",
+            "Bash",
+            "Grep",
+            "Glob"
+          ]
         }
       },
       "planning-readonly": {
         "id": "codex",
         "model": "gpt-5-codex",
-        "tags": ["planning", "review"],
+        "tags": [
+          "planning",
+          "review"
+        ],
         "budget": {
           "minutes": 30
         },
@@ -83,25 +101,38 @@
           "search": true,
           "json": true,
           "sandbox": "read-only",
-          "config": ["model_reasoning_effort=high"]
+          "config": [
+            "model_reasoning_effort=high"
+          ]
         }
       },
       "security-review": {
         "id": "claude",
-        "tags": ["security", "review"],
+        "tags": [
+          "security",
+          "review"
+        ],
         "budget": {
-          "turns": 8,
           "minutes": 20
         },
         "claude": {
-          "allowedTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"]
+          "allowedTools": [
+            "Read",
+            "Edit",
+            "Write",
+            "Bash",
+            "Grep",
+            "Glob"
+          ]
         }
       },
       "ops-triage": {
         "id": "opencode",
-        "tags": ["ops", "research"],
+        "tags": [
+          "ops",
+          "research"
+        ],
         "budget": {
-          "turns": 8,
           "minutes": 20
         }
       }
@@ -122,34 +153,81 @@
   },
   "skills": {
     "dir": "skills",
-    "base": ["wave-core", "repo-coding-rules"],
+    "base": [
+      "wave-core",
+      "repo-coding-rules"
+    ],
     "byRole": {
-      "design": ["role-design"],
-      "implementation": ["role-implementation"],
-      "integration": ["role-integration"],
-      "documentation": ["role-documentation"],
-      "cont-qa": ["role-cont-qa"],
-      "cont-eval": ["role-cont-eval"],
-      "security": ["role-security"],
-      "infra": ["role-infra"],
-      "deploy": ["role-deploy"],
-      "research": ["role-research"]
+      "design": [
+        "role-design"
+      ],
+      "implementation": [
+        "role-implementation"
+      ],
+      "integration": [
+        "role-integration"
+      ],
+      "documentation": [
+        "role-documentation"
+      ],
+      "cont-qa": [
+        "role-cont-qa"
+      ],
+      "cont-eval": [
+        "role-cont-eval"
+      ],
+      "security": [
+        "role-security"
+      ],
+      "infra": [
+        "role-infra"
+      ],
+      "deploy": [
+        "role-deploy"
+      ],
+      "research": [
+        "role-research"
+      ]
     },
     "byRuntime": {
-      "codex": ["runtime-codex"],
-      "claude": ["runtime-claude"],
-      "opencode": ["runtime-opencode"],
-      "local": ["runtime-local"]
+      "codex": [
+        "runtime-codex"
+      ],
+      "claude": [
+        "runtime-claude"
+      ],
+      "opencode": [
+        "runtime-opencode"
+      ],
+      "local": [
+        "runtime-local"
+      ]
     },
     "byDeployKind": {
-      "railway-cli": ["provider-railway"],
-      "railway-mcp": ["provider-railway"],
-      "docker-compose": ["provider-docker-compose"],
-      "kubernetes": ["provider-kubernetes"],
-      "aws": ["provider-aws"],
-      "github-release": ["provider-github-release"],
-      "ssh-manual": ["provider-ssh-manual"],
-      "custom": ["provider-custom-deploy"]
+      "railway-cli": [
+        "provider-railway"
+      ],
+      "railway-mcp": [
+        "provider-railway"
+      ],
+      "docker-compose": [
+        "provider-docker-compose"
+      ],
+      "kubernetes": [
+        "provider-kubernetes"
+      ],
+      "aws": [
+        "provider-aws"
+      ],
+      "github-release": [
+        "provider-github-release"
+      ],
+      "ssh-manual": [
+        "provider-ssh-manual"
+      ],
+      "custom": [
+        "provider-custom-deploy"
+      ]
     }
   },
   "planner": {
@@ -223,7 +301,11 @@
           "infra": "opencode",
           "deploy": "opencode"
         },
-        "fallbackExecutorOrder": ["claude", "opencode", "codex"]
+        "fallbackExecutorOrder": [
+          "claude",
+          "opencode",
+          "codex"
+        ]
       }
     }
   }

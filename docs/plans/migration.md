@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.9.3` surface.
+This page is the practical repo-upgrade guide for the current `0.9.4` surface.
 
 Use it when you are:
 
@@ -12,9 +12,19 @@ For the completed internal architecture cutover record, see [architecture-harden
 
 For the sandbox-specific long-running execution target, including async `submit/status/wait` semantics and daemon ownership goals, see [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
 
-## What `0.9.3` Changes
 
-The current `0.9.3` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
+## What `0.9.4` Changes
+
+The `0.9.4` surface adds laddered gate modes and fixes the steward threshold enforcement.
+
+- **Laddered gate modes**: bootstrap (waves 0-3), standard (4-9), strict (10+). Bootstrap mode requires only implementation agent exit 0 and deliverables exist — no formal QA signals needed.
+- **Steward threshold fix**: `requireDocumentationStewardFromWave` is now strictly respected. Previously it was OR'd with `componentPromotionRuleActive`.
+- **New config fields**: `gateModeThresholds`, `bootstrapPassConditions`, `testCommand`, `testCommandTimeout`.
+- **No breaking changes**: existing repos get bootstrap mode for waves 0-3 by default.
+
+## What `0.9.4` Changes
+
+The current `0.9.4` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
 
 The practical changes are:
 
@@ -30,7 +40,7 @@ There are no breaking changes. Just upgrade with `pnpm up @chllming/wave-orchest
 
 If your repo uses wave-gate markers, you can now use `gap` for dimensions where the gap is documented and not an actionable blocker.
 
-For the practical `0.9.3` operating stance after the upgrade, read [../guides/recommendations-0.9.3.md](../guides/recommendations-0.9.3.md).
+For the practical `0.9.4` operating stance after the upgrade, read [../guides/recommendations-0.9.4.md](../guides/recommendations-0.9.4.md).
 
 ## What `0.9.2` Changes
 
@@ -170,11 +180,11 @@ pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 
 Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a tmux-backed dashboard after the upgrade.
 
-## `0.9.3` Release Model
+## `0.9.4` Release Model
 
-The current `0.9.3` surface combines these strands:
+The current `0.9.4` surface combines these strands:
 
-- the gap-value wave-gate fix and first-time setup UX improvements released in `0.9.3`
+- the gap-value wave-gate fix and first-time setup UX improvements released in `0.9.4`
 - the detached process-runner and sandbox supervisor hardening released in `0.9.2`
 - the shipped `0.9.0` monorepo project support and project-aware runtime isolation
 - the shipped `design` worker role and hybrid design-steward flow introduced in `0.8.5`
@@ -282,7 +292,7 @@ The interactive `wave draft` flow supports `design` as a worker role and scaffol
 
 ## Version-Specific Upgrade Guidance
 
-## Upgrading From `0.8.5` To `0.9.3`
+## Upgrading From `0.8.5` To `0.9.4`
 
 This is the smallest upgrade, but it changes the live wait-loop contract for external automation and intentionally long-running agents.
 
@@ -319,7 +329,7 @@ If the repo copied starter surface, sync:
 - if the repo uses long-running watchers, confirm they can write the ack file where the prompt tells them to
 - reroute one targeted feedback or coordination request and confirm the resident signal version changes even when the signal kind stays the same
 
-## Upgrading From `0.8.4` To `0.9.3`
+## Upgrading From `0.8.4` To `0.9.4`
 
 ### What changed
 
@@ -357,7 +367,7 @@ If your repo copied starter config defaults, also sync the `designRolePromptPath
 - hybrid design stewards rejoin implementation when they explicitly own code
 - long-running prompts receive signal-state and ack paths when the repo uses the new waiting model
 
-## Upgrading From `0.8.3` To `0.9.3`
+## Upgrading From `0.8.3` To `0.9.4`
 
 Treat this as one move to the current `0.9.2` surface.
 
@@ -392,7 +402,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.9.3`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.9.4`
 
 This is the main migration path for older adopted repos.
 
@@ -433,7 +443,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.9.3`
+## Upgrading From `0.5.x` Or Earlier To `0.9.4`
 
 Do not treat this as a tiny patch bump.
 
@@ -543,4 +553,4 @@ For repos that depend on replay parity, replay at least:
 
 ## Summary
 
-The current `0.9.3` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.
+The current `0.9.4` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

@@ -1786,8 +1786,7 @@ export function validateWaveDefinition(wave, options = {}) {
     }
   }
   const documentationRuleActive =
-    (documentationThreshold !== null && wave.wave >= documentationThreshold) ||
-    componentPromotionRuleActive;
+    documentationThreshold !== null && wave.wave >= documentationThreshold;
   if (documentationRuleActive) {
     const documentationStewards = wave.agents.filter((agent) =>
       agent.rolePromptPaths?.includes(laneProfile.roles.documentationRolePromptPath),

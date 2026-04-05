@@ -3,7 +3,7 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
-      "version": "0.9.3",
+      "version": "0.9.4",
       "date": "2026-03-30",
       "summary": "Gap-value wave-gate fix and first-time project setup UX improvements.",
       "features": [
@@ -14,13 +14,13 @@
         "`wave project setup` now shows descriptive help text before each prompt, explains all template and posture options inline, and adds whitespace between question groups for readability. (Contributed by @justanothernate in #54)",
         "`PromptSession` gains a `describe(text)` method for writing contextual help to stderr during interactive setup flows.",
         "`parseArgs` now passes the loaded config object through to `runLauncherCli`, avoiding a redundant `loadWaveConfig()` call.",
-        "Release docs, migration guidance, runtime-config and closure references, the manifest, and the tracked install-state fixtures now all point at the `0.9.3` surface.",
+        "Release docs, migration guidance, runtime-config and closure references, the manifest, and the tracked install-state fixtures now all point at the `0.9.4` surface.",
         "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target."
       ],
       "manualSteps": [
-        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.3` release surface.",
-        "Push the `v0.9.3` tag after the release commit so the GitHub publish workflow can publish the matching npm package version.",
-        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, and `docs/guides/recommendations-0.9.3.md` so local guidance matches the packaged release."
+        "Run `pnpm exec wave doctor` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.4` release surface.",
+        "Push the `v0.9.4` tag after the release commit so the GitHub publish workflow can publish the matching npm package version.",
+        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, and `docs/guides/recommendations-0.9.4.md` so local guidance matches the packaged release."
       ],
       "breaking": false
     },

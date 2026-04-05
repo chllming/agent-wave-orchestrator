@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageName": "@chllming/wave-orchestration",
-  "installedVersion": "0.9.3",
+  "installedVersion": "0.9.4",
   "initializedAt": "2026-03-21T22:06:19.813Z",
   "lastUpgradeAt": "2026-03-30T07:58:00.000Z",
   "initMode": "adopt-existing",
@@ -180,7 +180,7 @@
       "at": "2026-03-30T07:58:00.000Z",
       "action": "upgrade",
       "fromVersion": "0.9.2",
-      "toVersion": "0.9.3",
+      "toVersion": "0.9.4",
       "report": ".wave/upgrade-history/2026-03-30T07-58-00.000Z-0.9.2-to-0.9.3.md"
     }
   ],

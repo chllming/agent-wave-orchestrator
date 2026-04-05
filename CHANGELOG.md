@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.9.4 - 2026-04-05
+
+- Laddered gate modes: bootstrap/standard/strict per wave number
+- Bootstrap pass: exit 0 + deliverables exist = advance (no QA signals needed)
+- Fix: requireDocumentationStewardFromWave threshold strictly respected
+- New config: gateModeThresholds, bootstrapPassConditions, testCommand
+- evaluateBootstrapGate() and resolveGateMode() functions
+
 ## 0.9.3 - 2026-03-30
 
 ### Fixed And Hardened

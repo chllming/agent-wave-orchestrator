@@ -531,6 +531,20 @@ function normalizeValidation(rawValidation = {}) {
       rawValidation.requireAgentComponentsFromWave,
       0,
     ),
+    gateModeThresholds: {
+      bootstrap: rawValidation.gateModeThresholds?.bootstrap ?? 0,
+      standard: rawValidation.gateModeThresholds?.standard ?? 4,
+      strict: rawValidation.gateModeThresholds?.strict ?? 10,
+    },
+    bootstrapPassConditions: {
+      requireA0Verdict: rawValidation.bootstrapPassConditions?.requireA0Verdict ?? false,
+      requireProofSignals: rawValidation.bootstrapPassConditions?.requireProofSignals ?? false,
+      requireTestsPass: rawValidation.bootstrapPassConditions?.requireTestsPass ?? true,
+      requireDeliverablesExist: rawValidation.bootstrapPassConditions?.requireDeliverablesExist ?? true,
+      requireExitCodeZero: rawValidation.bootstrapPassConditions?.requireExitCodeZero ?? true,
+    },
+    testCommand: typeof rawValidation.testCommand === "string" ? rawValidation.testCommand : null,
+    testCommandTimeout: typeof rawValidation.testCommandTimeout === "number" ? rawValidation.testCommandTimeout : 120,
   };
 }
 

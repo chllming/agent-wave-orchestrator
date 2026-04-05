@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.9.6 - 2026-04-05
+
+### Fixed
+- Closure engine now respects `requireIntegrationStewardFromWave` and `requireDocumentationStewardFromWave` thresholds instead of unconditionally requiring integration/documentation closure runs.
+
 ## 0.9.5 - 2026-04-05
 
 ### Fixed

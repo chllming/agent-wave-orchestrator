@@ -3,6 +3,17 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.6",
+      "date": "2026-04-05",
+      "summary": "Fix closure engine unconditionally requiring integration/documentation steward runs for waves that don't declare them.",
+      "features": [
+        "The closure engine's `stageRequiresRun` now respects `requireIntegrationStewardFromWave` and `requireDocumentationStewardFromWave` thresholds. When set to null, the stage is only required if the wave declares the corresponding agent.",
+        "planner-agentic bundle placeholder remains available for adopted repos."
+      ],
+      "manualSteps": [],
+      "breaking": false
+    },
+    {
       "version": "0.9.5",
       "date": "2026-04-05",
       "summary": "Hotfix: pass lanePaths to reconcileFailuresAgainstSharedComponentState, fixing launcher crash on repos without Integration Steward.",

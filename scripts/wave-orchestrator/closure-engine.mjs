@@ -95,8 +95,20 @@ function forwardedClosureGapRecord({
 
 function stageRequiresRun(stage, wave, lanePaths) {
   switch (stage.key) {
-    case "integration":
-    case "documentation":
+    case "integration": {
+      const threshold = lanePaths?.requireIntegrationStewardFromWave;
+      if (threshold === null || threshold === undefined) {
+        return Array.isArray(wave?.agents) && wave.agents.some((agent) => agent?.agentId === stage.agentId);
+      }
+      return wave.wave >= threshold;
+    }
+    case "documentation": {
+      const docThreshold = lanePaths?.requireDocumentationStewardFromWave;
+      if (docThreshold === null || docThreshold === undefined) {
+        return Array.isArray(wave?.agents) && wave.agents.some((agent) => agent?.agentId === stage.agentId);
+      }
+      return wave.wave >= docThreshold;
+    }
     case "cont-qa":
       return true;
     case "cont-eval":

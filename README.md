@@ -107,8 +107,8 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.9.5`
-- Release tag: [`v0.9.5`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.5)
+- `@chllming/wave-orchestration@0.9.6`
+- Release tag: [`v0.9.5`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.6)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 

@@ -553,7 +553,7 @@
 - Initial generic wave orchestrator runtime.
 - Added Context7 bundle resolution and multi-executor support for Codex, Claude Code, and OpenCode.
 
-## 0.9.8
+## 0.9.8 - 2026-04-06
 
 ### Fixed
 - Gate engine: bootstrap mode treats doc-closure, cont-QA, integration, and component gates as advisory (non-blocking) while impl gates remain required

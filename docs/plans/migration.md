@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.9.7` surface.
+This page is the practical repo-upgrade guide for the current `0.9.8` surface.
 
 Use it when you are:
 
@@ -24,7 +24,7 @@ The `0.9.4` surface adds laddered gate modes and fixes the steward threshold enf
 
 ## What `0.9.4` Changes
 
-The current `0.9.7` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
+The current `0.9.8` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
 
 The practical changes are:
 
@@ -182,7 +182,7 @@ Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach globa
 
 ## `0.9.4` Release Model
 
-The current `0.9.7` surface combines these strands:
+The current `0.9.8` surface combines these strands:
 
 - the gap-value wave-gate fix and first-time setup UX improvements released in `0.9.4`
 - the detached process-runner and sandbox supervisor hardening released in `0.9.2`
@@ -367,7 +367,7 @@ If your repo copied starter config defaults, also sync the `designRolePromptPath
 - hybrid design stewards rejoin implementation when they explicitly own code
 - long-running prompts receive signal-state and ack paths when the repo uses the new waiting model
 
-## Upgrading From `0.8.3` To `0.9.7`
+## Upgrading From `0.8.3` To `0.9.8`
 
 Treat this as one move to the current `0.9.2` surface.
 
@@ -402,7 +402,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.9.7`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.9.8`
 
 This is the main migration path for older adopted repos.
 
@@ -553,4 +553,4 @@ For repos that depend on replay parity, replay at least:
 
 ## Summary
 
-The current `0.9.7` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.
+The current `0.9.8` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

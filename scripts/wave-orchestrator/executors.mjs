@@ -193,7 +193,6 @@ export function buildCodexExecInvocation(
   appendSingleValueFlag(tokens, "--model", options.model);
   appendSingleValueFlag(tokens, "--profile", options.profileName);
   appendRepeatedFlag(tokens, "-c", options.config);
-  appendBooleanFlag(tokens, "--search", options.search);
   appendRepeatedFlag(tokens, "--image", options.images);
   appendRepeatedFlag(tokens, "--add-dir", options.addDirs);
   appendBooleanFlag(tokens, "--json", options.json);

@@ -1604,16 +1604,33 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
     ["componentMatrixGate", componentMatrixGate], ["contQaGate", contQaGate],
     ["infraGate", infraGate], ["clarificationBarrier", clarificationBarrier],
   ];
-  const firstFailure = orderedGates.find(([, gate]) => gate?.ok === false);
+  const gateMode = laneConfig.gateMode || "strict";
+  // In bootstrap mode, these gates are advisory (non-blocking)
+  const bootstrapAdvisoryGates = new Set([
+    "documentationGate", "contQaGate", "integrationBarrier",
+    "componentMatrixGate", "componentGate",
+  ]);
+  const firstFailure = orderedGates.find(([name, gate]) => {
+    if (!gate || gate.ok !== false) return false;
+    if (gateMode === "bootstrap" && bootstrapAdvisoryGates.has(name)) return false;
+    return true;
+  });
+  const advisoryFailures = gateMode === "bootstrap"
+    ? orderedGates.filter(([name, gate]) => gate?.ok === false && bootstrapAdvisoryGates.has(name))
+    : [];
   return {
     designGate, implementationGate, componentGate, integrationGate: integrationMarkerGate,
     integrationBarrier, documentationGate, componentMatrixGate,
     contEvalGate, securityGate, contQaGate, infraGate,
     clarificationBarrier, helperAssignmentBarrier, dependencyBarrier,
+    gateMode,
+    advisoryFailures: advisoryFailures.map(([name, gate]) => ({ gate: name, ...gate })),
     overall: firstFailure
       ? { ok: false, gate: firstFailure[0], statusCode: firstFailure[1].statusCode,
           detail: firstFailure[1].detail, agentId: firstFailure[1].agentId || null }
       : { ok: true, gate: "pass", statusCode: "pass",
-          detail: "All replayed wave gates passed.", agentId: null },
+          detail: gateMode === "bootstrap"
+            ? `Bootstrap pass: impl gates passed (${advisoryFailures.length} advisory).`
+            : "All replayed wave gates passed.", agentId: null },
   };
 }

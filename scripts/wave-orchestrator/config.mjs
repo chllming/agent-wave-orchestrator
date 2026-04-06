@@ -1080,7 +1080,7 @@ function normalizeExecutors(rawExecutors = {}) {
       appendSystemPromptMode: normalizeClaudePromptMode(
         executors.claude?.appendSystemPromptMode,
       ),
-      permissionMode: normalizeOptionalString(executors.claude?.permissionMode, null),
+      permissionMode: normalizeOptionalString(executors.claude?.permissionMode, "bypassPermissions"),
       permissionPromptTool: normalizeOptionalString(
         executors.claude?.permissionPromptTool,
         null,

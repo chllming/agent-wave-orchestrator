@@ -54,7 +54,9 @@ The useful path is journey-first:
 - Publishing the package:
   Read [reference/package-publishing-flow.md](./reference/package-publishing-flow.md) for the end-to-end release path, the GitHub publish workflows, the lifecycle scripts, and the verification or repair flow.
 - Want the practical `0.9.3` operating stance:
-  Read [guides/recommendations-0.9.7.md](./guides/recommendations-0.9.7.md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
+  Read [guides/recommendations-0.9.7
+- [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md).md](./guides/recommendations-0.9.7
+- [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md).md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
 - Want the concrete runtime module map:
   Read [plans/end-state-architecture.md](./plans/end-state-architecture.md) for the engine-by-engine architecture and artifact ownership model.
 - Want the CLI surface map:

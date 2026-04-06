@@ -552,3 +552,12 @@
 
 - Initial generic wave orchestrator runtime.
 - Added Context7 bundle resolution and multi-executor support for Codex, Claude Code, and OpenCode.
+
+## 0.9.8
+
+### Fixed
+- Gate engine: bootstrap mode treats doc-closure, cont-QA, integration, and component gates as advisory (non-blocking) while impl gates remain required
+- Gate engine: integration barrier short-circuits when no steward declared
+- Claude executor defaults permissionMode to bypassPermissions (fixes Docker containers)
+- Removed --search from codex exec invocations (unsupported by codex exec)
+- Advisory failures tracked in gate snapshot for operator visibility

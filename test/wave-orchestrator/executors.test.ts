@@ -451,7 +451,7 @@ describe("buildExecutorLaunchSpec", () => {
     expect(invocation).toContain("--profile 'review'");
     expect(invocation).toContain("-c 'model_reasoning_effort=high'");
     expect(invocation).toContain("-c 'model_verbosity=low'");
-    expect(invocation).toContain("--search");
+    expect(invocation).not.toContain("--search");
     expect(invocation).toContain("--image 'docs/mock-ui.png'");
     expect(invocation).toContain("--add-dir '../shared'");
     expect(invocation).toContain("--json");

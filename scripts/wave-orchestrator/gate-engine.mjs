@@ -1552,6 +1552,8 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   });
   const integrationBarrier = (() => {
     if (!integrationMarkerGate.ok) { return integrationMarkerGate; }
+    // Short-circuit: no integration steward declared and not required
+    if (!integrationMarkerGate.agentId) { return integrationMarkerGate; }
     const integrationSummary = derivedState?.integrationSummary || null;
     if (!integrationSummary) {
       return { ok: false, agentId: integrationMarkerGate.agentId,

@@ -56,9 +56,11 @@ The useful path is journey-first:
 - Want the practical `0.9.3` operating stance:
   Read [guides/recommendations-0.9.7
 - [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md
-- [0.9.9 Recommendations](guides/recommendations-0.9.9.md)).md](./guides/recommendations-0.9.7
+- [0.9.9 Recommendations](guides/recommendations-0.9.9.md
+- [0.9.10 Recommendations](guides/recommendations-0.9.10.md))).md](./guides/recommendations-0.9.7
 - [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md
-- [0.9.9 Recommendations](guides/recommendations-0.9.9.md)).md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
+- [0.9.9 Recommendations](guides/recommendations-0.9.9.md
+- [0.9.10 Recommendations](guides/recommendations-0.9.10.md))).md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
 - Want the concrete runtime module map:
   Read [plans/end-state-architecture.md](./plans/end-state-architecture.md) for the engine-by-engine architecture and artifact ownership model.
 - Want the CLI surface map:

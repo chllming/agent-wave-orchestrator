@@ -2665,6 +2665,9 @@ export function writeRunState(runStatePath, state) {
   return payload;
 }
 
+const RUN_STATE_MAX_HISTORY = 200;
+const RUN_STATE_MAX_HISTORY_PER_WAVE = 20;
+
 function nextRunStateSequence(history) {
   return (history || []).reduce((max, entry) => Math.max(max, Number(entry?.seq) || 0), 0) + 1;
 }
@@ -2686,13 +2689,23 @@ function appendRunStateTransition(state, {
   const effectiveDetail = String(detail || "").trim();
   const effectiveEvidence =
     evidence && typeof evidence === "object" && !Array.isArray(evidence) ? evidence : null;
+  // Dedup: skip if the transition is identical (ignore timestamps in evidence)
+  const evidenceForCompare = (ev) => {
+    if (!ev || typeof ev !== "object") return null;
+    const { statusFiles, ...rest } = ev;
+    // Strip completedAt from status files for comparison (changes every cycle)
+    const normalizedFiles = Array.isArray(statusFiles)
+      ? statusFiles.map(({ completedAt, ...f }) => f)
+      : statusFiles;
+    return JSON.stringify({ ...rest, statusFiles: normalizedFiles });
+  };
   if (
     previousEntry &&
     currentState === toState &&
     previousEntry.lastSource === source &&
     previousEntry.lastReasonCode === reasonCode &&
     previousEntry.lastDetail === effectiveDetail &&
-    JSON.stringify(currentEvidence || null) === JSON.stringify(effectiveEvidence || null)
+    evidenceForCompare(currentEvidence) === evidenceForCompare(effectiveEvidence)
   ) {
     return nextState;
   }
@@ -2717,6 +2730,31 @@ function appendRunStateTransition(state, {
     lastEvidence: effectiveEvidence,
   };
   nextState.history = [...nextState.history, historyEntry];
+  // Cap history to prevent unbounded growth (run-state bloat fix)
+  if (nextState.history.length > RUN_STATE_MAX_HISTORY) {
+    // Keep the last N entries per wave, plus the most recent entries overall
+    const byWave = new Map();
+    for (const entry of nextState.history) {
+      const key = String(entry.wave ?? "");
+      if (!byWave.has(key)) byWave.set(key, []);
+      byWave.get(key).push(entry);
+    }
+    const kept = [];
+    for (const [, entries] of byWave) {
+      kept.push(...entries.slice(-RUN_STATE_MAX_HISTORY_PER_WAVE));
+    }
+    // Strip evidence from all but the last entry per wave to reduce size
+    const lastPerWave = new Set();
+    for (let i = kept.length - 1; i >= 0; i--) {
+      const key = String(kept[i].wave ?? "");
+      if (!lastPerWave.has(key)) {
+        lastPerWave.add(key);
+      } else {
+        kept[i] = { ...kept[i], evidence: null };
+      }
+    }
+    nextState.history = kept.sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  }
   nextState.completedWaves = completedWavesFromStateEntries(nextState.waves);
   return nextState;
 }

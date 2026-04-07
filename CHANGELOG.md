@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.10 - 2026-04-07
+
+### Fixed
+- **Run-state history bloat**: The `run-state.json` history array grew unbounded, reaching 500MB+ in long-running repos. Each reconciliation cycle appended entries with full evidence objects (file hashes, status paths) that were never pruned. Fixed with:
+  - History cap: max 200 total entries, max 20 per wave. Older entries are pruned on every write.
+  - Evidence stripping: only the most recent history entry per wave retains its full evidence object; older entries have evidence set to null.
+  - Improved dedup: the transition dedup check now ignores `completedAt` timestamps in status file evidence, preventing identical reconciliation cycles from creating duplicate entries.
+
+
 ## 0.9.9 - 2026-04-07
 
 ### Fixed

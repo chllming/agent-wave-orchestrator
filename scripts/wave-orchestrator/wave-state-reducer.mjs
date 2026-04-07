@@ -19,6 +19,7 @@ import {
   buildGateSnapshotPure,
   readClarificationBarrier,
   readWaveAssignmentBarrier,
+  resolveGateMode,
 } from "./gate-engine.mjs";
 import { buildHumanInputRequests } from "./human-input-workflow.mjs";
 import { projectLegacySummaryFromEnvelope } from "./result-envelope.mjs";
@@ -713,7 +714,9 @@ export function reduceWaveState({
     Array.isArray(waveDefinition?.agents) ? waveDefinition.agents : [],
     laneConfig.capabilityRouting || {},
   );
-  const helperAssignmentBarrier = readWaveAssignmentBarrier({ capabilityAssignments });
+  const _reducerGateThresholds = laneConfig?.gateModeThresholds || laneConfig?.validation?.gateModeThresholds || null;
+  const _reducerGateMode = resolveGateMode(waveDefinition?.wave || 0, _reducerGateThresholds);
+  const helperAssignmentBarrier = readWaveAssignmentBarrier({ capabilityAssignments }, { gateMode: _reducerGateMode });
   const dependencyBarrier = (() => {
     if (!dependencyTickets) {
       return { ok: true, statusCode: "pass", detail: "" };

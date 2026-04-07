@@ -573,6 +573,11 @@ export function buildWaveIntegrationSummary({
     securitySummary,
   });
   if (explicitIntegration) {
+    // When the integration steward explicitly asserts ready-for-doc-closure,
+    // clear synthesized proof/doc gaps — the steward has signed off on them.
+    const stewardClearedGaps =
+      explicitIntegration.state === "ready-for-doc-closure" &&
+      (explicitIntegration.blockers || 0) === 0;
     return {
       wave: wave.wave,
       lane: lanePaths.lane,
@@ -595,8 +600,8 @@ export function buildWaveIntegrationSummary({
       ),
       changedInterfaces: evidence.changedInterfaces,
       crossComponentImpacts: evidence.crossComponentImpacts,
-      proofGaps: evidence.proofGaps,
-      docGaps: evidence.docGaps,
+      proofGaps: stewardClearedGaps ? [] : evidence.proofGaps,
+      docGaps: stewardClearedGaps ? [] : evidence.docGaps,
       deployRisks: evidence.deployRisks,
       securityState: evidence.securityState,
       securityFindings: evidence.securityFindings,

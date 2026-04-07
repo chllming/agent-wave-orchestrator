@@ -443,16 +443,16 @@ export function parseVerdictFromText(text, regex) {
   }
   regex.lastIndex = 0;
   let match = regex.exec(text);
-  let verdict = null;
-  let detail = "";
-  while (match !== null) {
-    verdict = normalizeWaveVerdict(match[1]);
-    detail = String(match[2] || "")
-      .trim()
-      .replace(/^detail=/i, "")
-      .trim();
-    match = regex.exec(text);
+  if (!match) {
+    return { verdict: null, detail: "" };
   }
+  // Use the first match — in append-only reports the latest verdict is written
+  // at the top of the newest section, while stale entries linger at the bottom.
+  const verdict = normalizeWaveVerdict(match[1]);
+  const detail = String(match[2] || "")
+    .trim()
+    .replace(/^detail=/i, "")
+    .trim();
   return { verdict, detail };
 }
 

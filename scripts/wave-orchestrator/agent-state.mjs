@@ -509,7 +509,9 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
         : "";
   const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
   const logVerdict = parseVerdictFromText(signalText, WAVE_VERDICT_REGEX);
-  const verdict = reportVerdict.verdict ? reportVerdict : logVerdict;
+  // Prefer log verdict (authoritative for the current run) over report verdict
+  // (may accumulate stale entries across retries in append-only report files).
+  const verdict = logVerdict.verdict ? logVerdict : reportVerdict;
   const termination = detectTermination(agent, logText, statusRecord);
   return {
     agentId: agent?.agentId || null,

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.11 - 2026-04-07
+
+### Fixed
+- **Verdict parsing: first-match-wins** — `parseVerdictFromText()` now returns the **first** regex match instead of the last. In append-only cont-QA report files, stale `Verdict: BLOCKED` entries from earlier attempts would linger at the bottom of the file while newer `Verdict: PASS` entries were written above them. The last-match-wins behavior caused the cont-QA gate to read the stale blocked verdict, creating an infinite retry loop. This was the root cause of 17 blocked waves in React Word Editor (DOCX W20+).
+- **Log verdict priority over report verdict** — `buildAgentExecutionSummary()` now prefers the log-based `[wave-verdict]` marker over the report file `Verdict:` line. The log is authoritative for the current run, while report files may accumulate conflicting entries across retry attempts.
+- **Integration steward closure is now sticky** — When the integration steward (A8) explicitly reports `state=ready-for-doc-closure` with zero blockers, synthesized proof gaps and doc gaps from implementation agent validation are cleared from the integration summary. Previously, `buildWaveIntegrationSummary()` would re-inject gaps derived from agent summaries on every `refreshDerivedState()` call, overriding the steward's explicit sign-off and causing unnecessary retry cycles (observed as 15+ loops in DOCX W20).
+
+### Added
+- Test suite for `parseVerdictFromText` covering first-match behavior, null/empty inputs, multi-verdict report files, and `[wave-verdict]` marker parsing.
+
 ## 0.9.10 - 2026-04-07
 
 ### Fixed

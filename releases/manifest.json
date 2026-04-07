@@ -3,6 +3,19 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.10",
+      "date": "2026-04-07",
+      "summary": "Fix run-state history bloat that caused 500MB+ JSON files and V8 string length crashes.",
+      "features": [
+        "Run-state history capped at 200 entries (20 per wave) with automatic pruning.",
+        "Evidence objects stripped from older history entries to reduce size.",
+        "Improved transition dedup ignores completedAt timestamps in evidence.",
+        "planner-agentic bundle placeholder remains available for adopted repos."
+      ],
+      "manualSteps": [],
+      "breaking": false
+    },
+    {
       "version": "0.9.9",
       "date": "2026-04-07",
       "summary": "Helper assignment barrier is advisory in bootstrap gate mode; planner-agentic bundle remains available.",

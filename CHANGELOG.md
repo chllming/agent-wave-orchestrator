@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9 - 2026-04-07
+
+### Fixed
+- Helper assignment barrier is now advisory (non-blocking) in bootstrap gate mode. Previously, open helper assignments blocked wave closure even when the assigned agent completed successfully with exit 0, causing unnecessary retries. In bootstrap mode, assigned-but-open helper requests are downgraded to advisory warnings with statusCode `helper-assignment-open-advisory`. Unresolved assignments (no assignee) remain blocking in all gate modes.
+
+
 ## 0.9.8 - 2026-04-06
 
 ### Added

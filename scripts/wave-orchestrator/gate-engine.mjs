@@ -1138,7 +1138,8 @@ export function readClarificationBarrier(derivedState) {
   };
 }
 
-export function readWaveAssignmentBarrier(derivedState) {
+export function readWaveAssignmentBarrier(derivedState, options) {
+  const gateMode = options?.gateMode || null;
   const blockingAssignments = (derivedState?.capabilityAssignments || []).filter(
     (assignment) => assignment.blocking,
   );
@@ -1155,6 +1156,13 @@ export function readWaveAssignmentBarrier(derivedState) {
       ok: false,
       statusCode: "helper-assignment-unresolved",
       detail: `Helper assignments remain unresolved (${unresolvedAssignments.map((assignment) => assignment.requestId).join(", ")}).`,
+    };
+  }
+  if (gateMode === "bootstrap") {
+    return {
+      ok: true,
+      statusCode: "helper-assignment-open-advisory",
+      detail: `Helper assignments remain open but are advisory in bootstrap gate mode (${blockingAssignments.map((assignment) => assignment.requestId).join(", ")}).`,
     };
   }
   return {

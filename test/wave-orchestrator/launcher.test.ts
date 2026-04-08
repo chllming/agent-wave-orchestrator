@@ -218,7 +218,7 @@ describe("readWaveContQaGate", () => {
     ).toMatchObject({
       ok: false,
       agentId: "A0",
-      statusCode: "cont-qa-concerns",
+      statusCode: "cont-qa-hold",
       detail: "waiting on QA",
     });
   });

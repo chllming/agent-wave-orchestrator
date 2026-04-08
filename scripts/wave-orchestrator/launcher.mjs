@@ -265,9 +265,9 @@ Options:
   --dry-run              Parse waves and update manifest only
   --terminal-surface <mode>
                         Terminal surface: ${TERMINAL_SURFACES.join(" | ")} (default: ${terminalSurface})
-  --no-dashboard         Disable per-wave tmux dashboard session
-  --cleanup-sessions     Kill lane tmux sessions after each wave (default: on)
-  --keep-sessions        Keep lane tmux sessions after each wave
+  --no-dashboard         Disable the per-wave dashboard projection session
+  --cleanup-sessions     Clean up lane tmux dashboard/projection sessions after each wave (default: on)
+  --keep-sessions        Keep lane tmux dashboard/projection sessions after each wave
   --keep-terminals       Do not remove temporary terminal entries after each wave
   --orchestrator-id <id> Stable orchestrator identity for cross-lane coordination
   --orchestrator-board <path>
@@ -475,6 +475,15 @@ function parseArgs(argv) {
     throw new Error("--terminal-surface none is only supported with --dry-run");
   }
   return { help: false, lanePaths, options, config };
+}
+
+function maybePrintOptionalTmuxNote(options) {
+  if (options.dryRun || options.terminalSurface !== "tmux" || options.dashboard) {
+    return;
+  }
+  console.log(
+    "[terminal-surface] tmux is optional here: live agents still run as detached processes, and tmux only affects dashboard/projection attach when dashboards are enabled.",
+  );
 }
 
 // --- Local wrappers that bind engine calls to launcher scope ---
@@ -1062,11 +1071,12 @@ export async function runLauncherCli(argv) {
       console.log(
         `[dry-run] prompts and executor overlays written: ${path.relative(REPO_ROOT, lanePaths.executorOverlaysDir)}`,
       );
-      console.log("Dry run enabled, skipping tmux and executor launch.");
+      console.log("Dry run enabled, skipping live execution and optional dashboard/projection launch.");
       return;
     }
 
     preflightWavesForExecutorAvailability(filteredWaves, lanePaths);
+    maybePrintOptionalTmuxNote(options);
     const terminalRegistryEnabled = terminalSurfaceUsesTerminalRegistry(
       options.terminalSurface,
     );

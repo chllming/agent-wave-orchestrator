@@ -3,9 +3,13 @@ import { StackClientApp } from "@stackframe/js";
 type StackProjectLike = {
   config?: {
     credential_enabled?: boolean;
+    credentialEnabled?: boolean;
     magic_link_enabled?: boolean;
+    magicLinkEnabled?: boolean;
     passkey_enabled?: boolean;
+    passkeyEnabled?: boolean;
     enabled_oauth_providers?: Array<{ id?: string | null } | null> | null;
+    oauthProviders?: Array<{ id?: string | null } | null> | null;
   } | null;
 } | null;
 
@@ -81,21 +85,26 @@ export function createStackApp(projectId: string, publishableClientKey: string, 
 
 export function resolveStackAuthCapabilities(project: StackProjectLike): StackAuthCapabilities {
   const config = project?.config || {};
-  const oauthProviders = Array.isArray(config.enabled_oauth_providers)
-    ? config.enabled_oauth_providers
+  const oauthProviderEntries = Array.isArray(config.oauthProviders)
+    ? config.oauthProviders
+    : Array.isArray(config.enabled_oauth_providers)
+      ? config.enabled_oauth_providers
+      : [];
+  const credentialEnabled =
+    config.credentialEnabled === true || config.credential_enabled === true;
+  const magicLinkEnabled =
+    config.magicLinkEnabled === true || config.magic_link_enabled === true;
+  const passkeyEnabled =
+    config.passkeyEnabled === true || config.passkey_enabled === true;
+  const oauthProviders = oauthProviderEntries
         .map((provider) => String(provider?.id || "").trim())
-        .filter(Boolean)
-    : [];
+        .filter(Boolean);
   return {
-    credentialEnabled: config.credential_enabled === true,
-    magicLinkEnabled: config.magic_link_enabled === true,
-    passkeyEnabled: config.passkey_enabled === true,
+    credentialEnabled,
+    magicLinkEnabled,
+    passkeyEnabled,
     oauthProviders,
-    hasAnyMethod:
-      config.credential_enabled === true ||
-      config.magic_link_enabled === true ||
-      config.passkey_enabled === true ||
-      oauthProviders.length > 0,
+    hasAnyMethod: credentialEnabled || magicLinkEnabled || passkeyEnabled || oauthProviders.length > 0,
   };
 }
 

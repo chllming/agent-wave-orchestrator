@@ -2,9 +2,9 @@
 
 This roadmap is intentionally short and current. The older planner-foundation and ad-hoc-run phase list has been removed because that work no longer describes the actual shipping direction for this package.
 
-## Current Release: 0.9.2
+## Current Release: 0.9.12
 
-`0.9.2` is the current packaged surface.
+`0.9.12` is the current packaged surface.
 
 It includes:
 
@@ -56,6 +56,6 @@ That line is expected to carry:
 
 For this repository, the practical sequence is:
 
-1. Ship `0.9.2` with the sandbox/runtime hardening and aligned docs.
+1. Ship `0.9.12` with the closure, operator-surface, and release-doc alignment fixes.
 2. Maintain this Node package for bug fixes, compatibility, operational hardening, and release-surface sync rather than a broad new feature wave.
 3. Move long-term execution investment to the LEAPclaw + Go + Temporal architecture and the Rust standalone runtime.

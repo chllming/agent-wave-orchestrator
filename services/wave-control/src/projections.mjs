@@ -44,6 +44,10 @@ function benchmarkRunKey(event) {
   return JSON.stringify({
     workspaceId: identity.workspaceId || "",
     projectId: identity.projectId || "",
+    runKind: identity.runKind || "",
+    runId: identity.runId || "",
+    lane: identity.lane || "",
+    wave: identity.wave ?? null,
     benchmarkRunId: identity.benchmarkRunId || "",
     orchestratorId: identity.orchestratorId || "",
     runtimeVersion: identity.runtimeVersion || "",
@@ -87,6 +91,18 @@ function matchesBenchmarkFilters(event, filters = {}) {
   if (filters.projectId && identity.projectId !== filters.projectId) {
     return false;
   }
+  if (filters.runKind && identity.runKind !== filters.runKind) {
+    return false;
+  }
+  if (filters.runId && identity.runId !== filters.runId) {
+    return false;
+  }
+  if (filters.lane && identity.lane !== filters.lane) {
+    return false;
+  }
+  if (filters.wave != null && Number(identity.wave) !== Number(filters.wave)) {
+    return false;
+  }
   if (filters.benchmarkRunId && identity.benchmarkRunId !== filters.benchmarkRunId) {
     return false;
   }
@@ -105,6 +121,51 @@ function latestEventByEntity(events, entityType) {
 
 function distinctValues(values) {
   return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function countByValue(values, fallback = "unknown") {
+  const counts = {};
+  for (const value of values || []) {
+    const normalized = cleanText(value, fallback);
+    counts[normalized] = (counts[normalized] || 0) + 1;
+  }
+  return counts;
+}
+
+function latestTimestamp(values) {
+  return (values || []).reduce((latest, value) => {
+    const normalized = cleanText(value, null);
+    if (!normalized) {
+      return latest;
+    }
+    if (!latest) {
+      return normalized;
+    }
+    return Date.parse(normalized) > Date.parse(latest) ? normalized : latest;
+  }, null);
+}
+
+function normalizeReferenceId(value) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return cleanText(value, null);
+  }
+  if (typeof value === "object") {
+    return cleanText(value.id || value.slug || value.name || value.label, null);
+  }
+  return null;
+}
+
+function normalizeOptionalBoolean(value) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  return null;
 }
 
 function summarizeRunEvents(events) {
@@ -199,22 +260,32 @@ function summarizeBenchmarkEvents(events) {
     const validity = cleanText(review.data?.reviewValidity, "review-only");
     reviewBreakdown[validity] = (reviewBreakdown[validity] || 0) + 1;
   }
+  const status = runEvent?.action || latest.action || "unknown";
   return {
     workspaceId: identity.workspaceId || null,
     projectId: identity.projectId || null,
+    runKind: identity.runKind || null,
+    runId: identity.runId || null,
+    lane: identity.lane || null,
+    wave: identity.wave ?? null,
     benchmarkRunId: identity.benchmarkRunId || null,
     orchestratorId: identity.orchestratorId || null,
     runtimeVersion: identity.runtimeVersion || null,
     startedAt: first.recordedAt || null,
     updatedAt: latest.recordedAt || null,
-    action: runEvent?.action || latest.action || "unknown",
+    action: status,
+    status,
     summary: runEvent?.data?.summary || null,
     adapter: runEvent?.data?.adapter || null,
+    adapterId: normalizeReferenceId(runEvent?.data?.adapter),
     manifest: runEvent?.data?.manifest || null,
+    manifestId: normalizeReferenceId(runEvent?.data?.manifest),
     selectedArms: runEvent?.data?.selectedArms || [],
     comparisonMode: runEvent?.data?.comparisonMode || null,
-    comparisonReady: runEvent?.data?.comparisonReady === true,
+    comparisonReady: normalizeOptionalBoolean(runEvent?.data?.comparisonReady),
     benchmarkItemCount: items.length,
+    itemCount: items.length,
+    reviewCount: reviews.length,
     verificationCount: verifications.length,
     reviewBreakdown,
   };
@@ -256,7 +327,7 @@ export function getBenchmarkRunDetail(events, filters = {}) {
 }
 
 export function buildAnalyticsOverview(events, filters = {}) {
-  const filtered = events.filter((event) => {
+  const baseFiltered = events.filter((event) => {
     const identity = event.identity || {};
     if (filters.workspaceId && identity.workspaceId !== filters.workspaceId) {
       return false;
@@ -272,29 +343,52 @@ export function buildAnalyticsOverview(events, filters = {}) {
     }
     return true;
   });
-  const runSummaries = listRunSummaries(filtered, filters);
-  const benchmarkRuns = listBenchmarkRunSummaries(filtered, filters);
+  const runEvents = baseFiltered.filter(
+    (event) =>
+      ["roadmap", "adhoc"].includes(event.identity?.runKind || "") &&
+      matchesRunFilters(event, filters),
+  );
+  const benchmarkEvents = baseFiltered.filter(
+    (event) => event.identity?.benchmarkRunId && matchesBenchmarkFilters(event, filters),
+  );
+  const runSummaries = listRunSummaries(runEvents, filters);
+  const benchmarkRuns = listBenchmarkRunSummaries(benchmarkEvents, filters);
   const reviewValidityCounts = {};
-  for (const event of filtered.filter((entry) => entry.entityType === "review")) {
+  for (const event of benchmarkEvents.filter((entry) => entry.entityType === "review")) {
     const validity = cleanText(event.data?.reviewValidity, "review-only");
     reviewValidityCounts[validity] = (reviewValidityCounts[validity] || 0) + 1;
   }
   const gateCounts = {};
-  for (const event of filtered.filter((entry) => entry.entityType === "gate")) {
+  for (const event of runEvents.filter((entry) => entry.entityType === "gate")) {
     const gate = cleanText(
       event.data?.gateSnapshot?.overall?.gate || event.data?.gateSnapshot?.overall?.statusCode,
       "unknown",
     );
     gateCounts[gate] = (gateCounts[gate] || 0) + 1;
   }
+  const artifactCount = [...runEvents, ...benchmarkEvents].reduce(
+    (total, event) => total + (event.artifacts || []).length,
+    0,
+  );
   return {
     runCount: runSummaries.length,
     benchmarkRunCount: benchmarkRuns.length,
     latestRunUpdatedAt: runSummaries[0]?.updatedAt || null,
     latestBenchmarkUpdatedAt: benchmarkRuns[0]?.updatedAt || null,
+    latestActivityAt: latestTimestamp([runSummaries[0]?.updatedAt, benchmarkRuns[0]?.updatedAt]),
+    runStatusCounts: countByValue(runSummaries.map((summary) => summary.status)),
+    benchmarkStatusCounts: countByValue(
+      benchmarkRuns.map((summary) => summary.status || summary.action),
+    ),
+    benchmarkComparisonReadyCount: benchmarkRuns.filter((summary) => summary.comparisonReady === true).length,
+    benchmarkComparisonPendingCount: benchmarkRuns.filter((summary) => summary.comparisonReady === false).length,
+    benchmarkComparisonUnknownCount: benchmarkRuns.filter((summary) => summary.comparisonReady == null).length,
     gateCounts,
     reviewValidityCounts,
-    coordinationRecordCount: filtered.filter((event) => event.entityType === "coordination_record").length,
-    proofBundleCount: filtered.filter((event) => event.entityType === "proof_bundle").length,
+    reviewCount: benchmarkRuns.reduce((total, summary) => total + Number(summary.reviewCount || 0), 0),
+    verificationCount: benchmarkRuns.reduce((total, summary) => total + Number(summary.verificationCount || 0), 0),
+    coordinationRecordCount: runEvents.filter((event) => event.entityType === "coordination_record").length,
+    proofBundleCount: runEvents.filter((event) => event.entityType === "proof_bundle").length,
+    artifactCount,
   };
 }

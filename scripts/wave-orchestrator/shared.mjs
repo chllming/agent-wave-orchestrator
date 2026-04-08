@@ -430,9 +430,6 @@ export function normalizeWaveVerdict(verdict) {
   const normalized = String(verdict || "")
     .trim()
     .toLowerCase();
-  if (normalized === "hold") {
-    return "concerns";
-  }
   if (normalized === "fail") {
     return "blocked";
   }

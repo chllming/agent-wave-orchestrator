@@ -1,6 +1,6 @@
 # Migration
 
-This page is the practical repo-upgrade guide for the current `0.9.10` surface.
+This page is the practical repo-upgrade guide for the current `0.9.12` surface.
 
 Use it when you are:
 
@@ -13,18 +13,22 @@ For the completed internal architecture cutover record, see [architecture-harden
 For the sandbox-specific long-running execution target, including async `submit/status/wait` semantics and daemon ownership goals, see [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
 
 
+## What `0.9.12` Changes
+
+The `0.9.12` surface keeps the existing proof-first runtime and adds one focused closure fix plus a broad operator-surface cleanup.
+
+- **Hybrid closure fast path**: bootstrap closure still supports low-entropy waves, but a wave no longer skips missing `cont-QA` once semantic closure stewards already ran.
+- **Closure policy wiring**: `closureModeThresholds.bootstrap` now actually affects runtime mode resolution, and derived closure-complexity metadata now includes the real barrier set.
+- **Optional TMUX language**: setup prompts, launcher help, docs, and canned commands now all describe TMUX as an optional dashboard/projection layer instead of a required execution backend.
+- **Wave Control operator UI**: the browser surface is now dashboard-first and exposes richer run, benchmark, and access summaries.
+
+There are no breaking changes. Existing repos can upgrade in place with `pnpm up @chllming/wave-orchestration` and `pnpm exec wave upgrade`.
+
+For the practical `0.9.12` operating stance after the upgrade, read [../guides/recommendations-0.9.12.md](../guides/recommendations-0.9.12.md).
+
 ## What `0.9.4` Changes
 
-The `0.9.4` surface adds laddered gate modes and fixes the steward threshold enforcement.
-
-- **Laddered gate modes**: bootstrap (waves 0-3), standard (4-9), strict (10+). Bootstrap mode requires only implementation agent exit 0 and deliverables exist — no formal QA signals needed.
-- **Steward threshold fix**: `requireDocumentationStewardFromWave` is now strictly respected. Previously it was OR'd with `componentPromotionRuleActive`.
-- **New config fields**: `gateModeThresholds`, `bootstrapPassConditions`, `testCommand`, `testCommandTimeout`.
-- **No breaking changes**: existing repos get bootstrap mode for waves 0-3 by default.
-
-## What `0.9.4` Changes
-
-The current `0.9.10` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
+The current `0.9.12` surface keeps everything from `0.9.2` and adds two focused improvements with no breaking changes.
 
 The practical changes are:
 
@@ -40,11 +44,11 @@ There are no breaking changes. Just upgrade with `pnpm up @chllming/wave-orchest
 
 If your repo uses wave-gate markers, you can now use `gap` for dimensions where the gap is documented and not an actionable blocker.
 
-For the practical `0.9.4` operating stance after the upgrade, read [../guides/recommendations-0.9.4.md](../guides/recommendations-0.9.4.md).
+For the practical `0.9.12` operating stance after the upgrade, read [../guides/recommendations-0.9.12.md](../guides/recommendations-0.9.12.md).
 
 ## What `0.9.2` Changes
 
-The current `0.9.2` surface keeps the packaged operator-guidance alignment, monorepo project support, and project-aware default telemetry from `0.9.0`, but adds a more sandbox-friendly execution model and lower-overhead live orchestration.
+The `0.9.2` release established the packaged operator-guidance alignment, monorepo project support, and project-aware default telemetry from `0.9.0`, then added a more sandbox-friendly execution model and lower-overhead live orchestration.
 
 The practical changes are:
 
@@ -55,11 +59,11 @@ The practical changes are:
 - Corridor is now documented as a first-class security input, including direct versus broker versus hybrid mode, implementation-owned path matching, generated artifact paths, and the closure-gate interaction with the human security reviewer
 - a dedicated setup guide now ships for LEAPclaw, OpenClaw, Nemoshell, Docker, and similar constrained environments
 - the `0.9.0` monorepo and project-aware state layout remains part of the release surface, including `defaultProject`, `projects.<projectId>`, project-scoped state roots, and project-aware CLI routing
-- the current release surface and tracked install-state fixtures now all move together on `0.9.2`
+- the current release surface and tracked install-state fixtures now move together on the active package version
 
-If your repo copied starter docs, shell automation, runbooks, or `wave.config.json` defaults, these are the areas most likely to need a sync before the `0.9.2` package cut.
+If your repo copied starter docs, shell automation, runbooks, or `wave.config.json` defaults, these are the areas most likely to need a sync before the current package cut.
 
-For a practical `0.9.2` operating stance after the upgrade, read [../guides/recommendations-0.9.2.md](../guides/recommendations-0.9.2.md).
+For a practical `0.9.12` operating stance after the upgrade, read [../guides/recommendations-0.9.12.md](../guides/recommendations-0.9.12.md).
 For the concrete operator setup in Nemoshell, Docker, and other sandboxed shells, also read [../guides/sandboxed-environments.md](../guides/sandboxed-environments.md).
 
 ## What `0.8.6` Changes
@@ -127,7 +131,7 @@ pnpm exec wave upgrade
 
 ### 3. Sync repo-owned starter surface only if you copied it
 
-The most common sync set for `0.9.2` is:
+The most common sync set for the current release line is:
 
 - `docs/agents/wave-launcher-role.md`
 - `docs/agents/wave-orchestrator-role.md`
@@ -180,9 +184,9 @@ pnpm exec wave coord inbox --lane main --wave 0 --agent A1 --dry-run
 
 Use `pnpm exec wave dashboard --lane <lane> --attach current` or `--attach global` when you need to reattach to a tmux-backed dashboard after the upgrade.
 
-## `0.9.4` Release Model
+## `0.9.12` Release Model
 
-The current `0.9.10` surface combines these strands:
+The current `0.9.12` surface combines these strands:
 
 - the gap-value wave-gate fix and first-time setup UX improvements released in `0.9.4`
 - the detached process-runner and sandbox supervisor hardening released in `0.9.2`
@@ -196,7 +200,7 @@ The current `0.9.10` surface combines these strands:
 
 ### Sandbox-safe execution and lower-overhead live runs
 
-This is the main new behavior in `0.9.2`.
+This remains the main execution-model shift introduced in `0.9.2`.
 
 The runtime now:
 
@@ -205,7 +209,7 @@ The runtime now:
 - keeps `wave attach --agent` usable through log-follow attach even when no live interactive terminal session exists
 - uses `wave submit/supervise/status/wait/attach` as the preferred sandbox-safe surface for short-lived clients
 
-If your repo copied sandbox, CI, or container runbooks, this is the main sync set to apply from `0.9.2`:
+If your repo copied sandbox, CI, or container runbooks, this is the main sync set to apply from that `0.9.2` execution-model cut:
 
 - `README.md`
 - `docs/README.md`
@@ -216,14 +220,14 @@ If your repo copied sandbox, CI, or container runbooks, this is the main sync se
 
 ### Authenticated Wave Control and Corridor-backed security
 
-The same `0.9.2` doc surface also now describes the current control-plane and security model as shipped:
+That same `0.9.2` doc surface also describes the current control-plane and security model as shipped:
 
 - owned Wave Control deployments use Stack for browser sign-in, then apply Wave-managed approval states and provider grants on top of that identity
 - approved users and superusers can issue PATs for scoped repo-runtime access, while dedicated service tokens keep machine-admin workflows separate from user-owned runtime credentials
 - arbitrary stored credentials are encrypted at rest and only returned through explicit runtime lease responses
 - `externalProviders.corridor` can run direct, brokered through an owned Wave Control deployment, or hybrid; the result is persisted as a normalized security artifact and can block closure before integration
 
-If your repo copied release docs, security runbooks, or Wave Control setup docs, this is the main sync set to apply from `0.9.2`:
+If your repo copied release docs, security runbooks, or Wave Control setup docs, this is the main sync set to apply from that `0.9.2` security-surface cut:
 
 - `README.md`
 - `docs/README.md`
@@ -292,7 +296,7 @@ The interactive `wave draft` flow supports `design` as a worker role and scaffol
 
 ## Version-Specific Upgrade Guidance
 
-## Upgrading From `0.8.5` To `0.9.4`
+## Upgrading From `0.8.5` To `0.9.12`
 
 This is the smallest upgrade, but it changes the live wait-loop contract for external automation and intentionally long-running agents.
 
@@ -329,7 +333,7 @@ If the repo copied starter surface, sync:
 - if the repo uses long-running watchers, confirm they can write the ack file where the prompt tells them to
 - reroute one targeted feedback or coordination request and confirm the resident signal version changes even when the signal kind stays the same
 
-## Upgrading From `0.8.4` To `0.9.4`
+## Upgrading From `0.8.4` To `0.9.12`
 
 ### What changed
 
@@ -367,7 +371,7 @@ If your repo copied starter config defaults, also sync the `designRolePromptPath
 - hybrid design stewards rejoin implementation when they explicitly own code
 - long-running prompts receive signal-state and ack paths when the repo uses the new waiting model
 
-## Upgrading From `0.9.9` To `0.9.10`
+## Upgrading From `0.9.9` To `0.9.12`
 
 Run-state history is now capped at 200 entries (20 per wave). Existing bloated run-state files will be automatically pruned on the next write. No config changes needed.
 
@@ -375,9 +379,9 @@ Run-state history is now capped at 200 entries (20 per wave). Existing bloated r
 
 Helper assignment barriers are now advisory in bootstrap gate mode. No config changes needed.
 
-## Upgrading From `0.8.3` To `0.9.10`
+## Upgrading From `0.8.3` To `0.9.12`
 
-Treat this as one move to the current `0.9.2` surface.
+Treat this as one move to the current `0.9.12` surface.
 
 ### What changed across that range
 
@@ -410,7 +414,7 @@ If your repo copied starter docs or skills, sync:
 - dry-run one design-steward wave if the repo wants the new authored surface
 - if the repo uses long-running watcher agents or shell automation, validate `scripts/wave-status.sh` and `scripts/wave-watch.sh` against a live or staged lane
 
-## Upgrading From `0.6.x` Or `0.7.x` To `0.9.10`
+## Upgrading From `0.6.x` Or `0.7.x` To `0.9.12`
 
 This is the main migration path for older adopted repos.
 
@@ -451,7 +455,7 @@ pnpm exec wave control proof get --lane main --wave 0 --json
 
 If the repo carries proof-first waves, verify that required proof artifacts still exist locally and not only in historical summaries.
 
-## Upgrading From `0.5.x` Or Earlier To `0.9.4`
+## Upgrading From `0.5.x` Or Earlier To `0.9.12`
 
 Do not treat this as a tiny patch bump.
 
@@ -561,4 +565,4 @@ For repos that depend on replay parity, replay at least:
 
 ## Summary
 
-The current `0.9.10` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, and now also packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.
+The current `0.9.12` surface keeps the same authority-set and phase-engine architecture, ships both the design-role starter surface and the signal-driven long-running-agent starter surface, keeps the `0.8.7` policy and routing hardening, adds the hybrid closure fast-path fixes, and now packages the practical operator recommendations guide inside the release line. For most repos already on `0.8.x`, the upgrade is package bump plus validation. For older adopted repos, the real work is syncing repo-owned prompts, skills, planner corpus, wrapper scripts, and runbooks so they describe the runtime the package now ships.

@@ -137,7 +137,7 @@ Multi-agent coding systems fail in predictable ways documented in recent researc
 - `wave-state-reducer.mjs`: Rebuilds full deterministic wave state from canonical sources
 
 **Layer 3 -- Supervisor and Projection Writer** (side effects)
-- `session-supervisor.mjs`: Launches processes, manages tmux sessions, writes observed lifecycle events (`agent_run.started`, `agent_run.completed`)
+- `session-supervisor.mjs`: Launches process-backed runs, manages optional tmux dashboard/projection sessions, writes observed lifecycle events (`agent_run.started`, `agent_run.completed`)
 - `projection-writer.mjs`: Persists all human-facing projections (dashboards, traces, boards, summaries, inboxes, ledgers)
 - `signals.mjs`: Writes versioned signal-state projections for long-running agents
 
@@ -307,7 +307,7 @@ For each wave in the selected range:
    then transition to implementation agents.
 
 6. For each selected agent run:
-   a. launchAgentSession()  -- build prompt, resolve skills, create tmux session
+   a. launchAgentSession()  -- build prompt, resolve skills, launch the process-backed agent run
    b. recordAgentRunStarted() -- supervisor writes control-plane event
 
 7. waitForWaveCompletion()
@@ -342,7 +342,7 @@ For each wave in the selected range:
 ### Phase 3: Cleanup
 
 ```
-  -> cleanupLaneTmuxSessions()          -- kill tmux sessions (unless --keep-sessions)
+  -> cleanupLaneTmuxSessions()          -- clean up tmux dashboard/projection sessions (unless --keep-sessions)
   -> removeLaneTemporaryTerminalEntries() -- clean terminal registry
   -> releaseLauncherLock()               -- release lock for other launchers
 ```

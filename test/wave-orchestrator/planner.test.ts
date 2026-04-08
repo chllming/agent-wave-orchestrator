@@ -395,6 +395,10 @@ describe("wave project setup", () => {
     });
 
     expect(setupResult.status).toBe(0);
+    expect(setupResult.stderr).toContain("Live agent execution stays process-backed either way");
+    expect(setupResult.stderr).toContain(
+      "tmux   — terminal-native dashboard and projection surface with no VS Code integration",
+    );
     const setupPayload = JSON.parse(setupResult.stdout);
     expect(setupPayload.profile).toMatchObject({
       newProject: true,

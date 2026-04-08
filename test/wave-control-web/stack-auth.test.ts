@@ -100,4 +100,23 @@ describe("wave-control web stack auth helpers", () => {
       hasAnyMethod: true,
     });
   });
+
+  it("supports the camelCase project config returned by the Stack client", () => {
+    expect(
+      resolveStackAuthCapabilities({
+        config: {
+          credentialEnabled: true,
+          magicLinkEnabled: false,
+          passkeyEnabled: true,
+          oauthProviders: [{ id: "github" }, { id: "google" }],
+        },
+      }),
+    ).toEqual({
+      credentialEnabled: true,
+      magicLinkEnabled: false,
+      passkeyEnabled: true,
+      oauthProviders: ["github", "google"],
+      hasAnyMethod: true,
+    });
+  });
 });

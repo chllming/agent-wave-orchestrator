@@ -396,6 +396,81 @@ code {
   margin-top: 1.5rem;
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.summary-grid-compact {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.summary-panel {
+  border: 1px solid var(--wc-border);
+  background: var(--wc-bg-elevated);
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.panel-copy {
+  margin: 0;
+  color: var(--wc-text-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.panel-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.panel-stat {
+  border: 1px solid var(--wc-border);
+  background: var(--wc-bg-sunken);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.panel-stat-value {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--wc-text-strong);
+}
+
+.panel-stat-label {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wc-text-muted);
+}
+
+.panel-breakdown {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.panel-breakdown-label {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wc-text-muted);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .metric {
   padding: 1rem;
   border: 1px solid var(--wc-border);
@@ -464,6 +539,9 @@ code {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 /* ── Pills / badges ────────────────────────────────────────────────── */
@@ -517,6 +595,7 @@ code {
 
 .admin-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -656,6 +735,14 @@ code {
   }
 
   .metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-stats {
     grid-template-columns: 1fr 1fr;
   }
 

@@ -1,6 +1,6 @@
 # End-State Architecture
 
-This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.9.2` surface now follows.
+This document describes the canonical architecture for the current Wave runtime. It is the authoritative reference for the engine boundaries, canonical authority set, and artifact ownership model that the shipped `0.9.12` surface now follows.
 
 For the sandbox-specific execution model, including async supervisor ownership, daemon adoption goals, and forwarded closure-gap behavior, read [sandbox-end-state-architecture.md](./sandbox-end-state-architecture.md).
 

@@ -57,7 +57,7 @@ pnpm exec wave dashboard --lane main --attach current
 pnpm exec wave dashboard --lane main --attach global
 ```
 
-Those commands work for both `tmux` and `vscode` terminal surfaces because the live dashboard projections still run on the lane tmux socket. If no live dashboard session exists, the attach command falls back to the last written dashboard JSON instead of failing immediately.
+Those commands work for both `tmux` and `vscode` terminal surfaces because live dashboard projection sessions currently use the lane tmux socket when dashboards are enabled. If no live dashboard session exists, the attach command falls back to the last written dashboard JSON instead of failing immediately.
 
 When `--terminal-surface vscode` is active, Wave also maintains a stable current-wave dashboard terminal entry instead of creating a new wave-numbered dashboard attach target for every wave transition.
 

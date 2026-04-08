@@ -623,6 +623,7 @@ export function normalizeGateSnapshotForBundle(gateSnapshot, agentArtifacts) {
     return gateSnapshot;
   }
   const normalized = { ...gateSnapshot };
+  const overallGate = String(gateSnapshot.overall?.gate || "").trim();
   for (const key of [
     "implementationGate",
     "componentGate",
@@ -638,7 +639,27 @@ export function normalizeGateSnapshotForBundle(gateSnapshot, agentArtifacts) {
     "evaluatorGate",
     "infraGate",
   ]) {
-    normalized[key] = normalizeGateLogPath(gateSnapshot[key], agentArtifacts);
+    const nextValue = normalizeGateLogPath(gateSnapshot[key], agentArtifacts);
+    if (key === "documentationGate") {
+      normalized[key] =
+        overallGate === "documentationGate" && nextValue
+          ? {
+              ok: Boolean(nextValue.ok),
+              statusCode: nextValue.statusCode || null,
+            }
+          : null;
+      continue;
+    }
+    if (key === "integrationGate" || key === "integrationBarrier") {
+      normalized[key] = nextValue
+        ? {
+            ok: Boolean(nextValue.ok),
+            statusCode: nextValue.statusCode || null,
+          }
+        : null;
+      continue;
+    }
+    normalized[key] = nextValue;
   }
   return normalized;
 }

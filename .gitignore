@@ -5,6 +5,7 @@ node_modules/
 .vscode/terminals.json
 dist/
 coverage/
+local-docs/
 docs/research/cache/
 docs/research/agent-context-cache/
 docs/research/papers/

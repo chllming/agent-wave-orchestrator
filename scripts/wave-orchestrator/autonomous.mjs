@@ -62,8 +62,8 @@ Options:
   --resident-orchestrator       Launch a resident orchestrator session for each live wave
   --executor <mode>             Default executor passed to launcher: ${AUTONOMOUS_EXECUTOR_MODES.join(" | ")} (default: lane config)
   --codex-sandbox <mode>        Codex sandbox mode override passed to launcher (default: lane config)
-  --dashboard                   Enable dashboards (default: disabled)
-  --keep-sessions               Keep tmux sessions between waves
+  --dashboard                   Enable dashboard projection sessions (default: disabled)
+  --keep-sessions               Keep tmux dashboard/projection sessions between waves
   --keep-terminals              Keep temporary terminal entries between waves
 `);
 }

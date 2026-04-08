@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.12 - 2026-04-08
+
+### Added
+- `docs/guides/recommendations-0.9.12.md` with the current operating guidance for advisory turn budgets, targeted recovery, low-entropy closure, and optional TMUX operator surfaces.
+
+### Changed
+- TMUX is now described consistently as an optional dashboard/projection layer across setup, launcher help, autonomous help, runbooks, and examples. Live agents remain process-backed, and `tmux + --no-dashboard` now emits an explicit informational note instead of implying TMUX is part of the execution backend.
+- Wave Control's browser surface now uses a dashboard-first information architecture with `Dashboard`, `Operations`, `Access`, and `Account` views, cleaner section navigation, and richer summaries for runs, benchmarks, and access review work.
+- Release docs, migration guidance, runtime-config references, package-publishing docs, the release manifest, and tracked install-state fixtures now align on the `0.9.12` surface.
+
+### Fixed
+- Bootstrap closure no longer silently skips a missing `cont-QA` run after semantic closure stewards already ran. The low-entropy fast path now stays limited to genuinely lightweight closure attempts.
+- `closureModeThresholds.bootstrap` now participates in runtime mode resolution instead of being normalized and then ignored.
+- Derived `closureComplexity` now incorporates clarification, helper-assignment, dependency, and contradiction barriers so emitted closure metadata matches the real closure state machine.
+- Wave Control benchmark and run projections now expose richer status, comparison-readiness, item, review, and verification rollups for both API consumers and the browser UI.
+- `normalizeWaveVerdict()` now preserves `hold` as its own verdict instead of collapsing it into `concerns`, which brings the shared parser back in line with the shipped verdict grammar and tests.
+
 ## 0.9.11 - 2026-04-07
 
 ### Fixed

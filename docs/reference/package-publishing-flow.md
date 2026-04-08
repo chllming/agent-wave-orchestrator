@@ -15,7 +15,7 @@ Release preparation happens in the repository itself:
 - update release-surface docs and fixtures
 - validate the repo
 - merge the release changes to `main`
-- push a version tag such as `v0.9.2`
+- push a version tag such as `v0.9.12`
 
 Registry publishing happens in GitHub Actions after the tag push:
 
@@ -122,14 +122,14 @@ In this source repo, `.wave/install-state.json` and tracked `.wave/upgrade-histo
 
 ### 2. Merge the release change to `main`
 
-This repository protects `main`, so release changes must land through a pull request rather than a direct push.
+This repository normally protects `main`, so release changes should land through a pull request unless the repo policy has been intentionally relaxed for a one-off release cut.
 
 Typical git flow:
 
 ```bash
-git checkout -b release/0.9.2
-git push -u origin release/0.9.2
-gh pr create --base main --head release/0.9.2
+git checkout -b release/0.9.12
+git push -u origin release/0.9.12
+gh pr create --base main --head release/0.9.12
 gh pr merge <pr-number> --merge --delete-branch
 ```
 
@@ -138,13 +138,13 @@ gh pr merge <pr-number> --merge --delete-branch
 After the release commit is on `main`, push the version tag:
 
 ```bash
-git tag v0.9.2
-git push origin v0.9.2
+git tag v0.9.12
+git push origin v0.9.12
 ```
 
 That tag push is the event that starts both publishing workflows.
 
-The tag must match the checked-in package version exactly. Example: if `package.json.version` is `0.9.2`, the pushed tag must be `v0.9.2`.
+The tag must match the checked-in package version exactly. Example: if `package.json.version` is `0.9.12`, the pushed tag must be `v0.9.12`.
 
 ## GitHub Actions Workflows
 
@@ -212,9 +212,9 @@ Expected result after a successful publish:
 
 ```json
 {
-  "version": "0.9.2",
+  "version": "0.9.12",
   "dist-tags": {
-    "latest": "0.9.2"
+    "latest": "0.9.12"
   }
 }
 ```
@@ -231,8 +231,8 @@ If a tag-triggered publish fails before the package is actually published, the f
 Example:
 
 ```bash
-git tag -f v0.9.2 <fixed-commit>
-git push origin refs/tags/v0.9.2 --force
+git tag -f v0.9.12 <fixed-commit>
+git push origin refs/tags/v0.9.12 --force
 ```
 
 Use that only before the package is live on npmjs. Once npmjs has accepted a version, do not try to republish the same version; cut a new version instead.

@@ -8,7 +8,7 @@ Typical examples:
 - Nemoshell or similar hosted terminal sandboxes
 - Docker or devcontainer setups where the client process is disposable but the workspace and state volume persist
 
-The core rule in `0.9.3` is simple:
+The core rule in `0.9.12` is simple:
 
 - clients should be short-lived
 - supervision should be long-lived
@@ -94,7 +94,7 @@ If the sandbox only gives you short exec windows, `wave autonomous` should not b
 
 ## Docker And Containerized Setups
 
-Docker works well with the `0.9.3` process-backed runner model, but only if the state directories survive container restarts.
+Docker works well with the `0.9.12` process-backed runner model, but only if the state directories survive container restarts.
 
 Recommended container posture:
 

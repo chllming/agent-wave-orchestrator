@@ -256,6 +256,7 @@ describe("terminal surfaces", () => {
       tmuxRepo,
     );
     expect(tmuxResult.status).toBe(0);
+    expect(tmuxResult.stdout).toContain("tmux is optional here");
     expect(fs.existsSync(path.join(tmuxRepo, ".vscode", "terminals.json"))).toBe(false);
     expect(listRuntimeFiles(path.join(tmuxRepo, ".tmp")).length).toBeGreaterThan(0);
 

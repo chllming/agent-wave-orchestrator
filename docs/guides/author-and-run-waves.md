@@ -74,7 +74,7 @@ Good fits:
 - multi-owner waves where downstream implementers need the same decisions and assumptions
 - ambiguous tasks where open questions should become explicit before code owners fan out
 
-The starter contract in `0.9.2` is:
+The starter contract in `0.9.12` is:
 
 - import `docs/agents/wave-design-role.md`
 - own one packet such as `docs/plans/waves/design/wave-<n>-<agentId>.md`
@@ -148,6 +148,7 @@ When the dry-run artifacts look correct, launch the wave with the operator surfa
 
 ```bash
 pnpm exec wave launch --lane main --start-wave 1 --end-wave 1 --terminal-surface vscode
+pnpm exec wave launch --lane main --start-wave 1 --end-wave 1 --no-dashboard
 pnpm exec wave launch --lane main --start-wave 1 --end-wave 1 --terminal-surface tmux --keep-sessions
 ```
 
@@ -156,7 +157,7 @@ Useful flags:
 - `--no-dashboard`
   Skip the dashboard session.
 - `--keep-sessions`
-  Preserve tmux sessions for inspection after the wave completes.
+  Preserve tmux dashboard and projection sessions for inspection after the wave completes.
 - `--keep-terminals`
   Preserve temporary VS Code terminal entries.
 

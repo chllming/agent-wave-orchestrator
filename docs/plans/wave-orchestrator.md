@@ -126,7 +126,7 @@ The live runtime is organized around explicit modules:
 ## Setup
 
 1. Install the package with `pnpm add -D @chllming/wave-orchestration`.
-2. Confirm `tmux` and at least one real executor (`codex`, `claude`, or `opencode`) are available if you want real wave execution.
+2. Confirm at least one real executor (`codex`, `claude`, or `opencode`) is available if you want live wave execution. Install `tmux` only if you want terminal-native dashboard or projection attach.
 3. Run `pnpm exec wave init` for a fresh repo, or `pnpm exec wave init --adopt-existing` for a repo with existing Wave files you want preserved.
 4. Review [wave.config.json](../../wave.config.json).
 5. Review the role prompts, starter `skills/` bundles, and docs you want the repo to own.

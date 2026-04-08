@@ -1,0 +1,141 @@
+import type { StackAuthCapabilities } from "./stack-auth";
+import type { PrimaryViewId, ViewId } from "./navigation";
+
+export type AppRecord = Record<string, any>;
+export type CountMap = Record<string, number>;
+
+export type OverviewMetrics = {
+  runCount: number;
+  benchmarkRunCount: number;
+  latestRunUpdatedAt: string | null;
+  latestBenchmarkUpdatedAt: string | null;
+  latestActivityAt: string | null;
+  runStatusCounts: CountMap;
+  benchmarkStatusCounts: CountMap;
+  benchmarkComparisonReadyCount: number;
+  benchmarkComparisonPendingCount: number;
+  benchmarkComparisonUnknownCount: number;
+  gateCounts: CountMap;
+  reviewValidityCounts: CountMap;
+  reviewCount: number;
+  verificationCount: number;
+  coordinationRecordCount: number;
+  proofBundleCount: number;
+  artifactCount: number;
+};
+
+export type RunSummary = {
+  workspaceId: string | null;
+  projectId: string | null;
+  runKind: string | null;
+  runId: string | null;
+  lane: string | null;
+  wave: number | null;
+  orchestratorId: string | null;
+  runtimeVersion: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+  status: string;
+  latestGate: string | null;
+  attemptCount: number;
+  agentIds: string[];
+  proofBundleCount: number;
+  coordinationRecordCount: number;
+  artifactCount: number;
+  tags: string[];
+};
+
+export type BenchmarkSummary = {
+  workspaceId: string | null;
+  projectId: string | null;
+  runKind: string | null;
+  runId: string | null;
+  lane: string | null;
+  wave: number | null;
+  benchmarkRunId: string | null;
+  orchestratorId: string | null;
+  runtimeVersion: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+  action: string;
+  status: string;
+  summary: AppRecord | null;
+  adapter: AppRecord | string | null;
+  adapterId: string | null;
+  manifest: AppRecord | string | null;
+  manifestId: string | null;
+  selectedArms: string[];
+  comparisonMode: string | null;
+  comparisonReady: boolean | null;
+  benchmarkItemCount: number;
+  itemCount: number;
+  reviewCount: number;
+  verificationCount: number;
+  reviewBreakdown: CountMap;
+};
+
+export type AppOverviewPayload = {
+  overview: OverviewMetrics;
+  recentRuns: RunSummary[];
+  recentBenchmarks: BenchmarkSummary[];
+};
+
+export type AppState = {
+  activeView: ViewId;
+  accessRequestReason: string;
+  authCapabilities: StackAuthCapabilities | null;
+  benchmarks: BenchmarkSummary[];
+  credentialDraftIds: Record<string, string>;
+  credentialDraftValues: Record<string, string>;
+  error: string;
+  loading: boolean;
+  me: AppRecord | null;
+  newUserAccessState: string;
+  newUserEmail: string;
+  newUserProviderGrants: string[];
+  newUserRole: string;
+  overview: AppOverviewPayload | null;
+  plaintextToken: string;
+  providerCatalog: AppRecord[];
+  runItems: RunSummary[];
+  session: AppRecord | null;
+  signedIn: boolean;
+  signInEmail: string;
+  signInPassword: string;
+  status: string;
+  tokenItems: AppRecord[];
+  tokenLabel: string;
+  userCredentialItems: Record<string, AppRecord[]>;
+  userItems: AppRecord[];
+};
+
+export type AppViewActions = {
+  createToken: () => Promise<void>;
+  createUserAction: () => Promise<void>;
+  deleteUserCredentialAction: (userId: string, credentialId: string) => Promise<void>;
+  handleThemeToggle: () => void;
+  refreshApp: () => Promise<void>;
+  revokeToken: (tokenId: string) => Promise<void>;
+  sendMagicLink: () => Promise<void>;
+  setAccessRequestReason: (value: string) => void;
+  setCredentialDraftId: (userId: string, value: string) => void;
+  setCredentialDraftValue: (userId: string, value: string) => void;
+  setNewUserAccessState: (value: string) => void;
+  setNewUserEmail: (value: string) => void;
+  setNewUserProviderGrant: (providerId: string, enabled: boolean) => void;
+  setNewUserRole: (value: string) => void;
+  setPrimaryView: (primaryView: PrimaryViewId) => void;
+  setSignInEmail: (value: string) => void;
+  setSignInPassword: (value: string) => void;
+  setTokenLabel: (value: string) => void;
+  setUserProvidersAction: (user: AppRecord, providerId: string, enabled: boolean) => Promise<void>;
+  setUserRoleAction: (userId: string, role: string) => Promise<void>;
+  setUserStateAction: (userId: string, accessState: string) => Promise<void>;
+  setView: (view: ViewId) => void;
+  signInWithCredentialAction: () => Promise<void>;
+  signInWithOAuthProvider: (providerId: string) => Promise<void>;
+  signInWithPasskeyAction: () => Promise<void>;
+  signOut: () => Promise<void>;
+  submitAccessRequest: () => Promise<void>;
+  upsertUserCredentialAction: (userId: string) => Promise<void>;
+};

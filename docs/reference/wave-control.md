@@ -23,7 +23,7 @@ That packaged endpoint is for the default metadata-reporting surface. The owned-
 
 ### Packaged Default Endpoint
 
-This is the release default in `@chllming/wave-orchestration@0.9.2`.
+This is the release default in `@chllming/wave-orchestration@0.9.12`.
 
 - receives local-first telemetry uploads
 - supports normal run and benchmark query surfaces
@@ -43,6 +43,8 @@ An owned deployment can add:
 - encrypted per-user stored credentials with owner-scoped runtime leasing
 - broker routes for Context7 and Corridor
 - provider env leasing for deployment-owned OpenAI and Anthropic credentials
+
+The packaged browser UI now defaults to a dashboard-first information architecture with `Dashboard`, `Operations`, `Access`, and `Account` views. The goal is to put operator triage first, then let deeper run, benchmark, token, and access-management screens hang off that navigation instead of treating every surface as a flat peer tab.
 
 ## What Gets Reported
 

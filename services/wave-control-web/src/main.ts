@@ -1,5 +1,16 @@
 import { html, render, type TemplateResult } from "lit";
+import type { AppState } from "./app-state";
+import { renderAccessRequest, renderFooter, renderSectionNav, renderSignedOut, renderTopbar } from "./chrome";
 import { appConfig } from "./config";
+import {
+  getDefaultViewForPrimary,
+  getPrimaryView,
+  getViewHash,
+  resolveInitialView,
+  type PrimaryViewId,
+  type ViewId,
+} from "./navigation";
+import { renderAccountView, renderAccessView, renderDashboardView, renderOperationsView } from "./pages";
 import {
   completePendingStackCallback,
   createStackApp,
@@ -52,64 +63,6 @@ function handleThemeToggle(): void {
   redraw();
 }
 
-/* ── Tab routing ───────────────────────────────────────────────────── */
-
-type TabId = "overview" | "runs" | "tokens" | "benchmarks" | "users";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "runs", label: "Runs" },
-  { id: "tokens", label: "Tokens" },
-  { id: "benchmarks", label: "Benchmarks" },
-  { id: "users", label: "Users" },
-];
-
-function getActiveTab(): TabId {
-  const hash = window.location.hash.slice(1);
-  if (hash === "runs" || hash === "tokens" || hash === "benchmarks" || hash === "users") return hash;
-  return "overview";
-}
-
-function setTab(tab: TabId): void {
-  window.location.hash = tab;
-  setState({ activeTab: tab });
-}
-
-function visibleTabs(): { id: TabId; label: string }[] {
-  return state.session?.isSuperuser ? TABS : TABS.filter((tab) => tab.id !== "users");
-}
-
-/* ── App state ─────────────────────────────────────────────────────── */
-
-type AppState = {
-  activeTab: TabId;
-  accessRequestReason: string;
-  authCapabilities: StackAuthCapabilities | null;
-  benchmarks: any[];
-  credentialDraftIds: Record<string, string>;
-  credentialDraftValues: Record<string, string>;
-  error: string;
-  loading: boolean;
-  me: any | null;
-  newUserAccessState: string;
-  newUserEmail: string;
-  newUserProviderGrants: string[];
-  newUserRole: string;
-  overview: any | null;
-  plaintextToken: string;
-  providerCatalog: any[];
-  runItems: any[];
-  session: any | null;
-  signedIn: boolean;
-  signInEmail: string;
-  signInPassword: string;
-  status: string;
-  tokenItems: any[];
-  tokenLabel: string;
-  userCredentialItems: Record<string, any[]>;
-  userItems: any[];
-};
-
 const root = document.querySelector("#app");
 
 if (!root) {
@@ -126,7 +79,7 @@ const stackApp =
     : null;
 
 const state: AppState = {
-  activeTab: getActiveTab(),
+  activeView: resolveInitialView(window.location.hash, true),
   accessRequestReason: "",
   authCapabilities: null,
   benchmarks: [],
@@ -153,6 +106,25 @@ const state: AppState = {
   userCredentialItems: {},
   userItems: [],
 };
+
+function replaceViewHash(view: ViewId): void {
+  const nextHash = getViewHash(view);
+  if (window.location.hash === nextHash) {
+    return;
+  }
+  const nextUrl = new URL(window.location.href);
+  nextUrl.hash = nextHash;
+  window.history.replaceState({}, "", nextUrl.toString());
+}
+
+function setView(view: ViewId): void {
+  window.location.hash = getViewHash(view);
+  setState({ activeView: view });
+}
+
+function setPrimaryView(primaryView: PrimaryViewId): void {
+  setView(getDefaultViewForPrimary(primaryView, state.session?.isSuperuser === true));
+}
 
 function setState(next: Partial<AppState>) {
   Object.assign(state, next);
@@ -294,6 +266,7 @@ async function refreshApp() {
     const user = await stackApp.getUser();
     if (!user) {
       setState({
+        activeView: resolveInitialView(window.location.hash, false),
         accessRequestReason: "",
         authCapabilities,
         benchmarks: [],
@@ -320,6 +293,7 @@ async function refreshApp() {
     const providerCatalog = sessionPayload.providerCatalog || [];
     if (!session || session.accessState !== "approved") {
       setState({
+        activeView: resolveInitialView(window.location.hash, false),
         accessRequestReason: session?.accessRequestReason || "",
         authCapabilities,
         benchmarks: [],
@@ -356,8 +330,10 @@ async function refreshApp() {
           }),
         )
       : [];
+    const activeView = resolveInitialView(window.location.hash, session.isSuperuser === true);
+    replaceViewHash(activeView);
     setState({
-      activeTab: state.activeTab === "users" && !session.isSuperuser ? "overview" : state.activeTab,
+      activeView,
       accessRequestReason: session.accessRequestReason || "",
       authCapabilities,
       benchmarks: benchmarks.items || [],
@@ -723,676 +699,97 @@ async function deleteUserCredentialAction(userId: string, credentialId: string) 
   }
 }
 
-/* ── Render: topbar ────────────────────────────────────────────────── */
-
-function renderTopbar(): TemplateResult {
-  return html`
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-copy">
-          <span class="brand-name">Wave Control</span>
-          <span class="brand-subtitle">internal operator surface</span>
-        </div>
-      </div>
-      <nav class="topnav" aria-label="Primary">
-        ${state.signedIn
-          ? visibleTabs().map(
-              (tab) => html`
-                <a
-                  class="nav-link ${state.activeTab === tab.id ? "is-active" : ""}"
-                  href="#${tab.id}"
-                  @click=${(e: Event) => {
-                    e.preventDefault();
-                    setTab(tab.id);
-                  }}
-                  >${tab.label}</a
-                >
-              `,
-            )
-          : ""}
-      </nav>
-      <div class="topbar-actions">
-        <button class="theme-toggle" @click=${handleThemeToggle}>
-          ${getThemeLabel(getStoredTheme())}
-        </button>
-        ${state.session
-          ? html`
-              <button class="theme-toggle" @click=${refreshApp}>Refresh</button>
-              <button class="theme-toggle" @click=${signOut}>Sign out</button>
-            `
-          : ""}
-      </div>
-    </header>
-  `;
-}
-
-function renderAccessRequest(): TemplateResult {
-  const accessState = String(state.session?.accessState || "none");
-  const canRequest = accessState === "none" || accessState === "pending";
-  return html`
-    <section class="signin-hero">
-      <h1>Wave Control Access</h1>
-      <p class="lead">
-        ${accessState === "pending"
-          ? "Your access request is pending superuser review."
-          : accessState === "rejected"
-            ? "This account was rejected for Wave Control access."
-            : accessState === "revoked"
-              ? "This account no longer has Wave Control access."
-              : "Request access to the internal operator surface."}
-      </p>
-      <p class="supporting">
-        Signed in as <code>${state.session?.email || "unknown"}</code>.
-        ${state.session?.role ? html`Current role: <code>${state.session.role}</code>.` : ""}
-      </p>
-      ${canRequest
-        ? html`
-            <div class="signin-form">
-              <textarea
-                class="form-input form-textarea"
-                .value=${state.accessRequestReason}
-                @input=${(event: Event) =>
-                  setState({ accessRequestReason: (event.target as HTMLTextAreaElement).value })}
-                placeholder="Why do you need Wave Control access?"
-              ></textarea>
-              <div class="auth-actions">
-                <button class="btn btn-primary" ?disabled=${state.loading} @click=${submitAccessRequest}>
-                  ${accessState === "pending" ? "Update request" : "Request access"}
-                </button>
-              </div>
-            </div>
-          `
-        : html``}
-      <p class="inline-note" style="margin-top:1.5rem">
-        Providers requested after approval are managed per user by Wave Control superusers.
-      </p>
-    </section>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: footer ────────────────────────────────────────────────── */
-
-function renderFooter(): TemplateResult {
-  return html`
-    <footer class="site-footer">
-      <p class="footer-line">
-        Wave Control &middot; <code>${appConfig.apiBaseUrl}</code> &middot; ${state.status}
-      </p>
-    </footer>
-  `;
-}
-
-/* ── Render: sign-in (pre-auth) ────────────────────────────────────── */
-
-function renderSignedOut(): TemplateResult {
-  const auth = state.authCapabilities;
-  const supportsEmail = auth?.credentialEnabled || auth?.magicLinkEnabled;
-  return html`
-    <section class="signin-hero">
-      <h1>Wave Control</h1>
-      <p class="lead">Internal operator surface for runs, brokers, and closure.</p>
-      <p class="supporting">
-        Sign in with your Stack Auth internal account. The API verifies your session and enforces
-        confirmed internal-team membership.
-      </p>
-      <div class="signin-form">
-        ${supportsEmail
-          ? html`
-              <input
-                class="form-input"
-                type="email"
-                .value=${state.signInEmail}
-                @input=${(event: Event) =>
-                  setState({ signInEmail: (event.target as HTMLInputElement).value })}
-                placeholder="you@company.com"
-              />
-            `
-          : ""}
-        ${auth?.credentialEnabled
-          ? html`
-              <input
-                class="form-input"
-                type="password"
-                .value=${state.signInPassword}
-                @input=${(event: Event) =>
-                  setState({ signInPassword: (event.target as HTMLInputElement).value })}
-                placeholder="Password"
-              />
-            `
-          : ""}
-        <div class="auth-actions">
-          ${auth?.credentialEnabled
-            ? html`
-                <button
-                  class="btn btn-primary"
-                  ?disabled=${state.loading || !state.signInEmail.trim() || !state.signInPassword.trim()}
-                  @click=${signInWithCredentialAction}
-                >
-                  Sign in
-                </button>
-              `
-            : ""}
-          ${auth?.magicLinkEnabled
-            ? html`
-                <button
-                  class="btn"
-                  ?disabled=${state.loading || !state.signInEmail.trim()}
-                  @click=${sendMagicLink}
-                >
-                  Email sign-in link
-                </button>
-              `
-            : ""}
-          ${auth?.passkeyEnabled
-            ? html`
-                <button class="btn" ?disabled=${state.loading} @click=${signInWithPasskeyAction}>
-                  Use passkey
-                </button>
-              `
-            : ""}
-        </div>
-        ${auth?.oauthProviders?.length
-          ? html`
-              <div class="oauth-options">
-                ${auth.oauthProviders.map(
-                  (providerId) => html`
-                    <button
-                      class="btn"
-                      ?disabled=${state.loading}
-                      @click=${() => signInWithOAuthProvider(providerId)}
-                    >
-                      Continue with ${formatOAuthProviderLabel(providerId)}
-                    </button>
-                  `,
-                )}
-              </div>
-            `
-          : ""}
-        ${auth && !auth.hasAnyMethod
-          ? html`<p class="inline-note">No Stack sign-in methods are enabled for this project.</p>`
-          : auth
-            ? html`<p class="inline-note">Available methods are loaded from the Stack project configuration.</p>`
-            : html`<p class="inline-note">Loading Stack sign-in methods\u2026</p>`}
-      </div>
-      <p class="inline-note" style="margin-top:1.5rem">
-        API: <code>${appConfig.apiBaseUrl}</code> &middot; Stack project:
-        <code>${appConfig.stackProjectId || "missing"}</code>
-      </p>
-    </section>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: metric helper ─────────────────────────────────────────── */
-
-function metric(label: string, value: string | number): TemplateResult {
-  return html`<div class="metric">
-    <span class="metric-label">${label}</span>
-    <span class="metric-value">${value}</span>
-  </div>`;
-}
-
-/* ── Render: overview tab ──────────────────────────────────────────── */
-
-function renderOverview(): TemplateResult {
-  return html`
-    <section class="page-hero">
-      <h1>${state.me?.displayName || state.me?.email || "Internal user"}</h1>
-      <p class="supporting">
-        ${state.me?.email || "unknown"} &middot;
-        ${state.me?.isSuperuser ? "superuser" : state.me?.role || "member"} &middot;
-        grants=${(state.me?.providerGrants || []).join(", ") || "none"}
-      </p>
-    </section>
-
-    <div class="metrics">
-      ${metric("Runs", state.overview?.overview?.runCount || 0)}
-      ${metric("Benchmarks", state.overview?.overview?.benchmarkRunCount || 0)}
-      ${metric("Artifacts", state.overview?.overview?.artifactCount || 0)}
-      ${metric("Proof Bundles", state.overview?.overview?.proofBundleCount || 0)}
-    </div>
-
-    <h3 class="section-heading">Recent Runs</h3>
-    <div class="data-list">
-      ${(state.runItems || []).slice(0, 6).map(
-        (run) => html`
-          <div class="data-row">
-            <div class="data-row-main">
-              <div class="data-row-title">
-                ${run.projectId || "project"} / ${run.lane || "lane"}
-              </div>
-              <p class="data-row-meta">
-                wave=${run.wave ?? "n/a"} &middot; updated=${run.updatedAt || "n/a"} &middot;
-                gate=${run.latestGate || "n/a"}
-              </p>
-            </div>
-            <span class="pill">${run.status || "unknown"}</span>
-          </div>
-        `,
-      )}
-    </div>
-
-    <h3 class="section-heading">Future surfaces</h3>
-    <div class="placeholder-grid">
-      <div class="placeholder">
-        <p class="eyebrow">Projects</p>
-        <p class="inline-note">
-          Project summaries, environment mappings, broker coverage, and cross-run health.
-        </p>
-      </div>
-      <div class="placeholder">
-        <p class="eyebrow">Evals</p>
-        <p class="inline-note">
-          Benchmark trends, validity breakdowns, and run-to-run regression review.
-        </p>
-      </div>
-    </div>
-
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: runs tab ──────────────────────────────────────────────── */
-
-function renderRuns(): TemplateResult {
-  return html`
-    <section class="page-hero">
-      <h1>Runs</h1>
-      <p class="supporting">All orchestrated runs reported to this control plane.</p>
-    </section>
-
-    <div class="data-list">
-      ${(state.runItems || []).length === 0
-        ? html`<p class="inline-note">No runs found.</p>`
-        : (state.runItems || []).map(
-            (run) => html`
-              <div class="data-row">
-                <div class="data-row-main">
-                  <div class="data-row-title">
-                    ${run.projectId || "project"} / ${run.lane || "lane"}
-                  </div>
-                  <p class="data-row-meta">
-                    wave=${run.wave ?? "n/a"} &middot; updated=${run.updatedAt || "n/a"} &middot;
-                    gate=${run.latestGate || "n/a"}
-                  </p>
-                </div>
-                <span class="pill">${run.status || "unknown"}</span>
-              </div>
-            `,
-          )}
-    </div>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: tokens tab ────────────────────────────────────────────── */
-
-function renderTokens(): TemplateResult {
-  const isSuperuser = state.me?.isSuperuser === true;
-  return html`
-    <section class="page-hero">
-      <h1>Tokens</h1>
-      <p class="supporting">
-        Issue personal tokens for repo runtime access. Approved users can self-issue tokens;
-        superusers can manage users and grants separately.
-      </p>
-    </section>
-
-    <div class="token-form">
-      <input
-        class="form-input"
-        .value=${state.tokenLabel}
-        @input=${(event: Event) =>
-          setState({ tokenLabel: (event.target as HTMLInputElement).value })}
-        placeholder="Token label"
-      />
-      <div>
-        <button class="btn btn-primary" ?disabled=${state.loading} @click=${createToken}>
-          Issue token
-        </button>
-      </div>
-    </div>
-    <p class="inline-note" style="margin-top:1rem">
-      Approved users receive broker, ingest, and <code>credential:read</code> by default. Provider
-      grants and stored credentials still gate what each token can actually lease at runtime.
-    </p>
-    ${state.plaintextToken
-      ? html`
-          <div class="flash token-plaintext">
-            <p class="eyebrow">Plaintext token</p>
-            <div class="mono">${state.plaintextToken}</div>
-          </div>
-        `
-      : ""}
-
-    <div class="data-list">
-      ${(state.tokenItems || []).map(
-        (token) => html`
-          <div class="data-row">
-            <div class="data-row-main">
-              <div class="data-row-title">${token.label || token.id}</div>
-              <p class="data-row-meta">
-                <span class="mono">${token.id}</span>
-              </p>
-              <p class="data-row-meta">
-                scopes=${(token.scopes || []).join(", ") || "none"} &middot;
-                created=${token.createdAt || "n/a"} &middot; last
-                used=${token.lastUsedAt || "never"}
-              </p>
-            </div>
-            <div class="data-row-actions">
-              <span class=${token.revokedAt ? "pill danger" : "pill success"}>
-                ${token.revokedAt ? "revoked" : "active"}
-              </span>
-              ${!token.revokedAt
-                ? html`<button
-                    class="btn btn-danger"
-                    ?disabled=${state.loading}
-                    @click=${() => revokeToken(token.id)}
-                  >
-                    Revoke
-                  </button>`
-                : ""}
-            </div>
-          </div>
-        `,
-      )}
-    </div>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: benchmarks tab ────────────────────────────────────────── */
-
-function renderBenchmarks(): TemplateResult {
-  return html`
-    <section class="page-hero">
-      <h1>Benchmarks</h1>
-      <p class="supporting">Benchmark runs and evaluation results.</p>
-    </section>
-
-    <div class="data-list">
-      ${(state.benchmarks || []).length === 0
-        ? html`<p class="inline-note">No benchmark runs found.</p>`
-        : (state.benchmarks || []).map(
-            (bm) => html`
-              <div class="data-row">
-                <div class="data-row-main">
-                  <div class="data-row-title">${bm.benchmarkRunId || bm.id || "benchmark"}</div>
-                  <p class="data-row-meta">
-                    items=${bm.itemCount ?? "n/a"} &middot; updated=${bm.updatedAt || "n/a"}
-                  </p>
-                </div>
-                <span class="pill">${bm.status || "recorded"}</span>
-              </div>
-            `,
-          )}
-    </div>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: users tab ─────────────────────────────────────────────── */
-
-function renderUsers(): TemplateResult {
-  const providerCatalog = state.providerCatalog || [];
-  return html`
-    <section class="page-hero">
-      <h1>Users</h1>
-      <p class="supporting">
-        Approve access, assign roles, and grant provider credentials for approved users.
-      </p>
-    </section>
-
-    <div class="admin-grid">
-      <div class="admin-panel">
-        <p class="eyebrow">Add Or Approve User</p>
-        <div class="token-form">
-          <input
-            class="form-input"
-            .value=${state.newUserEmail}
-            @input=${(event: Event) =>
-              setState({ newUserEmail: (event.target as HTMLInputElement).value })}
-            placeholder="user@company.com"
-          />
-          <select
-            class="form-input"
-            .value=${state.newUserRole}
-            @change=${(event: Event) =>
-              setState({ newUserRole: (event.target as HTMLSelectElement).value })}
-          >
-            <option value="member">member</option>
-            <option value="superuser">superuser</option>
-          </select>
-          <select
-            class="form-input"
-            .value=${state.newUserAccessState}
-            @change=${(event: Event) =>
-              setState({ newUserAccessState: (event.target as HTMLSelectElement).value })}
-          >
-            <option value="approved">approved</option>
-            <option value="pending">pending</option>
-            <option value="rejected">rejected</option>
-            <option value="revoked">revoked</option>
-          </select>
-          <div class="checkbox-grid">
-            ${providerCatalog.map(
-              (provider) => html`
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    .checked=${state.newUserProviderGrants.includes(provider.id)}
-                    @change=${(event: Event) =>
-                      setState({
-                        newUserProviderGrants: (event.target as HTMLInputElement).checked
-                          ? Array.from(new Set([...state.newUserProviderGrants, provider.id])).sort()
-                          : state.newUserProviderGrants.filter((entry) => entry !== provider.id),
-                      })}
-                  />
-                  <span>${provider.label}</span>
-                  <span class="inline-note">${provider.delivery}${provider.enabled ? "" : " (disabled)"}</span>
-                </label>
-              `,
-            )}
-          </div>
-          <div>
-            <button
-              class="btn btn-primary"
-              ?disabled=${state.loading || !state.newUserEmail.trim()}
-              @click=${createUserAction}
-            >
-              Save user
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="data-list">
-      ${(state.userItems || []).map(
-        (user) => html`
-          <div class="data-row admin-row">
-            <div class="data-row-main">
-              <div class="data-row-title">${user.displayName || user.email || user.id}</div>
-              <p class="data-row-meta">
-                ${user.email || "unknown"} &middot; role=${user.role || "member"} &middot;
-                access=${user.accessState || "none"}
-              </p>
-              <p class="data-row-meta">
-                grants=${(user.providerGrants || []).join(", ") || "none"} &middot;
-                requested=${user.accessRequestedAt || "n/a"} &middot;
-                reviewed=${user.accessReviewedAt || "n/a"}
-              </p>
-              <div class="credential-list">
-                <p class="eyebrow">Stored Credentials</p>
-                ${((state.userCredentialItems[user.id] || []) as any[]).length === 0
-                  ? html`<p class="inline-note">No credentials stored.</p>`
-                  : ((state.userCredentialItems[user.id] || []) as any[]).map(
-                      (credential) => html`
-                        <div class="credential-row">
-                          <div>
-                            <div class="data-row-title">${credential.credentialId}</div>
-                            <p class="data-row-meta">
-                              updated=${credential.updatedAt || "n/a"} &middot;
-                              key=${credential.keyVersion || "n/a"}
-                            </p>
-                          </div>
-                          <button
-                            class="btn btn-danger"
-                            ?disabled=${state.loading}
-                            @click=${() => deleteUserCredentialAction(user.id, credential.credentialId)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      `,
-                    )}
-                <div class="credential-form">
-                  <input
-                    class="form-input"
-                    .value=${state.credentialDraftIds[user.id] || ""}
-                    @input=${(event: Event) =>
-                      setCredentialDraftId(user.id, (event.target as HTMLInputElement).value)}
-                    placeholder="credential id"
-                  />
-                  <input
-                    class="form-input"
-                    type="password"
-                    .value=${state.credentialDraftValues[user.id] || ""}
-                    @input=${(event: Event) =>
-                      setCredentialDraftValue(user.id, (event.target as HTMLInputElement).value)}
-                    placeholder="secret value"
-                  />
-                  <div>
-                    <button
-                      class="btn"
-                      ?disabled=${state.loading}
-                      @click=${() => upsertUserCredentialAction(user.id)}
-                    >
-                      Create or rotate
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="admin-actions">
-              <div class="auth-actions">
-                <button class="btn" ?disabled=${state.loading} @click=${() => setUserStateAction(user.id, "approved")}>
-                  Approve
-                </button>
-                <button class="btn" ?disabled=${state.loading} @click=${() => setUserStateAction(user.id, "pending")}>
-                  Pending
-                </button>
-                <button class="btn btn-danger" ?disabled=${state.loading} @click=${() => setUserStateAction(user.id, "rejected")}>
-                  Reject
-                </button>
-                <button class="btn btn-danger" ?disabled=${state.loading} @click=${() => setUserStateAction(user.id, "revoked")}>
-                  Revoke
-                </button>
-                <button
-                  class="btn"
-                  ?disabled=${state.loading}
-                  @click=${() => setUserRoleAction(user.id, user.role === "superuser" ? "member" : "superuser")}
-                >
-                  ${user.role === "superuser" ? "Make member" : "Make superuser"}
-                </button>
-              </div>
-              <div class="checkbox-grid">
-                ${providerCatalog.map(
-                  (provider) => html`
-                    <label class="checkbox-row">
-                      <input
-                        type="checkbox"
-                        .checked=${(user.providerGrants || []).includes(provider.id)}
-                        @change=${(event: Event) =>
-                          setUserProvidersAction(
-                            user,
-                            provider.id,
-                            (event.target as HTMLInputElement).checked,
-                          )}
-                      />
-                      <span>${provider.label}</span>
-                      <span class="inline-note">${provider.delivery}${provider.enabled ? "" : " (disabled)"}</span>
-                    </label>
-                  `,
-                )}
-              </div>
-            </div>
-          </div>
-        `,
-      )}
-    </div>
-    ${state.error ? html`<div class="flash error">${state.error}</div>` : ""}
-  `;
-}
-
-/* ── Render: tab content router ────────────────────────────────────── */
-
-function renderTabContent(): TemplateResult {
-  switch (state.activeTab) {
-    case "runs":
-      return renderRuns();
-    case "tokens":
-      return renderTokens();
-    case "benchmarks":
-      return renderBenchmarks();
-    case "users":
-      return renderUsers();
+function renderSignedInView(): TemplateResult {
+  switch (getPrimaryView(state.activeView)) {
+    case "operations":
+      return renderOperationsView(state);
+    case "access":
+      return renderAccessView(state, {
+        createUserAction,
+        deleteUserCredentialAction,
+        setCredentialDraftId,
+        setCredentialDraftValue,
+        setNewUserAccessState: (value: string) => setState({ newUserAccessState: value }),
+        setNewUserEmail: (value: string) => setState({ newUserEmail: value }),
+        setNewUserProviderGrant: (providerId: string, enabled: boolean) =>
+          setState({
+            newUserProviderGrants: enabled
+              ? Array.from(new Set([...state.newUserProviderGrants, providerId])).sort()
+              : state.newUserProviderGrants.filter((entry) => entry !== providerId),
+          }),
+        setNewUserRole: (value: string) => setState({ newUserRole: value }),
+        setUserProvidersAction,
+        setUserRoleAction,
+        setUserStateAction,
+        setView,
+        upsertUserCredentialAction,
+      });
+    case "account":
+      return renderAccountView(state, {
+        createToken,
+        revokeToken,
+        setTokenLabel: (value: string) => setState({ tokenLabel: value }),
+      });
     default:
-      return renderOverview();
+      return renderDashboardView(state, {
+        setUserStateAction,
+        setView,
+      });
   }
 }
-
-/* ── Render: tab bar ───────────────────────────────────────────────── */
-
-function renderTabBar(): TemplateResult {
-  return html`
-    <nav class="tab-bar" aria-label="Sections">
-      ${visibleTabs().map(
-        (tab) => html`
-          <a
-            class="tab-link ${state.activeTab === tab.id ? "is-active" : ""}"
-            href="#${tab.id}"
-            @click=${(e: Event) => {
-              e.preventDefault();
-              setTab(tab.id);
-            }}
-            >${tab.label}</a
-          >
-        `,
-      )}
-    </nav>
-  `;
-}
-
-/* ── Main redraw ───────────────────────────────────────────────────── */
 
 function redraw() {
   render(
     html`
       <div class="site-shell">
-        ${renderTopbar()}
+        ${renderTopbar(
+          state,
+          {
+            handleThemeToggle,
+            refreshApp,
+            setPrimaryView,
+            signOut,
+          },
+          getThemeLabel(getStoredTheme()),
+        )}
         <main class="main-content ${state.signedIn ? "" : "narrow"}">
           ${state.signedIn
-            ? html`${renderTabBar()}${renderTabContent()}`
+            ? html`
+                ${renderSectionNav(state, { setView })}
+                ${renderSignedInView()}
+              `
             : state.session
-              ? renderAccessRequest()
-              : renderSignedOut()}
+              ? renderAccessRequest(state, {
+                  setAccessRequestReason: (value: string) => setState({ accessRequestReason: value }),
+                  submitAccessRequest,
+                })
+              : renderSignedOut(
+                  state,
+                  {
+                    sendMagicLink,
+                    setSignInEmail: (value: string) => setState({ signInEmail: value }),
+                    setSignInPassword: (value: string) => setState({ signInPassword: value }),
+                    signInWithCredentialAction,
+                    signInWithOAuthProvider,
+                    signInWithPasskeyAction,
+                  },
+                  appConfig.stackProjectId,
+                )}
         </main>
-        ${renderFooter()}
+        ${renderFooter(appConfig.apiBaseUrl, state.status)}
       </div>
     `,
     root,
   );
 }
 
-/* ── Bootstrap ─────────────────────────────────────────────────────── */
-
 applyTheme(getStoredTheme());
 
 window.addEventListener("hashchange", () => {
-  setState({ activeTab: getActiveTab() });
+  const nextView = resolveInitialView(window.location.hash, state.session?.isSuperuser === true);
+  if (nextView !== state.activeView) {
+    setState({ activeView: nextView });
+  }
 });
 
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {

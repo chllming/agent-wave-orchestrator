@@ -107,18 +107,17 @@ Wave is built to mitigate those failures with a canonical authority set, generat
 
 Current release:
 
-- `@chllming/wave-orchestration@0.9.7`
-- Release tag: [`v0.9.5`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.7)
+- `@chllming/wave-orchestration@0.9.12`
+- Release tag: [`v0.9.12`](https://github.com/chllming/agent-wave-orchestrator/releases/tag/v0.9.12)
 - Public install path: npmjs
 - Authenticated fallback: GitHub Packages
 
-Highlights in `0.9.4`:
+Highlights in `0.9.12`:
 
-- Wave-gate markers now accept `gap` alongside `pass`, `concerns`, and `blocked` for all five gate dimensions. Agents that report a documented gap (e.g. `live=gap` for an infrastructure topology constraint) no longer have their marker rejected entirely, and `cont-QA` treats gap values as a conditional pass instead of a hard blocker.
-- First-time `wave launch` now auto-triggers `wave project setup` when no project profile exists, matching existing `wave draft` behavior. The interactive setup flow now shows descriptive help text, explains all template and posture options inline, and adds whitespace between question groups for readability.
-- `PromptSession` gains a `describe(text)` method for writing contextual help to stderr during interactive setup flows.
-- `parseArgs` now passes the loaded config object through to `runLauncherCli`, avoiding a redundant `loadWaveConfig()` call.
-- Release docs, migration guidance, runtime-config and closure references, the manifest, and the tracked install-state fixtures now all point at the `0.9.4` surface.
+- Closure bootstrap mode now has a real low-entropy fast path: missing `cont-QA` runs are skipped only when semantic closure did not already escalate into the deeper steward path, and the closure-mode thresholds now apply consistently across launcher, closure, and derived-state logic.
+- TMUX is now documented and surfaced consistently as an optional dashboard/projection layer. Live agents remain process-backed, and `tmux + --no-dashboard` now prints an explicit note instead of implying a mandatory tmux runtime.
+- Wave Control's browser surface now defaults to a dashboard-first information architecture with clearer `Dashboard`, `Operations`, `Access`, and `Account` navigation, plus richer run and benchmark analytics summaries for operators.
+- Release docs, migration guidance, runtime-config and closure references, the manifest, and the tracked install-state fixtures now all point at the `0.9.12` surface.
 
 Requirements:
 

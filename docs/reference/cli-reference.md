@@ -54,7 +54,7 @@ Closure-role bindings do not have a CLI override surface. When a wave file decla
 | `--agent-launch-stagger-ms <n>` | `1200` | Delay between agent launches |
 | `--terminal-surface <mode>` | `vscode` | `tmux`, `vscode`, or `none` |
 | `--no-dashboard` | off | Disable the per-wave dashboard projection session |
-| `--cleanup-sessions` | on | Kill lane tmux dashboard and projection sessions after each wave |
+| `--cleanup-sessions` | on | Clean up lane tmux dashboard and projection sessions after each wave |
 | `--keep-sessions` | off | Keep lane tmux dashboard and projection sessions |
 | `--keep-terminals` | off | Keep temporary terminal entries |
 | `--orchestrator-id <id>` | generated | Stable orchestrator identity |
@@ -629,7 +629,7 @@ Interactive draft currently offers worker role kinds:
 - `research`
 - `security`
 
-Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.9.2` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
+Agentic planner payloads also accept `workerAgents[].roleKind = "design"`. The shipped `0.9.12` surface uses `design-pass` as the default executor profile for that role and typically assigns a packet path like `docs/plans/waves/design/wave-<n>-<agentId>.md`. Interactive draft scaffolds the docs-first default; hybrid design stewards are authored by explicitly adding implementation-owned paths and the normal implementation contract sections.
 
 ## Ad-Hoc Task Commands
 

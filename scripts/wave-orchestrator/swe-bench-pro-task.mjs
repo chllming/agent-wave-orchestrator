@@ -796,7 +796,7 @@ function buildFullWaveSolve(row, taskWorkspace, options) {
   });
   assertSuccess(doctor, "wave doctor");
   const launch = runShellCommand(
-    `node ${shellQuote(WAVE_ENTRY)} launch --lane main --start-wave 1 --end-wave 1 --no-dashboard --terminal-surface tmux`,
+    `node ${shellQuote(WAVE_ENTRY)} launch --lane main --start-wave 1 --end-wave 1 --no-dashboard`,
     {
       cwd: taskWorkspace.repoDir,
       timeoutMs: options.maxWallClockMinutes * 60 * 1000,

@@ -17,7 +17,7 @@ The useful path is journey-first:
 - `docs/concepts/`
   Mental models and architecture. Read these first if you want to understand what a wave is, how runtime-agnostic execution works, or how Context7 differs from skills.
 - `docs/guides/`
-  Task-oriented workflows. Use these when you need to set up the planner, choose an operating mode, or decide how to run tmux and terminal surfaces.
+  Task-oriented workflows. Use these when you need to set up the planner, choose an operating mode, or pick an operator terminal surface such as optional tmux-backed dashboards.
 - `docs/reference/`
   Exact command, config, and file-format details. Use this when you need precise key names, runtime options, or bundle structure.
 - `docs/plans/`
@@ -38,7 +38,7 @@ The useful path is journey-first:
 - Setting up multiple projects in one monorepo:
   Read [guides/monorepo-projects.md](./guides/monorepo-projects.md) for `defaultProject`, `projects.<projectId>`, project-scoped state paths, and telemetry defaults.
 - Adding an optional pre-implementation design steward:
-  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.9.3` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
+  Read [guides/author-and-run-waves.md](./guides/author-and-run-waves.md), then the standing prompt in [agents/wave-design-role.md](./agents/wave-design-role.md). The shipped `0.9.12` surface includes `role-design` plus `tui-design`, with docs-first design stewards by default and explicit hybrid design stewards when a wave also gives that same agent code ownership.
 - Running in LEAPclaw, OpenClaw, Nemoshell, Docker, or another short-lived sandbox:
   Read [guides/sandboxed-environments.md](./guides/sandboxed-environments.md) first for the submit or supervise pattern, persistent-state expectations, and dashboard guidance, then use [plans/sandbox-end-state-architecture.md](./plans/sandbox-end-state-architecture.md) for the deeper runtime design.
 - Want signal-driven automation or long-running watcher loops:
@@ -53,14 +53,8 @@ The useful path is journey-first:
   Read [plans/migration.md](./plans/migration.md), then review the release notes in [../CHANGELOG.md](../CHANGELOG.md) before running `pnpm exec wave upgrade`.
 - Publishing the package:
   Read [reference/package-publishing-flow.md](./reference/package-publishing-flow.md) for the end-to-end release path, the GitHub publish workflows, the lifecycle scripts, and the verification or repair flow.
-- Want the practical `0.9.3` operating stance:
-  Read [guides/recommendations-0.9.7
-- [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md
-- [0.9.9 Recommendations](guides/recommendations-0.9.9.md
-- [0.9.10 Recommendations](guides/recommendations-0.9.10.md))).md](./guides/recommendations-0.9.7
-- [0.9.8 Operating Recommendations](guides/recommendations-0.9.8.md
-- [0.9.9 Recommendations](guides/recommendations-0.9.9.md
-- [0.9.10 Recommendations](guides/recommendations-0.9.10.md))).md) for the recommended default around relaxed blocker states, advisory turn budgets, and targeted recovery.
+- Want the practical `0.9.12` operating stance:
+  Read [guides/recommendations-0.9.12.md](./guides/recommendations-0.9.12.md) for the recommended default around advisory turn budgets, targeted recovery, low-entropy closure, and optional TMUX operator surfaces.
 - Want the concrete runtime module map:
   Read [plans/end-state-architecture.md](./plans/end-state-architecture.md) for the engine-by-engine architecture and artifact ownership model.
 - Want the CLI surface map:

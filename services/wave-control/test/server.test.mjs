@@ -571,8 +571,134 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
           ],
         },
         {
+          id: "evt-gate-1",
+          recordedAt: "2026-03-22T10:00:30.000Z",
+          entityType: "gate",
+          entityId: "wave-1:gate",
+          action: "evaluated",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "roadmap",
+            lane: "main",
+            wave: 1,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            gateSnapshot: {
+              overall: {
+                gate: "pass",
+                statusCode: "pass",
+              },
+            },
+          },
+        },
+        {
+          id: "evt-proof-1",
+          recordedAt: "2026-03-22T10:00:40.000Z",
+          entityType: "proof_bundle",
+          entityId: "wave-1:proof",
+          action: "recorded",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "roadmap",
+            lane: "main",
+            wave: 1,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            summary: "proof recorded",
+          },
+        },
+        {
+          id: "evt-coord-1",
+          recordedAt: "2026-03-22T10:00:50.000Z",
+          entityType: "coordination_record",
+          entityId: "wave-1:coord",
+          action: "noted",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "roadmap",
+            lane: "main",
+            wave: 1,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            kind: "note",
+          },
+        },
+        {
+          id: "evt-run-2",
+          recordedAt: "2026-03-22T10:00:55.000Z",
+          entityType: "wave_run",
+          entityId: "wave-2",
+          action: "blocked",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "adhoc",
+            lane: "main",
+            wave: 2,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            waveId: "wave-2",
+          },
+        },
+        {
+          id: "evt-gate-2",
+          recordedAt: "2026-03-22T10:01:10.000Z",
+          entityType: "gate",
+          entityId: "wave-2:gate",
+          action: "evaluated",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "adhoc",
+            lane: "main",
+            wave: 2,
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            gateSnapshot: {
+              overall: {
+                gate: "clarificationBarrier",
+                statusCode: "clarification-follow-up-open",
+              },
+            },
+          },
+        },
+        {
+          id: "evt-bench-3",
+          recordedAt: "2026-03-22T10:01:40.000Z",
+          entityType: "benchmark_run",
+          entityId: "bench-3",
+          action: "completed",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-3",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            adapter: { id: "local-bench" },
+            manifest: { id: "pilot-local" },
+            selectedArms: ["local-wave"],
+            summary: { tasks: 1, solved: 1 },
+          },
+        },
+        {
           id: "evt-bench-1",
-          recordedAt: "2026-03-22T10:01:00.000Z",
+          recordedAt: "2026-03-22T10:02:00.000Z",
           entityType: "benchmark_run",
           entityId: "bench-1",
           action: "completed",
@@ -594,8 +720,40 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
           },
         },
         {
+          id: "evt-bench-item-1",
+          recordedAt: "2026-03-22T10:02:10.000Z",
+          entityType: "benchmark_item",
+          entityId: "task-1",
+          action: "recorded",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-1",
+            benchmarkItemId: "task-1:full-wave",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+        },
+        {
+          id: "evt-verification-1",
+          recordedAt: "2026-03-22T10:02:20.000Z",
+          entityType: "verification",
+          entityId: "task-1:verify",
+          action: "completed",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-1",
+            benchmarkItemId: "task-1:full-wave",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+        },
+        {
           id: "evt-review-1",
-          recordedAt: "2026-03-22T10:02:00.000Z",
+          recordedAt: "2026-03-22T10:02:30.000Z",
           entityType: "review",
           entityId: "task-1:review",
           action: "review-only",
@@ -612,6 +770,64 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
             reviewValidity: "review-only",
           },
         },
+        {
+          id: "evt-bench-2",
+          recordedAt: "2026-03-22T10:03:00.000Z",
+          entityType: "benchmark_run",
+          entityId: "bench-2",
+          action: "completed",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-2",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            adapter: { id: "swe-bench-lite" },
+            manifest: { id: "pilot-2" },
+            selectedArms: ["lite-wave"],
+            comparisonMode: "comparison",
+            comparisonReady: true,
+            summary: { tasks: 2, solved: 2 },
+          },
+        },
+        {
+          id: "evt-bench-item-2",
+          recordedAt: "2026-03-22T10:03:10.000Z",
+          entityType: "benchmark_item",
+          entityId: "task-2",
+          action: "recorded",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-2",
+            benchmarkItemId: "task-2:lite-wave",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+        },
+        {
+          id: "evt-review-2",
+          recordedAt: "2026-03-22T10:03:20.000Z",
+          entityType: "review",
+          entityId: "task-2:review",
+          action: "comparison-valid",
+          identity: {
+            workspaceId: "workspace-1",
+            projectId: "wave-orchestration",
+            runKind: "benchmark",
+            benchmarkRunId: "bench-2",
+            benchmarkItemId: "task-2:lite-wave",
+            orchestratorId: "main-orch-1",
+            runtimeVersion: "0.7.0",
+          },
+          data: {
+            reviewValidity: "comparison-valid",
+          },
+        },
       ],
     }),
   });
@@ -624,11 +840,19 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
   );
   assert.equal(runs.status, 200);
   const runList = await runs.json();
-  assert.equal(runList.length, 1);
-  assert.equal(runList[0].status, "completed");
+  assert.equal(runList.length, 2);
   assert.equal(runList[0].projectId, "wave-orchestration");
   assert.equal(runList[0].orchestratorId, "main-orch-1");
   assert.equal(runList[0].runtimeVersion, "0.7.0");
+  const completedRun = runList.find((entry) => entry.wave === 1);
+  assert.equal(completedRun.status, "completed");
+  assert.equal(completedRun.latestGate, "pass");
+  assert.equal(completedRun.artifactCount, 1);
+  assert.equal(completedRun.proofBundleCount, 1);
+  assert.equal(completedRun.coordinationRecordCount, 1);
+  const blockedRun = runList.find((entry) => entry.wave === 2);
+  assert.equal(blockedRun.status, "blocked");
+  assert.equal(blockedRun.latestGate, "clarificationBarrier");
 
   const runDetail = await fetch(
     `${app.baseUrl}/api/v1/run?workspaceId=workspace-1&projectId=wave-orchestration&lane=main&wave=1&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
@@ -646,9 +870,30 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
   );
   assert.equal(benchmarks.status, 200);
   const benchmarkList = await benchmarks.json();
-  assert.equal(benchmarkList.length, 1);
-  assert.equal(benchmarkList[0].benchmarkRunId, "bench-1");
-  assert.equal(benchmarkList[0].projectId, "wave-orchestration");
+  assert.equal(benchmarkList.length, 3);
+  const benchOne = benchmarkList.find((entry) => entry.benchmarkRunId === "bench-1");
+  assert.equal(benchOne.projectId, "wave-orchestration");
+  assert.equal(benchOne.status, "completed");
+  assert.equal(benchOne.itemCount, 1);
+  assert.equal(benchOne.reviewCount, 1);
+  assert.equal(benchOne.verificationCount, 1);
+  assert.equal(benchOne.adapterId, "swe-bench-pro");
+  assert.equal(benchOne.manifestId, "pilot-1");
+  assert.equal(benchOne.comparisonReady, false);
+  const benchTwo = benchmarkList.find((entry) => entry.benchmarkRunId === "bench-2");
+  assert.equal(benchTwo.status, "completed");
+  assert.equal(benchTwo.itemCount, 1);
+  assert.equal(benchTwo.reviewCount, 1);
+  assert.equal(benchTwo.adapterId, "swe-bench-lite");
+  assert.equal(benchTwo.manifestId, "pilot-2");
+  assert.equal(benchTwo.comparisonReady, true);
+  const benchThree = benchmarkList.find((entry) => entry.benchmarkRunId === "bench-3");
+  assert.equal(benchThree.status, "completed");
+  assert.equal(benchThree.itemCount, 0);
+  assert.equal(benchThree.reviewCount, 0);
+  assert.equal(benchThree.adapterId, "local-bench");
+  assert.equal(benchThree.manifestId, "pilot-local");
+  assert.equal(benchThree.comparisonReady, null);
 
   const benchmarkDetail = await fetch(
     `${app.baseUrl}/api/v1/benchmark?workspaceId=workspace-1&projectId=wave-orchestration&benchmarkRunId=bench-1&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
@@ -666,8 +911,71 @@ test("run, benchmark, analytics, and artifact endpoints project ingested telemet
   );
   assert.equal(analytics.status, 200);
   const analyticsPayload = await analytics.json();
-  assert.equal(analyticsPayload.runCount, 1);
-  assert.equal(analyticsPayload.benchmarkRunCount, 1);
+  assert.equal(analyticsPayload.runCount, 2);
+  assert.equal(analyticsPayload.benchmarkRunCount, 3);
+  assert.equal(analyticsPayload.artifactCount, 1);
+  assert.equal(analyticsPayload.verificationCount, 1);
+  assert.equal(analyticsPayload.reviewCount, 2);
+  assert.equal(analyticsPayload.benchmarkComparisonReadyCount, 1);
+  assert.equal(analyticsPayload.benchmarkComparisonPendingCount, 1);
+  assert.equal(analyticsPayload.benchmarkComparisonUnknownCount, 1);
+  assert.equal(analyticsPayload.latestRunUpdatedAt, "2026-03-22T10:01:10.000Z");
+  assert.equal(analyticsPayload.latestBenchmarkUpdatedAt, "2026-03-22T10:03:20.000Z");
+  assert.equal(analyticsPayload.latestActivityAt, "2026-03-22T10:03:20.000Z");
+  assert.deepEqual(analyticsPayload.runStatusCounts, {
+    blocked: 1,
+    completed: 1,
+  });
+  assert.deepEqual(analyticsPayload.benchmarkStatusCounts, {
+    completed: 3,
+  });
+  assert.deepEqual(analyticsPayload.gateCounts, {
+    clarificationBarrier: 1,
+    pass: 1,
+  });
+  assert.deepEqual(analyticsPayload.reviewValidityCounts, {
+    "comparison-valid": 1,
+    "review-only": 1,
+  });
+  assert.equal(analyticsPayload.coordinationRecordCount, 1);
+  assert.equal(analyticsPayload.proofBundleCount, 1);
+
+  const scopedAnalytics = await fetch(
+    `${app.baseUrl}/api/v1/analytics/overview?workspaceId=workspace-1&projectId=wave-orchestration&lane=main&wave=1&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
+    { headers },
+  );
+  assert.equal(scopedAnalytics.status, 200);
+  const scopedAnalyticsPayload = await scopedAnalytics.json();
+  assert.equal(scopedAnalyticsPayload.runCount, 1);
+  assert.deepEqual(scopedAnalyticsPayload.runStatusCounts, {
+    completed: 1,
+  });
+  assert.deepEqual(scopedAnalyticsPayload.gateCounts, {
+    pass: 1,
+  });
+  assert.equal(scopedAnalyticsPayload.coordinationRecordCount, 1);
+  assert.equal(scopedAnalyticsPayload.proofBundleCount, 1);
+  assert.equal(scopedAnalyticsPayload.artifactCount, 1);
+
+  const roadmapBenchmarks = await fetch(
+    `${app.baseUrl}/api/v1/benchmarks?workspaceId=workspace-1&projectId=wave-orchestration&runKind=roadmap&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
+    { headers },
+  );
+  assert.equal(roadmapBenchmarks.status, 200);
+  assert.deepEqual(await roadmapBenchmarks.json(), []);
+
+  const roadmapAnalytics = await fetch(
+    `${app.baseUrl}/api/v1/analytics/overview?workspaceId=workspace-1&projectId=wave-orchestration&runKind=roadmap&orchestratorId=main-orch-1&runtimeVersion=0.7.0`,
+    { headers },
+  );
+  assert.equal(roadmapAnalytics.status, 200);
+  const roadmapAnalyticsPayload = await roadmapAnalytics.json();
+  assert.equal(roadmapAnalyticsPayload.benchmarkRunCount, 0);
+  assert.deepEqual(roadmapAnalyticsPayload.benchmarkStatusCounts, {});
+  assert.equal(roadmapAnalyticsPayload.benchmarkComparisonReadyCount, 0);
+  assert.equal(roadmapAnalyticsPayload.benchmarkComparisonPendingCount, 0);
+  assert.equal(roadmapAnalyticsPayload.benchmarkComparisonUnknownCount, 0);
+  assert.deepEqual(roadmapAnalyticsPayload.reviewValidityCounts, {});
 
   const artifact = await fetch(
     `${app.baseUrl}/api/v1/artifact?eventId=evt-run-1&artifactId=artifact-inline&inline=1`,

@@ -3,6 +3,38 @@
   "packageName": "@chllming/wave-orchestration",
   "releases": [
     {
+      "version": "0.9.12",
+      "date": "2026-04-08",
+      "summary": "Hybrid closure fast-path fixes, optional-TMUX release-surface cleanup, and a dashboard-first Wave Control UI refresh.",
+      "features": [
+        "Bootstrap closure now keeps the low-entropy fast path only for genuinely lightweight closure attempts; missing `cont-QA` runs are no longer silently skipped after semantic closure work already ran.",
+        "`closureModeThresholds.bootstrap` now participates in runtime mode resolution, and derived closure-complexity metadata now includes clarification, dependency, helper-assignment, and contradiction barriers.",
+        "Planner setup, launcher help, autonomous help, runbooks, and canned commands now describe TMUX consistently as an optional dashboard/projection layer instead of a required execution backend.",
+        "The `wave-control-web` browser surface now uses dashboard-first navigation with clearer `Dashboard`, `Operations`, `Access`, and `Account` views plus richer run and benchmark analytics summaries.",
+        "The shipped versioned operating guide is now `docs/guides/recommendations-0.9.12.md`, and release docs, migration guidance, runtime-config docs, package-publishing docs, tracked install-state fixtures, and the release manifest now all point at the same `0.9.12` surface.",
+        "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target."
+      ],
+      "manualSteps": [
+        "Run `pnpm exec wave doctor --json` and `pnpm exec wave launch --lane main --dry-run --no-dashboard` after upgrading so the repo validates against the `0.9.12` release surface.",
+        "If your repo copied starter docs or runbooks, sync `README.md`, `docs/README.md`, `docs/plans/current-state.md`, `docs/plans/migration.md`, `docs/reference/coordination-and-closure.md`, `docs/reference/runtime-config/README.md`, `docs/reference/wave-control.md`, `docs/reference/package-publishing-flow.md`, and `docs/guides/recommendations-0.9.12.md` so local guidance matches the packaged release.",
+        "If your repo copied terminal-surface guidance or shell helpers, update any local wording that still treats TMUX as mandatory for live execution."
+      ],
+      "breaking": false
+    },
+    {
+      "version": "0.9.11",
+      "date": "2026-04-07",
+      "summary": "Cont-QA verdict parsing fix, log-first verdict authority, and sticky integration closure.",
+      "features": [
+        "`parseVerdictFromText()` now returns the first regex match instead of the last, fixing retry loops caused by stale `Verdict: BLOCKED` lines lingering in append-only cont-QA reports.",
+        "`buildAgentExecutionSummary()` now prefers the log-based `[wave-verdict]` marker over the report-file `Verdict:` line when both are present.",
+        "Integration closure now respects an explicit A8 `ready-for-doc-closure` sign-off with zero blockers instead of re-injecting synthesized proof/doc gaps on the next derived-state refresh.",
+        "Planner migration guidance and the `planner-agentic` bundle placeholder remain part of the shipped current-surface docs so adopted repos still have one aligned upgrade target."
+      ],
+      "manualSteps": [],
+      "breaking": false
+    },
+    {
       "version": "0.9.10",
       "date": "2026-04-07",
       "summary": "Fix run-state history bloat that caused 500MB+ JSON files and V8 string length crashes.",

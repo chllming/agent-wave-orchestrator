@@ -6,7 +6,7 @@ If you want the full author-to-launch workflow, start with [author-and-run-waves
 
 It reduces repeated setup questions, stores project defaults, and generates wave specs plus markdown that already fit the launcher.
 
-The published `0.9.2` package already includes the optional `design` worker role for pre-implementation design packets. This guide calls out where that affects drafting.
+The published `0.9.12` package already includes the optional `design` worker role for pre-implementation design packets. This guide calls out where that affects drafting.
 
 ## What Ships Today
 
@@ -48,7 +48,7 @@ pnpm exec wave launch --lane main --dry-run --no-dashboard
 - forward replanning of later waves
 - separate runtime enforcement for oversight vs dark-factory
 
-Those remain future work outside the current `0.9.2` release line. The planner foundation is about better structured authoring, not a second execution engine.
+Those remain future work outside the current `0.9.12` release line. The planner foundation is about better structured authoring, not a second execution engine.
 
 ## Project Profile
 
@@ -70,7 +70,7 @@ The saved profile remembers:
 
 - whether the repo is a new project
 - default oversight mode
-- default terminal surface for live runs (`vscode` or `tmux`; `none` remains dry-run only)
+- default terminal surface for live runs (`vscode` or `tmux`; `none` remains dry-run only). This is an operator viewing preference, not the agent execution backend.
 - default draft template
 - default lane
 - typed deploy environments

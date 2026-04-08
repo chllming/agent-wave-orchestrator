@@ -2944,9 +2944,10 @@ async function runProjectSetupFlow(options = {}) {
       ),
     );
 
-    prompt.describe("\nHow do you want to watch agent sessions?");
-    prompt.describe("  vscode — agent sessions appear as VS Code terminal tabs");
-    prompt.describe("  tmux   — agent sessions run in tmux panes (terminal-native)");
+    prompt.describe("\nHow do you want to follow live runs?");
+    prompt.describe("Live agent execution stays process-backed either way; this only changes the operator surface.");
+    prompt.describe("  vscode — VS Code gets temporary terminal entries for agent logs and dashboards");
+    prompt.describe("  tmux   — terminal-native dashboard and projection surface with no VS Code integration");
     const defaultTerminalSurface = normalizeTerminalSurface(
       await prompt.askChoice(
         "Default terminal surface",

@@ -6,6 +6,7 @@ import { DEFAULT_CODEX_SANDBOX_MODE } from "../../scripts/wave-orchestrator/conf
 import { buildCodexExecInvocation } from "../../scripts/wave-orchestrator/executors.mjs";
 import { resolvePostDesignPassTransition } from "../../scripts/wave-orchestrator/launcher.mjs";
 import {
+  buildGateSnapshotPure,
   readWaveComponentGate,
   readWaveComponentMatrixGate,
   readWaveContEvalGate,
@@ -946,6 +947,99 @@ describe("buildWaveIntegrationSummary", () => {
     expect(integrationSummary.securityState).toBe("concerns");
     expect(integrationSummary.securityFindings[0]).toContain("A7:");
     expect(integrationSummary.securityApprovals[0]).toContain("A7:");
+  });
+
+  it("keeps gate snapshots aligned when inferred integration and doc no-change are auto-satisfied", () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.gateModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.autoClosure = {
+      allowInferredIntegration: true,
+      allowAutoDocNoChange: true,
+      allowAutoDocProjection: false,
+      allowSkipContQaInBootstrap: false,
+    };
+    lanePaths.laneProfile.validation.autoClosure = lanePaths.autoClosure;
+
+    const gateSnapshot = buildGateSnapshotPure({
+      wave: {
+        wave: 4,
+        agents: [{ agentId: "A8" }, { agentId: "A9" }, { agentId: "A0" }],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+      },
+      agentResults: {
+        A0: {
+          verdict: { verdict: "pass", detail: "ready" },
+          gate: {
+            architecture: "pass",
+            integration: "pass",
+            durability: "pass",
+            live: "pass",
+            docs: "pass",
+            detail: "ready",
+          },
+        },
+      },
+      derivedState: {
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Inferred integration is coherent.",
+          openClaims: [],
+          conflictingClaims: [],
+          unresolvedBlockers: [],
+          changedInterfaces: [],
+          crossComponentImpacts: [],
+          proofGaps: [],
+          docGaps: [],
+          deployRisks: [],
+          inboundDependencies: [],
+          outboundDependencies: [],
+          helperAssignments: [],
+        },
+        docsQueue: { items: [] },
+        coordinationState: {
+          clarifications: [],
+          humanEscalations: [],
+          humanFeedback: [],
+        },
+        capabilityAssignments: [],
+        dependencySnapshot: {
+          openInbound: [],
+          openOutbound: [],
+          unresolvedInboundAssignments: [],
+        },
+        clarificationBarrier: { ok: true, statusCode: "pass", detail: "" },
+        helperAssignmentBarrier: { ok: true, statusCode: "pass", detail: "" },
+        dependencyBarrier: { ok: true, statusCode: "pass", detail: "" },
+      },
+      validationMode: "compat",
+      laneConfig: {
+        gateMode: "standard",
+        contQaAgentId: "A0",
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        requireIntegrationStewardFromWave: 0,
+        laneProfile: lanePaths.laneProfile,
+        autoClosure: lanePaths.autoClosure,
+      },
+    });
+
+    expect(gateSnapshot.integrationGate).toMatchObject({
+      ok: true,
+      agentId: null,
+      integrationState: "inferred",
+    });
+    expect(gateSnapshot.documentationGate).toMatchObject({
+      ok: true,
+      agentId: null,
+      docClosureState: "no-change",
+    });
+    expect(gateSnapshot.overall).toMatchObject({
+      ok: true,
+      statusCode: "pass",
+    });
   });
 });
 
@@ -2156,6 +2250,243 @@ describe("computeReducerSnapshot", () => {
 });
 
 describe("runClosureSweepPhase", () => {
+  it("skips low-entropy bootstrap closure agents when auto closure is enabled", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.gateModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.closureModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.autoClosure = {
+      allowInferredIntegration: true,
+      allowAutoDocNoChange: true,
+      allowAutoDocProjection: false,
+      allowSkipContQaInBootstrap: true,
+    };
+    lanePaths.laneProfile.validation.autoClosure = lanePaths.autoClosure;
+    lanePaths.laneProfile.validation.closureModeThresholds = lanePaths.closureModeThresholds;
+    const closureRuns = ["A8", "A9", "A0"].map((agentId) => ({
+      agent: { agentId, title: agentId },
+      sessionName: `wave-${agentId.toLowerCase()}`,
+      promptPath: path.join(dir, `${agentId}.prompt.md`),
+      logPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.log`),
+      statusPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.status`),
+      messageBoardPath: path.join(dir, "board.md"),
+      messageBoardSnapshot: "",
+      sharedSummaryPath: path.join(dir, "shared.md"),
+      sharedSummaryText: "",
+      inboxPath: path.join(dir, `${agentId}.inbox.md`),
+      inboxText: "",
+    }));
+    const launched = [];
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: {
+        wave: 0,
+        agents: [{ agentId: "A8" }, { agentId: "A9" }, { agentId: "A0" }],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+      },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "ready-for-doc-closure",
+          detail: "Integration is coherent.",
+          openClaims: [],
+          conflictingClaims: [],
+          unresolvedBlockers: [],
+          changedInterfaces: [],
+          crossComponentImpacts: [],
+          proofGaps: [],
+          docGaps: [],
+          deployRisks: [],
+          inboundDependencies: [],
+          outboundDependencies: [],
+          helperAssignments: [],
+        },
+        docsQueue: { items: [] },
+        coordinationState: {
+          clarifications: [],
+          humanEscalations: [],
+          humanFeedback: [],
+        },
+        capabilityAssignments: [],
+        dependencySnapshot: {
+          openInbound: [],
+          openOutbound: [],
+          unresolvedInboundAssignments: [],
+        },
+        clarificationBarrier: { ok: true, statusCode: "pass", detail: "" },
+        helperAssignmentBarrier: { ok: true, statusCode: "pass", detail: "" },
+        dependencyBarrier: { ok: true, statusCode: "pass", detail: "" },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: closureRuns.map((run) => ({ agentId: run.agent.agentId, attempts: 0 })),
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async (_lanePaths, params) => {
+        launched.push(params.agent.agentId);
+        return { executorId: "codex" };
+      },
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+    });
+
+    expect(launched).toEqual([]);
+    expect(result.failures).toEqual([]);
+  });
+
+  it("fails bootstrap closure when cont-QA is missing after semantic closure stages run", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.gateModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.closureModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.autoClosure = {
+      allowInferredIntegration: false,
+      allowAutoDocNoChange: false,
+      allowAutoDocProjection: false,
+      allowSkipContQaInBootstrap: true,
+    };
+    lanePaths.laneProfile.validation.autoClosure = lanePaths.autoClosure;
+    lanePaths.laneProfile.validation.closureModeThresholds = lanePaths.closureModeThresholds;
+    const closureRuns = ["A8", "A9"].map((agentId) => ({
+      agent: { agentId, title: agentId },
+      sessionName: `wave-${agentId.toLowerCase()}`,
+      promptPath: path.join(dir, `${agentId}.prompt.md`),
+      logPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.log`),
+      statusPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.status`),
+      messageBoardPath: path.join(dir, "board.md"),
+      messageBoardSnapshot: "",
+      sharedSummaryPath: path.join(dir, "shared.md"),
+      sharedSummaryText: "",
+      inboxPath: path.join(dir, `${agentId}.inbox.md`),
+      inboxText: "",
+    }));
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: {
+        wave: 0,
+        agents: [{ agentId: "A8" }, { agentId: "A9" }, { agentId: "A0" }],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+      },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "needs-more-work",
+          detail: "semantic review required",
+          openClaims: [],
+          conflictingClaims: [],
+          unresolvedBlockers: [],
+          changedInterfaces: [],
+          crossComponentImpacts: [],
+          proofGaps: [],
+          docGaps: [],
+          deployRisks: [],
+          inboundDependencies: [],
+          outboundDependencies: [],
+          helperAssignments: [],
+        },
+        docsQueue: { items: [{ id: "doc-1", kind: "shared-plan" }] },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: [{ agentId: "A8", attempts: 0 }, { agentId: "A9", attempts: 0 }],
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async () => ({ executorId: "codex" }),
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+      readWaveIntegrationBarrierFn: (() => {
+        let count = 0;
+        return () => {
+          count += 1;
+          return count === 1
+            ? {
+                ok: false,
+                agentId: "A8",
+                statusCode: "integration-needs-more-work",
+                detail: "semantic integration stage required",
+                logPath: "logs/a8.log",
+              }
+            : {
+                ok: true,
+                agentId: "A8",
+                statusCode: "pass",
+                detail: "ready",
+                logPath: "logs/a8.log",
+              };
+        };
+      })(),
+      readWaveDocumentationGateFn: (() => {
+        let count = 0;
+        return () => {
+          count += 1;
+          return count === 1
+            ? {
+                ok: false,
+                agentId: "A9",
+                statusCode: "doc-closure-open",
+                detail: "doc stage required",
+                logPath: "logs/a9.log",
+              }
+            : {
+                ok: true,
+                agentId: "A9",
+                statusCode: "pass",
+                detail: "ready",
+                logPath: "logs/a9.log",
+              };
+        };
+      })(),
+      readWaveComponentMatrixGateFn: () => ({
+        ok: true,
+        agentId: "A9",
+        statusCode: "pass",
+        detail: "ready",
+        logPath: "logs/a9.log",
+      }),
+      materializeAgentExecutionSummaryForRunFn: () => null,
+      monitorWaveHumanFeedbackFn: () => false,
+    });
+
+    expect(result.failures).toEqual([
+      expect.objectContaining({
+        agentId: "A0",
+        statusCode: "missing-closure-run",
+      }),
+    ]);
+  });
+
   it("runs cont-EVAL before integration, documentation, and cont-QA when present", async () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);

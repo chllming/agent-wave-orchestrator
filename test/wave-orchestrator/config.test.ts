@@ -814,4 +814,58 @@ describe("runtime configuration normalization", () => {
     expect(config.roles.designRolePromptPath).toBe("docs/agents/wave-design-role.md");
     expect(lane.roles.designRolePromptPath).toBe("docs/agents/wave-design-role.md");
   });
+
+  it("normalizes closure fast-path validation settings", () => {
+    const repoDir = makeTempDir();
+    const configPath = path.join(repoDir, "wave.config.json");
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultProject: "app",
+          projects: {
+            app: {
+              rootDir: ".",
+              lanes: {
+                main: {
+                  validation: {
+                    closureModeThresholds: {
+                      bootstrap: 0,
+                      standard: 3,
+                      strict: 8,
+                    },
+                    autoClosure: {
+                      allowInferredIntegration: true,
+                      allowAutoDocNoChange: true,
+                      allowAutoDocProjection: true,
+                      allowSkipContQaInBootstrap: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const config = loadWaveConfig(configPath);
+    const lane = resolveLaneProfile(config, "main", "app");
+
+    expect(lane.validation.closureModeThresholds).toEqual({
+      bootstrap: 0,
+      standard: 3,
+      strict: 8,
+    });
+    expect(lane.validation.autoClosure).toEqual({
+      allowInferredIntegration: true,
+      allowAutoDocNoChange: true,
+      allowAutoDocProjection: true,
+      allowSkipContQaInBootstrap: true,
+    });
+  });
 });

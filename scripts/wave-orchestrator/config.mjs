@@ -536,6 +536,21 @@ function normalizeValidation(rawValidation = {}) {
       standard: rawValidation.gateModeThresholds?.standard ?? 4,
       strict: rawValidation.gateModeThresholds?.strict ?? 10,
     },
+    closureModeThresholds: {
+      bootstrap: rawValidation.closureModeThresholds?.bootstrap ?? 0,
+      standard: rawValidation.closureModeThresholds?.standard ?? 4,
+      strict: rawValidation.closureModeThresholds?.strict ?? 10,
+    },
+    autoClosure: {
+      allowInferredIntegration:
+        normalizeOptionalBoolean(rawValidation.autoClosure?.allowInferredIntegration, false),
+      allowAutoDocNoChange:
+        normalizeOptionalBoolean(rawValidation.autoClosure?.allowAutoDocNoChange, false),
+      allowAutoDocProjection:
+        normalizeOptionalBoolean(rawValidation.autoClosure?.allowAutoDocProjection, false),
+      allowSkipContQaInBootstrap:
+        normalizeOptionalBoolean(rawValidation.autoClosure?.allowSkipContQaInBootstrap, false),
+    },
     bootstrapPassConditions: {
       requireA0Verdict: rawValidation.bootstrapPassConditions?.requireA0Verdict ?? false,
       requireProofSignals: rawValidation.bootstrapPassConditions?.requireProofSignals ?? false,

@@ -53,6 +53,10 @@ import {
   openClarificationLinkedRequests,
 } from "./coordination-store.mjs";
 import { contradictionsBlockingGate } from "./contradiction-entity.mjs";
+import {
+  evaluateDocumentationAutoClosure,
+  evaluateInferredIntegrationClosure,
+} from "./closure-policy.mjs";
 
 function contradictionList(value) {
   if (value instanceof Map) {
@@ -860,7 +864,21 @@ export function readWaveComponentMatrixGate(wave, agentRuns, options = {}) {
 
 export function readWaveDocumentationGate(wave, agentRuns, options = {}) {
   const mode = normalizeReadMode(options.mode || "live");
-  const documentationAgentId = wave.documentationAgentId || "A9";
+  const documentationAgentId =
+    options.documentationAgentId || wave.documentationAgentId || "A9";
+  const autoClosure = evaluateDocumentationAutoClosure(options.derivedState, options, {
+    componentMatrixGate: options.componentMatrixGate,
+  });
+  if (autoClosure?.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: autoClosure.statusCode,
+      detail: autoClosure.detail,
+      logPath: null,
+      docClosureState: autoClosure.state,
+    };
+  }
   const docRun =
     agentRuns.find((run) => run.agent.agentId === documentationAgentId) ?? null;
   if (!docRun) {
@@ -1003,6 +1021,17 @@ export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
     (options.requireIntegrationStewardFromWave !== null &&
       options.requireIntegrationStewardFromWave !== undefined &&
       wave.wave >= options.requireIntegrationStewardFromWave);
+  const autoClosure = evaluateInferredIntegrationClosure(options.derivedState, options);
+  if (autoClosure?.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: autoClosure.statusCode,
+      detail: autoClosure.detail,
+      logPath: null,
+      integrationState: autoClosure.state,
+    };
+  }
   const integrationRun =
     agentRuns.find((run) => run.agent.agentId === integrationAgentId) ?? null;
   if (!integrationRun) {
@@ -1059,8 +1088,14 @@ export function readWaveIntegrationGate(wave, agentRuns, options = {}) {
 }
 
 export function readWaveIntegrationBarrier(wave, agentRuns, derivedState, options = {}) {
-  const markerGate = readWaveIntegrationGate(wave, agentRuns, options);
+  const markerGate = readWaveIntegrationGate(wave, agentRuns, {
+    ...options,
+    derivedState,
+  });
   if (!markerGate.ok) {
+    return markerGate;
+  }
+  if (!markerGate.agentId) {
     return markerGate;
   }
   const integrationSummary = derivedState?.integrationSummary || null;
@@ -1240,6 +1275,7 @@ export function buildGateSnapshot({
       securityRolePromptPath: lanePaths?.securityRolePromptPath,
       requireIntegrationStewardFromWave: lanePaths?.requireIntegrationStewardFromWave,
       laneProfile: lanePaths?.laneProfile,
+      autoClosure: lanePaths?.autoClosure,
       benchmarkCatalogPath: lanePaths?.laneProfile?.paths?.benchmarkCatalogPath,
       componentMatrixPayload,
       componentMatrixJsonPath,
@@ -1446,6 +1482,19 @@ export function readWaveComponentMatrixGatePure(wave, agentResults, options = {}
 
 export function readWaveDocumentationGatePure(wave, agentResults, options = {}) {
   const documentationAgentId = options.documentationAgentId || wave.documentationAgentId || "A9";
+  const autoClosure = evaluateDocumentationAutoClosure(options.derivedState, options, {
+    componentMatrixGate: options.componentMatrixGate,
+  });
+  if (autoClosure?.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: autoClosure.statusCode,
+      detail: autoClosure.detail,
+      logPath: null,
+      docClosureState: autoClosure.state,
+    };
+  }
   if (!waveDeclaresAgent(wave, documentationAgentId)) {
     return { ok: true, agentId: null, statusCode: "pass",
       detail: "No documentation steward declared for this wave.", logPath: null };
@@ -1507,6 +1556,17 @@ export function readWaveIntegrationGatePure(wave, agentResults, options = {}) {
   const integrationAgentId = options.integrationAgentId || wave.integrationAgentId || "A8";
   const requireIntegration = options.requireIntegrationSteward === true ||
     (options.requireIntegrationStewardFromWave != null && wave.wave >= options.requireIntegrationStewardFromWave);
+  const autoClosure = evaluateInferredIntegrationClosure(options.derivedState, options);
+  if (autoClosure?.ok) {
+    return {
+      ok: true,
+      agentId: null,
+      statusCode: autoClosure.statusCode,
+      detail: autoClosure.detail,
+      logPath: null,
+      integrationState: autoClosure.state,
+    };
+  }
   if (!waveDeclaresAgent(wave, integrationAgentId)) {
     return {
       ok: !requireIntegration,
@@ -1557,6 +1617,9 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
   const integrationMarkerGate = readWaveIntegrationGatePure(wave, agentResults, {
     integrationAgentId: laneConfig.integrationAgentId,
     requireIntegrationStewardFromWave: laneConfig.requireIntegrationStewardFromWave,
+    derivedState,
+    laneProfile: laneConfig.laneProfile,
+    autoClosure: laneConfig.autoClosure,
   });
   const integrationBarrier = (() => {
     if (!integrationMarkerGate.ok) { return integrationMarkerGate; }
@@ -1585,12 +1648,17 @@ export function buildGateSnapshotPure({ wave, agentResults, derivedState, valida
     }
     return integrationMarkerGate;
   })();
-  const documentationGate = readWaveDocumentationGatePure(wave, agentResults, {
-    documentationAgentId: laneConfig.documentationAgentId });
   const componentMatrixGate = readWaveComponentMatrixGatePure(wave, agentResults, {
     laneProfile: laneConfig.laneProfile, documentationAgentId: laneConfig.documentationAgentId,
     componentMatrixPayload: laneConfig.componentMatrixPayload,
     componentMatrixJsonPath: laneConfig.componentMatrixJsonPath });
+  const documentationGate = readWaveDocumentationGatePure(wave, agentResults, {
+    documentationAgentId: laneConfig.documentationAgentId,
+    derivedState,
+    laneProfile: laneConfig.laneProfile,
+    autoClosure: laneConfig.autoClosure,
+    componentMatrixGate,
+  });
   const contEvalGate = readWaveContEvalGatePure(wave, agentResults, {
     contEvalAgentId: laneConfig.contEvalAgentId, mode: validationMode,
     evalTargets: wave.evalTargets, benchmarkCatalogPath: laneConfig.benchmarkCatalogPath });

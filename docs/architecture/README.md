@@ -521,7 +521,15 @@ This is enforced by the `closure-engine.mjs` module. The launcher cannot bypass 
 
 ### How the Closure Sweep Executes
 
-The sweep is sequential and staged. Each stage launches a closure agent, waits for it to complete, evaluates the gate, and only proceeds to the next stage if the gate passes. This is implemented in `runClosureSweepPhase()`.
+The sweep is sequential and staged for semantic closure work. Each required closure stage launches its steward, waits for it to complete, evaluates the gate, and only proceeds to the next stage if the gate passes. This is implemented in `runClosureSweepPhase()`.
+
+Low-entropy waves now use a closure fast-path before any steward is launched:
+
+- `closure-policy.mjs` can auto-satisfy integration from derived state when no contradictions, helper assignments, dependency barriers, security blockers, interface drift, or deploy risks remain.
+- Documentation closure can auto-satisfy as `no-change` when no shared-plan or component-matrix delta remains, and can auto-close mechanical component-matrix reconciliation when the canonical matrix is already current.
+- cont-QA can be skipped only in bootstrap closure mode, and only when no semantic closure steward had to run.
+
+If the fast-path does not prove closure, the runtime falls back to the normal staged steward sequence below.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐

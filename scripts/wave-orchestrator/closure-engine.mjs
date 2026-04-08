@@ -24,6 +24,10 @@ import {
   resolveWaveRoleBindings,
 } from "./role-helpers.mjs";
 import { summarizeResolvedSkills } from "./skills.mjs";
+import {
+  resolveClosureMode as resolveClosurePolicyMode,
+  resolveClosurePolicyConfig,
+} from "./closure-policy.mjs";
 
 function failureResultFromGate(gate, fallbackLogPath) {
   return {
@@ -134,6 +138,30 @@ function missingClosureRunGate(stage) {
   };
 }
 
+function shouldEvaluateStageBeforeLaunch(stage) {
+  return stage.key === "integration" || stage.key === "documentation";
+}
+
+function shouldSkipContQaStage({
+  stage,
+  wave,
+  lanePaths,
+  semanticClosureStagesRan,
+}) {
+  if (stage.key !== "cont-qa" || semanticClosureStagesRan) {
+    return false;
+  }
+  const closurePolicy = resolveClosurePolicyConfig(lanePaths);
+  if (!closurePolicy.autoClosure.allowSkipContQaInBootstrap) {
+    return false;
+  }
+  const closureMode = resolveClosurePolicyMode(
+    wave.wave,
+    closurePolicy.closureModeThresholds,
+  );
+  return closureMode === "bootstrap";
+}
+
 export async function runClosureSweepPhase({
   lanePaths,
   wave,
@@ -195,9 +223,58 @@ export async function runClosureSweepPhase({
     resolveWaveRoleBindings(wave, lanePaths);
   const _gateThresholds = lanePaths?.gateModeThresholds || lanePaths?.validation?.gateModeThresholds || options?.gateModeThresholds || null;
   const _resolvedGateMode = resolveGateMode(wave.wave, _gateThresholds);
+  let semanticClosureStagesRan = false;
   for (const [stageIndex, stage] of stagedRuns.entries()) {
+    const currentDerivedState = refreshDerivedState?.(dashboardState?.attempt || 0) || null;
+    if (shouldEvaluateStageBeforeLaunch(stage)) {
+      const preLaunchGate = evaluateClosureStage({
+        stage,
+        wave,
+        closureRuns,
+        lanePaths,
+        dashboardState,
+        derivedState: currentDerivedState,
+        refreshDerivedState,
+        readWaveContEvalGateFn: readContEvalGate,
+        readWaveSecurityGateFn: readSecurityGate,
+        readWaveIntegrationBarrierFn: readIntegrationBarrier,
+        readWaveDocumentationGateFn: readDocumentationGate,
+        readWaveComponentMatrixGateFn: readComponentMatrixGate,
+        readWaveContQaGateFn: readContQaGate,
+        contEvalAgentId,
+        integrationAgentId,
+        documentationAgentId,
+        contQaAgentId,
+      });
+      const autoSatisfiedStage =
+        preLaunchGate.ok &&
+        !preLaunchGate.agentId &&
+        (preLaunchGate.integrationState || preLaunchGate.docClosureState);
+      if (autoSatisfiedStage) {
+        recordCombinedEvent({
+          agentId: stage.agentId || null,
+          message: `${stage.label} already satisfied before launch: ${preLaunchGate.detail}`,
+        });
+        continue;
+      }
+    }
+    if (
+      shouldSkipContQaStage({
+        stage,
+        wave,
+        lanePaths,
+        semanticClosureStagesRan,
+      })
+    ) {
+      recordCombinedEvent({
+        agentId: stage.agentId || null,
+        message:
+          "cont-QA gate skipped in bootstrap because closure remained on the low-entropy fast path.",
+      });
+      continue;
+    }
     if (stage.runs.length === 0) {
-      if (_resolvedGateMode === "bootstrap") {
+      if (_resolvedGateMode === "bootstrap" && stage.key !== "cont-qa") {
         continue;
       }
       if (stageRequiresRun(stage, wave, lanePaths)) {
@@ -214,6 +291,9 @@ export async function runClosureSweepPhase({
         return failureResultFromGate(gate, null);
       }
       continue;
+    }
+    if (stage.key !== "cont-qa") {
+      semanticClosureStagesRan = true;
     }
     for (const runInfo of stage.runs) {
       const existing = dashboardState.agents.find((entry) => entry.agentId === runInfo.agent.agentId);
@@ -311,6 +391,7 @@ export async function runClosureSweepPhase({
       closureRuns,
       lanePaths,
       dashboardState,
+      derivedState: refreshDerivedState?.(dashboardState?.attempt || 0) || currentDerivedState,
       refreshDerivedState,
       readWaveContEvalGateFn: readContEvalGate,
       readWaveSecurityGateFn: readSecurityGate,
@@ -435,6 +516,7 @@ function evaluateClosureStage({
   closureRuns,
   lanePaths,
   dashboardState,
+  derivedState,
   refreshDerivedState,
   readWaveContEvalGateFn,
   readWaveSecurityGateFn,
@@ -464,24 +546,39 @@ function evaluateClosureStage({
       return readWaveIntegrationBarrierFn(
         wave,
         closureRuns,
-        refreshDerivedState?.(dashboardState?.attempt || 0),
+        derivedState || refreshDerivedState?.(dashboardState?.attempt || 0),
         {
           integrationAgentId,
           mode: "live",
           requireIntegrationStewardFromWave: lanePaths.requireIntegrationStewardFromWave,
+          laneProfile: lanePaths.laneProfile,
+          autoClosure: lanePaths.autoClosure,
         },
       );
     case "documentation": {
+      const componentMatrixGate = readWaveComponentMatrixGateFn(wave, closureRuns, {
+        laneProfile: lanePaths.laneProfile,
+        documentationAgentId,
+      });
       const documentationGate = readWaveDocumentationGateFn(wave, closureRuns, {
         mode: "live",
+        derivedState: derivedState || refreshDerivedState?.(dashboardState?.attempt || 0),
+        documentationAgentId,
+        laneProfile: lanePaths.laneProfile,
+        autoClosure: lanePaths.autoClosure,
+        componentMatrixGate,
       });
       if (!documentationGate.ok) {
         return documentationGate;
       }
-      return readWaveComponentMatrixGateFn(wave, closureRuns, {
-        laneProfile: lanePaths.laneProfile,
-        documentationAgentId,
-      });
+      return {
+        ...componentMatrixGate,
+        docClosureState: documentationGate.docClosureState || null,
+        detail:
+          documentationGate.docClosureState && componentMatrixGate.ok
+            ? documentationGate.detail
+            : componentMatrixGate.detail,
+      };
     }
     case "cont-qa":
       return readWaveContQaGateFn(wave, closureRuns, {

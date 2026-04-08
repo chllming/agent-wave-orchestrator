@@ -276,7 +276,18 @@
     "requireExitContractsFromWave": 6,
     "requireIntegrationStewardFromWave": 0,
     "requireComponentPromotionsFromWave": 0,
-    "requireAgentComponentsFromWave": 0
+    "requireAgentComponentsFromWave": 0,
+    "closureModeThresholds": {
+      "bootstrap": 0,
+      "standard": 4,
+      "strict": 10
+    },
+    "autoClosure": {
+      "allowInferredIntegration": true,
+      "allowAutoDocNoChange": true,
+      "allowAutoDocProjection": false,
+      "allowSkipContQaInBootstrap": true
+    }
   },
   "capabilityRouting": {
     "preferredAgents": {}

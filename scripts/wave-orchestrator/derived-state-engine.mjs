@@ -3,7 +3,10 @@ import path from "node:path";
 import {
   materializeAgentExecutionSummaryForRun,
   materializeAgentExecutionSummaries,
+  readClarificationBarrier,
   readRunExecutionSummary,
+  readWaveAssignmentBarrier,
+  readWaveDependencyBarrier,
 } from "./gate-engine.mjs";
 import {
   isOpenCoordinationStatus,
@@ -745,7 +748,22 @@ export function buildWaveDerivedState({
   });
   const closurePolicy = resolveClosurePolicyConfig(lanePaths);
   const closureMode = resolveClosureMode(wave.wave, closurePolicy.closureModeThresholds);
+  const clarificationBarrier = readClarificationBarrier({
+    coordinationState,
+  });
+  const helperAssignmentBarrier = readWaveAssignmentBarrier(
+    {
+      capabilityAssignments,
+    },
+    {
+      gateMode: closureMode,
+    },
+  );
+  const dependencyBarrier = readWaveDependencyBarrier({
+    dependencySnapshot,
+  });
   const closureComplexity = classifyClosureComplexity({
+    contradictions: coordinationState?.contradictions || [],
     coordinationState,
     docsQueue,
     capabilityAssignments,
@@ -753,6 +771,9 @@ export function buildWaveDerivedState({
     securitySummary,
     corridorSummary,
     integrationSummary,
+    clarificationBarrier,
+    helperAssignmentBarrier,
+    dependencyBarrier,
   });
   const ledger = deriveWaveLedger({
     lane: lanePaths.lane,
@@ -825,6 +846,9 @@ export function buildWaveDerivedState({
     integrationSummaryPath: waveIntegrationPath(lanePaths, wave.wave),
     integrationMarkdownPath: waveIntegrationMarkdownPath(lanePaths, wave.wave),
     securityMarkdownPath: waveSecurityMarkdownPath(lanePaths, wave.wave),
+    clarificationBarrier,
+    helperAssignmentBarrier,
+    dependencyBarrier,
     closureMode,
     closureComplexity,
     ledger,

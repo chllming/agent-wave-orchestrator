@@ -2350,6 +2350,143 @@ describe("runClosureSweepPhase", () => {
     expect(result.failures).toEqual([]);
   });
 
+  it("fails bootstrap closure when cont-QA is missing after semantic closure stages run", async () => {
+    const dir = makeTempDir();
+    const lanePaths = makeLanePaths(dir);
+    lanePaths.gateModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.closureModeThresholds = { bootstrap: 0, standard: 4, strict: 10 };
+    lanePaths.autoClosure = {
+      allowInferredIntegration: false,
+      allowAutoDocNoChange: false,
+      allowAutoDocProjection: false,
+      allowSkipContQaInBootstrap: true,
+    };
+    lanePaths.laneProfile.validation.autoClosure = lanePaths.autoClosure;
+    lanePaths.laneProfile.validation.closureModeThresholds = lanePaths.closureModeThresholds;
+    const closureRuns = ["A8", "A9"].map((agentId) => ({
+      agent: { agentId, title: agentId },
+      sessionName: `wave-${agentId.toLowerCase()}`,
+      promptPath: path.join(dir, `${agentId}.prompt.md`),
+      logPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.log`),
+      statusPath: path.join(dir, `wave-0-${agentId.toLowerCase()}.status`),
+      messageBoardPath: path.join(dir, "board.md"),
+      messageBoardSnapshot: "",
+      sharedSummaryPath: path.join(dir, "shared.md"),
+      sharedSummaryText: "",
+      inboxPath: path.join(dir, `${agentId}.inbox.md`),
+      inboxText: "",
+    }));
+
+    const result = await runClosureSweepPhase({
+      lanePaths,
+      wave: {
+        wave: 0,
+        agents: [{ agentId: "A8" }, { agentId: "A9" }, { agentId: "A0" }],
+        integrationAgentId: "A8",
+        documentationAgentId: "A9",
+        contQaAgentId: "A0",
+      },
+      closureRuns,
+      coordinationLogPath: path.join(dir, "coordination", "wave-0.jsonl"),
+      refreshDerivedState: () => ({
+        integrationSummary: {
+          recommendation: "needs-more-work",
+          detail: "semantic review required",
+          openClaims: [],
+          conflictingClaims: [],
+          unresolvedBlockers: [],
+          changedInterfaces: [],
+          crossComponentImpacts: [],
+          proofGaps: [],
+          docGaps: [],
+          deployRisks: [],
+          inboundDependencies: [],
+          outboundDependencies: [],
+          helperAssignments: [],
+        },
+        docsQueue: { items: [{ id: "doc-1", kind: "shared-plan" }] },
+      }),
+      dashboardState: {
+        attempt: 1,
+        agents: [{ agentId: "A8", attempts: 0 }, { agentId: "A9", attempts: 0 }],
+      },
+      recordCombinedEvent: () => {},
+      flushDashboards: () => {},
+      options: {
+        orchestratorId: "orch",
+        executorMode: "codex",
+        codexSandboxMode: "danger-full-access",
+        agentRateLimitRetries: 0,
+        agentRateLimitBaseDelaySeconds: 1,
+        agentRateLimitMaxDelaySeconds: 1,
+        context7Enabled: false,
+        timeoutMinutes: 5,
+      },
+      feedbackStateByRequestId: new Map(),
+      appendCoordination: () => {},
+      launchAgentSessionFn: async () => ({ executorId: "codex" }),
+      waitForWaveCompletionFn: async () => ({ failures: [], timedOut: false }),
+      readWaveIntegrationBarrierFn: (() => {
+        let count = 0;
+        return () => {
+          count += 1;
+          return count === 1
+            ? {
+                ok: false,
+                agentId: "A8",
+                statusCode: "integration-needs-more-work",
+                detail: "semantic integration stage required",
+                logPath: "logs/a8.log",
+              }
+            : {
+                ok: true,
+                agentId: "A8",
+                statusCode: "pass",
+                detail: "ready",
+                logPath: "logs/a8.log",
+              };
+        };
+      })(),
+      readWaveDocumentationGateFn: (() => {
+        let count = 0;
+        return () => {
+          count += 1;
+          return count === 1
+            ? {
+                ok: false,
+                agentId: "A9",
+                statusCode: "doc-closure-open",
+                detail: "doc stage required",
+                logPath: "logs/a9.log",
+              }
+            : {
+                ok: true,
+                agentId: "A9",
+                statusCode: "pass",
+                detail: "ready",
+                logPath: "logs/a9.log",
+              };
+        };
+      })(),
+      readWaveComponentMatrixGateFn: () => ({
+        ok: true,
+        agentId: "A9",
+        statusCode: "pass",
+        detail: "ready",
+        logPath: "logs/a9.log",
+      }),
+      materializeAgentExecutionSummaryForRunFn: () => null,
+      monitorWaveHumanFeedbackFn: () => false,
+    });
+
+    expect(result.failures).toEqual([
+      expect.objectContaining({
+        agentId: "A0",
+        statusCode: "missing-closure-run",
+      }),
+    ]);
+  });
+
   it("runs cont-EVAL before integration, documentation, and cont-QA when present", async () => {
     const dir = makeTempDir();
     const lanePaths = makeLanePaths(dir);

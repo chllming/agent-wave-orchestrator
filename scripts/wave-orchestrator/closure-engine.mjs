@@ -274,7 +274,7 @@ export async function runClosureSweepPhase({
       continue;
     }
     if (stage.runs.length === 0) {
-      if (_resolvedGateMode === "bootstrap") {
+      if (_resolvedGateMode === "bootstrap" && stage.key !== "cont-qa") {
         continue;
       }
       if (stageRequiresRun(stage, wave, lanePaths)) {

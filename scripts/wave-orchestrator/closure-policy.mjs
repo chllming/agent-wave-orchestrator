@@ -148,13 +148,22 @@ export function resolveClosureMode(waveNumber, thresholds) {
   if (!thresholds) {
     return "strict";
   }
-  if (waveNumber < (thresholds.standard ?? 4)) {
-    return "bootstrap";
+  const bootstrapStart = normalizeThreshold(thresholds.bootstrap, 0);
+  const standardStart = Math.max(
+    bootstrapStart,
+    normalizeThreshold(thresholds.standard, 4),
+  );
+  const strictStart = Math.max(
+    standardStart,
+    normalizeThreshold(thresholds.strict, 10),
+  );
+  if (waveNumber >= strictStart) {
+    return "strict";
   }
-  if (waveNumber < (thresholds.strict ?? 10)) {
+  if (waveNumber >= standardStart) {
     return "standard";
   }
-  return "strict";
+  return "bootstrap";
 }
 
 export function resolveClosurePolicyConfig(source = {}) {

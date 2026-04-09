@@ -36,7 +36,7 @@ const COMPONENT_MATURITY_ORDER = ORDER(COMPONENT_MATURITY_LEVELS);
 const PROOF_CENTRIC_COMPONENT_LEVEL = "pilot-live";
 
 const WAVE_PROOF_REGEX =
-  /^\[wave-proof\]\s*completion=(contract|integrated|authoritative|live)\s+durability=(none|ephemeral|durable)\s+proof=(unit|integration|live)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
+  /^\[wave-proof\]\s*completion=(contract|integrated|authoritative|live)\s+durability=(none|ephemeral|durable)\s+proof=(unit|integration|live)\s+state=(met|complete|gap)\s*(?:detail=(.*))?$/gim;
 const WAVE_DOC_DELTA_REGEX =
   /^\[wave-doc-delta\]\s*state=(none|owned|shared-plan)(?:\s+paths=([^\n]*?))?(?:\s+detail=(.*))?$/gim;
 const WAVE_DOC_CLOSURE_REGEX =
@@ -54,7 +54,7 @@ const WAVE_GATE_REGEX =
 const WAVE_GAP_REGEX =
   /^\[wave-gap\]\s*kind=(architecture|integration|durability|ops|docs)\s*(?:detail=(.*))?$/gim;
 const WAVE_COMPONENT_REGEX =
-  /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|gap)\s*(?:detail=(.*))?$/gim;
+  /^\[wave-component\]\s*component=([a-z0-9._-]+)\s+level=([a-z0-9._-]+)\s+state=(met|complete|gap)\s*(?:detail=(.*))?$/gim;
 const STRUCTURED_SIGNAL_LINE_REGEX = /^\[wave-[a-z0-9-]+(?:\]|\s|=|$).*$/i;
 const WRAPPED_STRUCTURED_SIGNAL_LINE_REGEX = /^`\[wave-[^`]+`$/;
 const STRUCTURED_SIGNAL_LIST_PREFIX_REGEX = /^(?:[-*+]|\d+\.)\s+/;
@@ -336,7 +336,7 @@ function findLatestComponentMatches(text) {
   const matches = findAllMatches(text, WAVE_COMPONENT_REGEX, (match) => ({
     componentId: match[1],
     level: match[2],
-    state: match[3],
+    state: match[3] === "complete" ? "met" : match[3],
     detail: cleanText(match[4]),
   }));
   const byComponent = new Map();
@@ -522,7 +522,7 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       completion: match[1],
       durability: match[2],
       proof: match[3],
-      state: match[4],
+      state: match[4] === "complete" ? "met" : match[4],
       detail: cleanText(match[5]),
     })),
     docDelta: findLastMatch(signalText, WAVE_DOC_DELTA_REGEX, (match) => ({

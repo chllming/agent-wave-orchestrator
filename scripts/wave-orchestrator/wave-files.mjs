@@ -1534,9 +1534,13 @@ export function validateWaveDefinition(wave, options = {}) {
           `Wave ${wave.wave} promotes ${componentId} to ${targetLevel}, but ${componentMatrix.jsonPath} declares ${matrixPromotion.target}`,
         );
       } else if (componentMatrix.levelOrder[targetLevel] < componentMatrix.levelOrder[component.currentLevel]) {
-        errors.push(
-          `Wave ${wave.wave} promotes ${componentId} to ${targetLevel}, but ${componentMatrix.jsonPath} already records currentLevel ${component.currentLevel}`,
-        );
+        // Skip this error for already-completed waves — their promotions may have
+        // been superseded by later waves that advanced the component further.
+        if (!options?.completedWaves?.has(wave.wave)) {
+          errors.push(
+            `Wave ${wave.wave} promotes ${componentId} to ${targetLevel}, but ${componentMatrix.jsonPath} already records currentLevel ${component.currentLevel}`,
+          );
+        }
       }
     }
     const matrixWavePromotions = Object.entries(componentMatrix.components)

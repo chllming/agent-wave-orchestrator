@@ -101,6 +101,7 @@ import {
   validateWaveRuntimeMixAssignments,
   validateWaveComponentMatrixCurrentLevels,
   validateWaveComponentPromotions,
+  normalizeCompletedWaves,
   validateWaveDefinition,
   waveRequiresProofCentricValidation,
   writeManifest,
@@ -881,6 +882,16 @@ export async function runLauncherCli(argv) {
       terminalSurface: options.terminalSurface,
     });
     const context7BundleIndex = loadContext7BundleIndex(lanePaths.context7BundleIndexPath);
+    // Read completed waves before validation so we can skip stale-promotion
+    // checks for waves that already ran (their promotions may be superseded).
+    const preValidationCompletedWaves = new Set(
+      normalizeCompletedWaves(
+        (() => {
+          try { return JSON.parse(fs.readFileSync(options.runStatePath, "utf8")).completedWaves; }
+          catch { return []; }
+        })()
+      )
+    );
     const allWaves = parseWaveFiles(lanePaths.wavesDir, { laneProfile: lanePaths.laneProfile })
       .map((wave) =>
         applyExecutorSelectionsToWave(wave, {
@@ -902,7 +913,10 @@ export async function runLauncherCli(argv) {
           };
         },
       )
-      .map((wave) => validateWaveDefinition(wave, { laneProfile: lanePaths.laneProfile }));
+      .map((wave) => validateWaveDefinition(wave, {
+        laneProfile: lanePaths.laneProfile,
+        completedWaves: preValidationCompletedWaves,
+      }));
     const reconciliation = reconcileRunStateFromStatusFiles(
       allWaves,
       options.runStatePath,

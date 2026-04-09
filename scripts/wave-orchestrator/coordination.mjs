@@ -319,11 +319,11 @@ export function buildExecutionPrompt({
     !isSecurityReviewAgent(agent) &&
     (agent.agentId !== contEvalAgentId || contEvalImplementationOwning)
       ? [
-          "- Emit one final structured proof marker: `[wave-proof] completion=<contract|integrated|authoritative|live> durability=<none|ephemeral|durable> proof=<unit|integration|live> state=<met|gap> detail=<short-note>`.",
+          "- Emit one final structured proof marker: `[wave-proof] completion=<contract|integrated|authoritative|live> durability=<none|ephemeral|durable> proof=<unit|integration|live> state=<met|complete|gap> detail=<short-note>`. Use `met` or `complete` when proof is satisfied; use `gap` only when proof cannot be produced.",
           "- Emit one final structured documentation marker: `[wave-doc-delta] state=<none|owned|shared-plan> paths=<comma-separated-paths> detail=<short-note>`.",
           ...(Array.isArray(agent.components) && agent.components.length > 0
             ? [
-                "- Emit one final structured component marker per owned component: `[wave-component] component=<id> level=<level> state=<met|gap> detail=<short-note>`.",
+                "- Emit one final structured component marker per owned component: `[wave-component] component=<id> level=<level> state=<met|complete|gap> detail=<short-note>`. Use `met` or `complete` when proof is satisfied; use `gap` only when proof cannot be produced.",
               ]
             : []),
           "- If the work is incomplete, keep the required proof/doc/component markers and set `state=gap` on the relevant final marker instead of narrating completion.",

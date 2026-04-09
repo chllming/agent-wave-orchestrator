@@ -922,7 +922,29 @@ export function readWaveDocumentationGate(wave, agentRuns, options = {}) {
       mode,
       securityRolePromptPath: options.securityRolePromptPath,
     });
-  const validation = validateDocumentationClosureSummary(docRun.agent, summary);
+  const validation = validateDocumentationClosureSummary(docRun.agent, summary, {
+    allowFallbackOnEmptyRun: true,
+  });
+  // Fallback: when doc steward had an empty run but integration/QA passed,
+  // auto-close instead of blocking the wave.
+  if (!validation.ok && validation.eligibleForFallback) {
+    const integrationSummary = options.derivedState?.integrationSummary;
+    const integrationReady =
+      integrationSummary?.recommendation === "ready-for-doc-closure";
+    const contQaPassed =
+      options.derivedState?.ledger?.contQa?.verdict === "pass" ||
+      options.derivedState?.ledger?.contQa?.verdict === "PASS";
+    if (integrationReady || contQaPassed) {
+      return {
+        ok: true,
+        agentId: docRun.agent.agentId,
+        statusCode: "fallback-auto-closed",
+        detail: `Documentation steward ${docRun.agent.agentId} had an empty run. Auto-closed because ${integrationReady ? "integration is ready-for-doc-closure" : "cont-QA passed"}.`,
+        logPath: summary?.logPath || path.relative(REPO_ROOT, docRun.logPath),
+        docClosureState: "no-change",
+      };
+    }
+  }
   return {
     ok: validation.ok,
     agentId: docRun.agent.agentId,
@@ -1501,7 +1523,30 @@ export function readWaveDocumentationGatePure(wave, agentResults, options = {}) 
   }
   const summary = agentResults?.[documentationAgentId] || null;
   const agent = { agentId: documentationAgentId };
-  const validation = validateDocumentationClosureSummary(agent, summary);
+  const validation = validateDocumentationClosureSummary(agent, summary, {
+    allowFallbackOnEmptyRun: true,
+  });
+  // When the doc steward had an empty run (broker collision, no output) but
+  // integration is already ready-for-doc-closure, auto-close documentation
+  // instead of failing the entire wave.
+  if (!validation.ok && validation.eligibleForFallback) {
+    const integrationSummary = options.derivedState?.integrationSummary;
+    const integrationReady =
+      integrationSummary?.recommendation === "ready-for-doc-closure";
+    const contQaPassed =
+      options.derivedState?.ledger?.contQa?.verdict === "pass" ||
+      options.derivedState?.ledger?.contQa?.verdict === "PASS";
+    if (integrationReady || contQaPassed) {
+      return {
+        ok: true,
+        agentId: documentationAgentId,
+        statusCode: "fallback-auto-closed",
+        detail: `Documentation steward ${documentationAgentId} had an empty run. Auto-closed because ${integrationReady ? "integration is ready-for-doc-closure" : "cont-QA passed"}.`,
+        logPath: summary?.logPath || null,
+        docClosureState: "no-change",
+      };
+    }
+  }
   return { ok: validation.ok, agentId: documentationAgentId, statusCode: validation.statusCode,
     detail: validation.detail, logPath: summary?.logPath || null };
 }

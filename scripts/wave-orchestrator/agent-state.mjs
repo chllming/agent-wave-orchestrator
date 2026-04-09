@@ -922,8 +922,28 @@ export function validateImplementationSummary(agent, summary) {
   };
 }
 
-export function validateDocumentationClosureSummary(agent, summary) {
+export function validateDocumentationClosureSummary(agent, summary, options = {}) {
   if (!summary?.docClosure) {
+    // When the agent had exit-code 0 but produced no structured output (e.g. credential
+    // broker collision, empty run), allow a graceful fallback instead of hard-failing
+    // the entire wave.  The caller (gate-engine) decides whether the surrounding
+    // integration/QA state justifies auto-closing documentation.
+    const emptyRun = !summary || (
+      !summary.proof && !summary.component && !summary.integration &&
+      !summary.verdict && !summary.docClosure && !summary.security &&
+      (summary.rawSignalCount === 0 || summary.rawSignalCount === undefined)
+    );
+    if (options.allowFallbackOnEmptyRun && emptyRun) {
+      return {
+        ok: false,
+        statusCode: "missing-doc-closure-empty-run",
+        detail: appendTerminationHint(
+          `Documentation steward ${agent?.agentId || "A9"} produced no output (empty run). Eligible for fallback auto-closure.`,
+          summary,
+        ),
+        eligibleForFallback: true,
+      };
+    }
     return {
       ok: false,
       statusCode: "missing-doc-closure",

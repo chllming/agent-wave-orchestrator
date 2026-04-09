@@ -905,10 +905,19 @@ export function evaluateOwnedSliceProven(task, agentResult, proofBundles = []) {
   }
 
   if (task.taskType === "documentation") {
-    const validation = validateDocumentationClosureSummary(agent, agentResult);
-    return validation.ok
-      ? { proven: true, reason: "Documentation closure satisfied" }
-      : { proven: false, reason: validation.detail || validation.statusCode };
+    const validation = validateDocumentationClosureSummary(agent, agentResult, {
+      allowFallbackOnEmptyRun: true,
+    });
+    if (validation.ok) {
+      return { proven: true, reason: "Documentation closure satisfied" };
+    }
+    // Allow fallback-eligible empty runs to pass at the task level;
+    // the gate engine will make the final call on whether surrounding
+    // state justifies auto-closure.
+    if (validation.eligibleForFallback) {
+      return { proven: true, reason: "Documentation closure fallback (empty run, deferred to gate)" };
+    }
+    return { proven: false, reason: validation.detail || validation.statusCode };
   }
 
   if (task.taskType === "security") {

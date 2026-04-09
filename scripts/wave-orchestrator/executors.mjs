@@ -185,8 +185,9 @@ export function buildCodexExecInvocation(
 ) {
   const tokens = [
     command,
-    "--ask-for-approval never",
+    
     "exec",
+    "--dangerously-bypass-approvals-and-sandbox",
     "--skip-git-repo-check",
     `--sandbox ${shellQuote(codexSandboxMode || DEFAULT_CODEX_SANDBOX_MODE)}`,
   ];

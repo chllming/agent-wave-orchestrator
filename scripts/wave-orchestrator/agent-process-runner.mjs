@@ -235,6 +235,11 @@ async function runAgentProcessRunner(payloadFile) {
       ...(payload.env && typeof payload.env === "object" ? payload.env : {}),
       WAVE_ORCHESTRATOR_ID: String(payload.orchestratorId || ""),
       WAVE_EXECUTOR_MODE: String(payload.executorId || ""),
+      // Unique broker sticky key per agent so multiple agents on the same node
+      // can acquire separate credentials concurrently.
+      LPM_AUTH_STICKY_KEY: payload.executorId
+        ? `wave:${payload.executorId}`
+        : undefined,
     },
   });
   const executorPid = parsePositiveInt(child.pid, null);

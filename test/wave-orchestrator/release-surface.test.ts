@@ -18,12 +18,12 @@ describe("release surface alignment", () => {
     );
 
     const version = packageJson.version;
-    // Relaxed for dev: expect(installState.installedVersion).toBe(version);
-    // Relaxed for dev: expect(manifest.releases[0]?.version).toBe(version);
-    // Relaxed: expect(readme).toContain(`@chllming/wave-orchestration@${version}`);
-    // Relaxed: expect(readme).toContain(
-    // Relaxed: `https://github.com/chllming/agent-wave-orchestrator/releases/tag/v${version}`,
-    // Relaxed: );
+    expect(installState.installedVersion).toBe(version);
+    expect(manifest.releases[0]?.version).toBe(version);
+    expect(readme).toContain(`@chllming/wave-orchestration@${version}`);
+    expect(readme).toContain(
+      `https://github.com/chllming/agent-wave-orchestrator/releases/tag/v${version}`,
+    );
     expect(changelog).toContain(`## ${version}`);
     expect(packageJson.repository.url).toBe(
       "git+https://github.com/chllming/agent-wave-orchestrator.git",
@@ -179,6 +179,10 @@ describe("release surface alignment", () => {
       path.join(repoRoot, "docs", "guides", `recommendations-${packageJson.version}.md`),
       "utf8",
     );
+    const historicalGuide = fs.readFileSync(
+      path.join(repoRoot, "docs", "guides", "recommendations-0.9.13.md"),
+      "utf8",
+    );
     const docsReadme = fs.readFileSync(path.join(repoRoot, "docs", "README.md"), "utf8");
 
     expect(guide).toContain("budget.minutes");
@@ -188,6 +192,8 @@ describe("release surface alignment", () => {
     expect(guide).toContain("resolve-policy");
     expect(guide).toContain("targeted recovery");
     expect(docsReadme).toContain(`guides/recommendations-${packageJson.version}.md`);
+    expect(historicalGuide).not.toContain("awaiting-adjudication");
+    expect(historicalGuide).not.toContain("wave signal");
   });
 
   it("links the monorepo projects guide from the main doc surfaces", () => {

@@ -45,6 +45,24 @@ describe("runtime dry-run harness", () => {
     expect(helpResult.stdout).toContain("--no-telemetry");
   });
 
+  it("runs launch dry-run without interactive project setup when no project profile exists", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+    fs.rmSync(path.join(repoDir, ".wave", "project-profile.json"), { force: true });
+
+    const dryRunResult = runWaveCli(
+      ["launch", "--lane", "main", "--dry-run", "--no-dashboard"],
+      repoDir,
+    );
+
+    expect(dryRunResult.status).toBe(0);
+    expect(dryRunResult.stderr).toContain("continuing dry-run with config defaults");
+    expect(dryRunResult.stderr).not.toContain("Wave project setup");
+    expect(fs.existsSync(path.join(repoDir, ".wave", "project-profile.json"))).toBe(false);
+  });
+
   it("materializes prompts and executor overlays for codex, claude, and opencode", () => {
     const repoDir = makeTempDir();
     writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });

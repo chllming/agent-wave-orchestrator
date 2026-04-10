@@ -977,7 +977,57 @@ describe("validateImplementationSummary", () => {
     ).toMatchObject({
       ok: false,
       statusCode: "invalid-wave-proof-format",
+      eligibleForAdjudication: false,
       detail: expect.stringContaining("Rejected sample: - [wave-proof] completion=contract detail=missing-required-fields"),
+    });
+  });
+
+  it("marks invalid proof markers as adjudication-eligible only when exit 0 and required artifacts landed", () => {
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+          deliverables: ["docs/example.md"],
+          proofArtifacts: [{ path: ".tmp/proof.json", kind: "check" }],
+        },
+        {
+          exitCode: 0,
+          docDelta: {
+            state: "owned",
+            paths: ["docs/example.md"],
+          },
+          deliverables: [{ path: "docs/example.md", exists: true }],
+          proofArtifacts: [{ path: ".tmp/proof.json", kind: "check", exists: true }],
+          structuredSignalDiagnostics: {
+            proof: {
+              rawCount: 1,
+              acceptedCount: 0,
+              rejectedCount: 1,
+              rejectedSamples: [
+                {
+                  line: "[wave-proof] completion=contract detail=missing-required-fields",
+                  rawValues: {
+                    completion: "contract",
+                    detail: "missing-required-fields",
+                  },
+                  unknownKeys: [],
+                },
+              ],
+            },
+          },
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "invalid-wave-proof-format",
+      eligibleForAdjudication: true,
+      failureClass: "transport-failure",
     });
   });
 
@@ -1059,6 +1109,38 @@ describe("validateImplementationSummary", () => {
       ok: false,
       statusCode: "invalid-wave-component-format",
       detail: expect.stringContaining("Expected a valid component marker for wave-parser-and-launcher."),
+    });
+  });
+
+  it("keeps missing proof markers out of adjudication even when exit 0 and artifacts landed", () => {
+    expect(
+      validateImplementationSummary(
+        {
+          agentId: "A1",
+          exitContract: {
+            completion: "contract",
+            durability: "none",
+            proof: "unit",
+            docImpact: "owned",
+          },
+          deliverables: ["docs/example.md"],
+          proofArtifacts: [{ path: ".tmp/proof.json", kind: "check" }],
+        },
+        {
+          exitCode: 0,
+          docDelta: {
+            state: "owned",
+            paths: ["docs/example.md"],
+          },
+          deliverables: [{ path: "docs/example.md", exists: true }],
+          proofArtifacts: [{ path: ".tmp/proof.json", kind: "check", exists: true }],
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      statusCode: "missing-wave-proof",
+      eligibleForAdjudication: false,
+      failureClass: "transport-failure",
     });
   });
 });

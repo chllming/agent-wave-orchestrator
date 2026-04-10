@@ -374,6 +374,117 @@ describe("wave control CLI", () => {
     });
   });
 
+  it("prefers adjudication outcomes over raw eligibility when projecting control status", () => {
+    const repoDir = makeTempDir();
+    writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });
+
+    expect(runWaveCli(["init"], repoDir).status).toBe(0);
+    fs.writeFileSync(
+      path.join(repoDir, "docs", "plans", "waves", "wave-0.md"),
+      `# Wave 0 - Control Status Fixture
+
+**Commit message**: \`Test: control status adjudication projection\`
+
+## Agent A1: Fixture implementation slice
+
+### Components
+
+- starter-docs-and-adoption-guidance
+
+### Exit contract
+
+- completion: contract
+- durability: none
+- proof: unit
+- doc-impact: owned
+
+### Prompt
+
+\`\`\`text
+Emit fixture closure markers.
+\`\`\`
+`,
+      "utf8",
+    );
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "status", "wave-0-0-a1.status"), {
+      code: 0,
+      attempt: 1,
+    });
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "status", "wave-0-0-a1.summary.json"), {
+      agentId: "A1",
+      exitCode: 0,
+      proof: {
+        completion: "contract",
+        durability: "none",
+        proof: "unit",
+        state: "met",
+      },
+      docDelta: {
+        state: "owned",
+        paths: ["docs/example.md"],
+      },
+      deliverables: [],
+      proofArtifacts: [],
+      components: [],
+      gaps: [
+        {
+          kind: "integration",
+          detail: "component marker still missing",
+        },
+      ],
+      structuredSignalDiagnostics: {
+        component: {
+          rawCount: 1,
+          acceptedCount: 0,
+          rejectedCount: 1,
+          rejectedSamples: [
+            {
+              line: "[wave-component] component=starter-docs-and-adoption-guidance level=repo-landed detail=missing-state",
+              componentId: "starter-docs-and-adoption-guidance",
+              rawValues: {
+                component: "starter-docs-and-adoption-guidance",
+                level: "repo-landed",
+                detail: "missing-state",
+              },
+              unknownKeys: [],
+            },
+          ],
+        },
+      },
+    });
+    writeJson(path.join(repoDir, ".tmp", "main-wave-launcher", "closure", "wave-0", "attempt-1", "A1.json"), {
+      schemaVersion: 1,
+      kind: "wave-closure-adjudication",
+      lane: "main",
+      wave: 0,
+      attempt: 1,
+      agentId: "A1",
+      status: "rework-required",
+      failureClass: "transport-failure",
+      reason: "semantic-negative-signal",
+      detail: "Explicit negative semantic proof signals remain.",
+      evidence: [],
+      synthesizedSignals: [],
+      createdAt: "2026-04-10T00:00:00.000Z",
+    });
+
+    const statusResult = runWaveCli(
+      ["control", "status", "--lane", "main", "--wave", "0", "--agent", "A1", "--json"],
+      repoDir,
+    );
+    expect(statusResult.status).toBe(0);
+    expect(JSON.parse(statusResult.stdout)).toMatchObject({
+      logicalAgents: [
+        expect.objectContaining({
+          agentId: "A1",
+          state: "needs-rerun",
+          closureState: "failed",
+        }),
+      ],
+    });
+    expect(statusResult.stdout).not.toContain("awaiting-adjudication");
+  });
+
   it("resolves clarification-linked requests by policy without leaving them blocking", () => {
     const repoDir = makeTempDir();
     writeJson(path.join(repoDir, "package.json"), { name: "fixture-repo", private: true });

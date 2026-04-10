@@ -173,7 +173,7 @@ For implementation agents with an exit contract, closure validates:
 
 Deliverables and proof artifacts are local ownership proof. They do not replace cross-agent follow-up.
 
-When implementation closure fails only because a transport-level marker is missing or malformed, Wave can now hold that failure in deterministic adjudication instead of immediately turning it into a relaunch. Adjudication is only eligible for transport-only proof failures with exit `0`, landed deliverables, required proof artifacts, a valid result envelope, and no explicit negative semantic gap. The persisted adjudication artifact records the evidence used for that decision so operators can inspect it later through `wave control adjudication get`.
+When implementation closure fails only because a transport-level marker is malformed, Wave can now hold that failure in deterministic adjudication instead of immediately turning it into a relaunch. Fully missing required proof markers remain non-passing closure failures. Adjudication is only eligible for transport-only proof failures with exit `0`, landed deliverables, required proof artifacts, a valid result envelope, and no explicit negative semantic gap. The persisted adjudication artifact records the evidence used for that decision so operators can inspect it later through `wave control adjudication get`.
 
 That distinction matters:
 

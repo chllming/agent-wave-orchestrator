@@ -1,6 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ensureDirectory } from "./shared.mjs";
+import {
+  EXIT_CONTRACT_COMPLETION_VALUES,
+  EXIT_CONTRACT_DURABILITY_VALUES,
+  EXIT_CONTRACT_PROOF_VALUES,
+  EXIT_CONTRACT_DOC_IMPACT_VALUES,
+} from "./agent-state.mjs";
+import { parseStructuredSignalCandidate } from "./structured-signal-parser.mjs";
+
+const PROOF_STATES = ["met", "complete", "gap"];
+const DOC_CLOSURE_STATES = ["closed", "no-change", "delta"];
+const INTEGRATION_STATES = ["ready-for-doc-closure", "needs-more-work"];
+const COMPONENT_ID_REGEX = /^[a-z0-9._-]+$/;
+const COMPONENT_LEVEL_REGEX = /^[a-z0-9._-]+$/;
+const UNSAFE_KEY_VALUE_FRAGMENT_REGEX = /(^|\s)[a-z][a-z0-9_-]*=/i;
+const PARSER_KIND_BY_SIGNAL_KIND = {
+  proof: "proof",
+  "doc-delta": "docDelta",
+  component: "component",
+  integration: "integration",
+  "doc-closure": "docClosure",
+};
 
 function printUsage() {
   console.log(`Usage:
@@ -14,6 +35,41 @@ function printUsage() {
 
 function normalizeState(value) {
   return String(value || "").trim().toLowerCase() === "complete" ? "met" : String(value || "").trim();
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
+}
+
+function validateAllowedValue(label, value, allowedValues) {
+  const normalized = cleanText(value).toLowerCase();
+  if (!allowedValues.includes(normalized)) {
+    throw new Error(`${label} must be one of: ${allowedValues.join(", ")}`);
+  }
+  return normalized;
+}
+
+function validateSafeField(label, value, { allowCommas = true } = {}) {
+  const normalized = cleanText(value);
+  if (!normalized) {
+    return normalized;
+  }
+  if (/[\r\n]/.test(normalized)) {
+    throw new Error(`${label} cannot contain newlines`);
+  }
+  if (!allowCommas && normalized.includes(",")) {
+    throw new Error(`${label} cannot contain commas`);
+  }
+  if (UNSAFE_KEY_VALUE_FRAGMENT_REGEX.test(normalized)) {
+    throw new Error(`${label} cannot contain embedded key=value fragments`);
+  }
+  return normalized;
+}
+
+function validatePathList(paths) {
+  return paths.map((item, index) =>
+    validateSafeField(`path ${index + 1}`, item, { allowCommas: false }),
+  );
 }
 
 function parseArgs(argv) {
@@ -119,28 +175,67 @@ function buildLine(kind, options) {
   throw new Error(`Unknown signal kind: ${kind}`);
 }
 
+function assertCanonicalRoundTrip(kind, line) {
+  const candidate = parseStructuredSignalCandidate(line);
+  const parserKind = PARSER_KIND_BY_SIGNAL_KIND[kind] || kind;
+  if (!candidate?.accepted || candidate.kind !== parserKind || candidate.normalizedLine !== line) {
+    throw new Error(`wave signal ${kind} could not round-trip through the shipped structured-signal parser`);
+  }
+}
+
 function validate(kind, options) {
   if (kind === "proof") {
     if (!options.completion || !options.durability || !options.proof || !options.state) {
       throw new Error("wave signal proof requires --completion, --durability, --proof, and --state");
     }
+    options.completion = validateAllowedValue("--completion", options.completion, EXIT_CONTRACT_COMPLETION_VALUES);
+    options.durability = validateAllowedValue("--durability", options.durability, EXIT_CONTRACT_DURABILITY_VALUES);
+    options.proof = validateAllowedValue("--proof", options.proof, EXIT_CONTRACT_PROOF_VALUES);
+    options.state = validateAllowedValue("--state", options.state, PROOF_STATES);
+    options.detail = validateSafeField("--detail", options.detail);
     return;
   }
   if (kind === "doc-delta" || kind === "doc-closure") {
     if (!options.state) {
       throw new Error(`wave signal ${kind} requires --state`);
     }
+    options.state = validateAllowedValue(
+      "--state",
+      options.state,
+      kind === "doc-delta" ? EXIT_CONTRACT_DOC_IMPACT_VALUES : DOC_CLOSURE_STATES,
+    );
+    options.paths = validatePathList(options.paths);
+    options.detail = validateSafeField("--detail", options.detail);
     return;
   }
   if (kind === "component") {
     if (!options.componentId || !options.level || !options.state) {
       throw new Error("wave signal component requires --id, --level, and --state");
     }
+    options.componentId = validateSafeField("--id", options.componentId, { allowCommas: false });
+    options.level = validateSafeField("--level", options.level, { allowCommas: false }).toLowerCase();
+    options.state = validateAllowedValue("--state", options.state, PROOF_STATES);
+    options.detail = validateSafeField("--detail", options.detail);
+    if (!COMPONENT_ID_REGEX.test(options.componentId)) {
+      throw new Error("--id must use a canonical component token like runtime-render-snapshot");
+    }
+    if (!COMPONENT_LEVEL_REGEX.test(options.level)) {
+      throw new Error("--level must use a canonical component level token");
+    }
     return;
   }
   if (kind === "integration") {
     if (!options.state) {
       throw new Error("wave signal integration requires --state");
+    }
+    options.state = validateAllowedValue("--state", options.state, INTEGRATION_STATES);
+    options.detail = validateSafeField("--detail", options.detail);
+    for (const field of ["claims", "conflicts", "blockers"]) {
+      const value = Number.parseInt(options[field], 10);
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`--${field} must be a non-negative integer`);
+      }
+      options[field] = String(value);
     }
     return;
   }
@@ -159,6 +254,7 @@ export async function runSignalCli(argv) {
   }
   validate(parsed.kind, parsed.options);
   const line = buildLine(parsed.kind, parsed.options);
+  assertCanonicalRoundTrip(parsed.kind, line);
   if (parsed.options.appendFile) {
     ensureDirectory(path.dirname(parsed.options.appendFile));
     fs.appendFileSync(parsed.options.appendFile, `${line}\n`, "utf8");

@@ -498,6 +498,12 @@ function rejectedStructuredSignalLine(summary, key, predicate = null) {
   return cleanText(match?.line || "");
 }
 
+function rejectedStructuredSignalSample(summary, key, predicate = null) {
+  const bucket = structuredSignalBucket(summary, key);
+  const rejected = Array.isArray(bucket?.rejectedSamples) ? bucket.rejectedSamples : [];
+  return (typeof predicate === "function" ? rejected.find(predicate) : rejected[0]) || null;
+}
+
 function hasRejectedStructuredSignal(summary, key) {
   const bucket = structuredSignalBucket(summary, key);
   return Number(bucket?.rawCount || 0) > 0 && Number(bucket?.acceptedCount || 0) === 0;
@@ -555,6 +561,16 @@ function implementationTransportEligibility(agent, summary) {
   };
 }
 
+function implementationInvalidMarkerEligibility(agent, summary, key, predicate = null) {
+  const transportEligibility = implementationTransportEligibility(agent, summary);
+  const sample = rejectedStructuredSignalSample(summary, key, predicate);
+  return {
+    ...transportEligibility,
+    rejectedSample: sample,
+    eligibleForAdjudication: transportEligibility.eligibleForAdjudication && Boolean(sample),
+  };
+}
+
 export function validateImplementationSummary(agent, summary) {
   const contract = normalizeExitContract(agent?.exitContract);
   if (!contract) {
@@ -566,8 +582,8 @@ export function validateImplementationSummary(agent, summary) {
     });
   }
   if (!summary.proof) {
-    const transportEligibility = implementationTransportEligibility(agent, summary);
     if (hasRejectedStructuredSignal(summary, "proof")) {
+      const transportEligibility = implementationInvalidMarkerEligibility(agent, summary, "proof");
       return buildValidationResult(
         false,
         "invalid-wave-proof-format",
@@ -587,10 +603,8 @@ export function validateImplementationSummary(agent, summary) {
       appendTerminationHint(`Missing [wave-proof] marker for ${agent.agentId}.`, summary),
       {
         failureClass: "transport-failure",
-        eligibleForAdjudication: transportEligibility.eligibleForAdjudication,
-        adjudicationHint: transportEligibility.eligibleForAdjudication
-          ? "Missing proof marker with exit 0 and landed artifacts is eligible for deterministic adjudication."
-          : null,
+        eligibleForAdjudication: false,
+        adjudicationHint: null,
       },
     );
   }
@@ -627,8 +641,8 @@ export function validateImplementationSummary(agent, summary) {
     );
   }
   if (!summary.docDelta) {
-    const transportEligibility = implementationTransportEligibility(agent, summary);
     if (hasRejectedStructuredSignal(summary, "docDelta")) {
+      const transportEligibility = implementationInvalidMarkerEligibility(agent, summary, "docDelta");
       return buildValidationResult(
         false,
         "invalid-doc-delta-format",
@@ -648,10 +662,8 @@ export function validateImplementationSummary(agent, summary) {
       appendTerminationHint(`Missing [wave-doc-delta] marker for ${agent.agentId}.`, summary),
       {
         failureClass: "transport-failure",
-        eligibleForAdjudication: transportEligibility.eligibleForAdjudication,
-        adjudicationHint: transportEligibility.eligibleForAdjudication
-          ? "Missing doc-delta marker with exit 0 and landed artifacts is eligible for deterministic adjudication."
-          : null,
+        eligibleForAdjudication: false,
+        adjudicationHint: null,
       },
     );
   }
@@ -681,7 +693,12 @@ export function validateImplementationSummary(agent, summary) {
           Number(componentDiagnostics?.rawCount || 0) > 0 &&
           (seenComponentIds.has(componentId) || Number(componentDiagnostics?.acceptedCount || 0) === 0)
         ) {
-          const transportEligibility = implementationTransportEligibility(agent, summary);
+          const transportEligibility = implementationInvalidMarkerEligibility(
+            agent,
+            summary,
+            "component",
+            (sample) => cleanText(sample?.componentId) === componentId,
+          );
           return buildValidationResult(
             false,
             "invalid-wave-component-format",
@@ -702,17 +719,14 @@ export function validateImplementationSummary(agent, summary) {
             },
           );
         }
-        const transportEligibility = implementationTransportEligibility(agent, summary);
         return buildValidationResult(
           false,
           "missing-wave-component",
           `Missing [wave-component] marker for ${agent.agentId} component ${componentId}.`,
           {
             failureClass: "transport-failure",
-            eligibleForAdjudication: transportEligibility.eligibleForAdjudication,
-            adjudicationHint: transportEligibility.eligibleForAdjudication
-              ? "Missing component marker with exit 0 and landed artifacts is eligible for deterministic adjudication."
-              : null,
+            eligibleForAdjudication: false,
+            adjudicationHint: null,
           },
         );
       }

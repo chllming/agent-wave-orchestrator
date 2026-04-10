@@ -88,6 +88,8 @@ node scripts/wave.mjs doctor --json
 node scripts/wave.mjs launch --lane main --dry-run --no-dashboard
 ```
 
+`launch --dry-run --no-dashboard` works in a clean checkout even when no `.wave/project-profile.json` exists yet. Live launches still run first-time project setup when a profile is missing.
+
 ### Registry verification commands
 
 After publish:

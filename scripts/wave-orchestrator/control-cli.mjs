@@ -39,7 +39,7 @@ import {
   registerWaveProofBundle,
   waveProofRegistryPath,
 } from "./proof-registry.mjs";
-import { closureAdjudicationPath } from "./closure-adjudicator.mjs";
+import { closureAdjudicationPath, evaluateClosureAdjudication } from "./closure-adjudicator.mjs";
 import { readWaveRelaunchPlanSnapshot, readWaveRetryOverride, resolveRetryOverrideAgentIds, writeWaveRetryOverride, clearWaveRetryOverride } from "./retry-control.mjs";
 import { flushWaveControlQueue, readWaveControlQueueState } from "./wave-control-client.mjs";
 import { readAgentExecutionSummary, validateImplementationSummary } from "./agent-state.mjs";
@@ -382,6 +382,7 @@ function buildLogicalAgents({
   lanePaths,
   wave,
   tasks,
+  coordinationState,
   dependencySnapshot,
   capabilityAssignments,
   selection,
@@ -411,6 +412,36 @@ function buildLogicalAgents({
       !isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId })
         ? validateImplementationSummary(agent, summary ? summary : null)
         : { ok: statusRecord?.code === 0, statusCode: statusRecord?.code === 0 ? "pass" : "pending" };
+    const adjudicationPath = closureAdjudicationPath(
+      lanePaths,
+      wave.wave,
+      statusRecord?.attempt || 1,
+      agent.agentId,
+    );
+    const persistedAdjudication = readClosureAdjudication(adjudicationPath, {
+      lane: lanePaths.lane,
+      wave: wave.wave,
+      attempt: statusRecord?.attempt || 1,
+      agentId: agent.agentId,
+    });
+    const adjudication =
+      proofValidation.eligibleForAdjudication && !proofValidation.ok
+        ? persistedAdjudication ||
+          evaluateClosureAdjudication({
+            wave,
+            lanePaths,
+            gate: proofValidation,
+            summary,
+            derivedState: {
+              coordinationState,
+            },
+            agentRun: {
+              agent,
+              logPath,
+            },
+            envelope: null,
+          })
+        : null;
     const targetedTasks = tasks.filter(
       (task) =>
         task.ownerAgentId === agent.agentId ||
@@ -427,6 +458,7 @@ function buildLogicalAgents({
     const satisfiedByStatus =
       statusRecord?.code === 0 &&
       (proofValidation.ok ||
+        adjudication?.status === "pass" ||
         isSecurityReviewAgentForLane(agent, lanePaths) ||
         isContEvalReportOnlyAgent(agent, { contEvalAgentId: lanePaths.contEvalAgentId }));
     const executionState =
@@ -484,10 +516,14 @@ function buildLogicalAgents({
         : "satisfied";
       reason = "Latest attempt satisfied current control-plane state.";
       closureState = "passed";
-    } else if (proofValidation.eligibleForAdjudication && !proofValidation.ok) {
+    } else if (adjudication?.status === "ambiguous") {
       state = "awaiting-adjudication";
-      reason = proofValidation.detail || "Closure transport is awaiting deterministic adjudication.";
+      reason = adjudication.detail || proofValidation.detail || "Closure transport is awaiting deterministic adjudication.";
       closureState = "awaiting-adjudication";
+    } else if (adjudication?.status === "rework-required") {
+      state = "needs-rerun";
+      reason = adjudication.detail || proofValidation.detail || "Closure adjudication requires more work.";
+      closureState = "failed";
     } else if (Number.isInteger(statusRecord?.code) && statusRecord.code !== 0) {
       state = "needs-rerun";
       reason = `Latest attempt exited with code ${statusRecord.code}.`;
@@ -798,6 +834,7 @@ export function buildControlStatusPayload({ lanePaths, wave, agentId = "" }) {
     selection,
     proofRegistry,
     phase,
+    coordinationState,
   }).filter((agent) => !agentId || agent.agentId === agentId);
   const executionState = deriveExecutionState({
     phase,

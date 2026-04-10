@@ -345,6 +345,7 @@ export function parseStructuredSignalCandidate(line) {
     accepted,
     tag,
     kind,
+    rawValues,
     unknownKeys,
     componentId: componentId || null,
   };
@@ -472,6 +473,8 @@ export function buildStructuredSignalDiagnostics(candidates) {
     bucket.rejectedCount += 1;
     pushLimited(bucket.rejectedSamples, {
       line: candidate.rawLine,
+      rawValues: candidate.rawValues,
+      unknownKeys: candidate.unknownKeys,
       ...(candidate.kind === "component" && candidate.componentId ? { componentId: candidate.componentId } : {}),
     });
   }

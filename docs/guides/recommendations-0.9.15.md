@@ -51,7 +51,7 @@ Practical effect:
 
 ### Transport-only closure failures can pause for adjudication before rerun
 
-When implementation closure has exit `0`, landed artifacts, and a valid result envelope but the final machine markers are malformed or missing, Wave can now hold the slice in deterministic adjudication instead of immediately relaunching it.
+When implementation closure has exit `0`, landed artifacts, and a valid result envelope but the final machine markers are malformed, Wave can now hold the slice in deterministic adjudication instead of immediately relaunching it. Fully missing required markers still fail closure until the agent emits them or a narrower rerun lands them.
 
 Practical effect:
 
@@ -72,7 +72,7 @@ Practical effect:
 ## Recommendations
 
 - **Proof markers**: keep requiring explicit final markers, but accept `complete` as an operationally harmless alias while normalizing downstream state to `met`.
-- **Signal helpers**: prefer `wave signal ...` instead of hand-typing marker syntax in orchestrator prompts, shell wrappers, or local helper scripts.
+- **Signal helpers**: prefer `wave signal ...` instead of hand-typing marker syntax in orchestrator prompts, shell wrappers, or local helper scripts. The helper now fails fast when a value would not round-trip through the shipped parser.
 - **Restart recovery**: prefer status-backed restart and targeted recovery over reauthoring older completed waves just because the component matrix has since moved on.
 - **Credential brokering**: let the detached runner use its per-agent sticky-key default unless you have a clear external reason to override it.
 - **Status interpretation**: read `executionState`, `closureState`, and `controllerState` together when deciding whether a wave is actively running, blocked only in closure, or merely carrying stale controller intent.

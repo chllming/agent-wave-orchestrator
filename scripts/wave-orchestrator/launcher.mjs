@@ -777,16 +777,23 @@ export async function runLauncherCli(argv) {
   const projectId = options.project || config.defaultProject;
   if (!readProjectProfile({ config, project: projectId })) {
     const { stderr: stderrStream } = await import("node:process");
-    stderrStream.write(
-      "\n  No project profile found — running first-time setup.\n" +
-        "  You can re-run this later with: wave project setup\n\n",
-    );
-    const { runPlannerCli } = await import("./planner.mjs");
-    await runPlannerCli(["project", "setup", ...(projectId ? ["--project", projectId] : [])]);
-    // Re-read the terminal surface from the newly created profile.
-    const freshProfile = readProjectProfile({ config, project: projectId });
-    if (freshProfile) {
-      options.terminalSurface = resolveDefaultTerminalSurface(freshProfile);
+    if (options.dryRun) {
+      stderrStream.write(
+        "\n  No project profile found — continuing dry-run with config defaults.\n" +
+          "  Live launches will still prompt for first-time setup, or you can run: wave project setup\n\n",
+      );
+    } else {
+      stderrStream.write(
+        "\n  No project profile found — running first-time setup.\n" +
+          "  You can re-run this later with: wave project setup\n\n",
+      );
+      const { runPlannerCli } = await import("./planner.mjs");
+      await runPlannerCli(["project", "setup", ...(projectId ? ["--project", projectId] : [])]);
+      // Re-read the terminal surface from the newly created profile.
+      const freshProfile = readProjectProfile({ config, project: projectId });
+      if (freshProfile) {
+        options.terminalSurface = resolveDefaultTerminalSurface(freshProfile);
+      }
     }
   }
 

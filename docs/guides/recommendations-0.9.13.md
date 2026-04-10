@@ -39,23 +39,11 @@ Practical effect:
 - local policy can still provide an explicit sticky key when a deployment needs custom routing
 - retry or resume flows stay deterministic because the default key now scopes down to one agent attempt
 
-### Transport-only closure failures can pause for adjudication before rerun
-
-When implementation closure has exit `0`, landed artifacts, and a valid result envelope but the final machine markers are malformed or missing, Wave can now hold the slice in deterministic adjudication instead of immediately relaunching it.
-
-Practical effect:
-
-- transport-only proof failures stop looking identical to real semantic regressions
-- operators can inspect the recorded adjudication artifact with `wave control adjudication get`
-- targeted rerun stays reserved for semantic, artifact, or runtime-state failures that actually need more work
-
 ## Recommendations
 
 - **Proof markers**: keep requiring explicit final markers, but accept `complete` as an operationally harmless alias while normalizing downstream state to `met`.
 - **Restart recovery**: prefer status-backed restart and targeted recovery over reauthoring older completed waves just because the component matrix has since moved on.
 - **Credential brokering**: let the detached runner use its per-agent sticky-key default unless you have a clear external reason to override it.
-- **Closure adjudication**: treat `awaiting-adjudication` as distinct from both success and rerun-needed. Inspect the persisted evidence first; do not auto-relaunch transport-only failures by habit.
-- **Canonical signals**: prefer `wave signal ...` when wrappers or custom prompts need to emit final markers. It keeps marker syntax canonical and avoids accidental format drift.
 - **Budgets**: keep using `budget.minutes` as the main wall-clock budget. Keep generic `budget.turns` advisory unless you deliberately need a runtime-specific hard ceiling.
 - **Coordination severity**: continue to use `mark-advisory`, `mark-stale`, and `resolve-policy` for follow-up that should stay visible without falsely reopening proof-critical closure.
 - **Targeted recovery**: prefer targeted recovery when one slice regresses or a restart left run-state behind. The most useful recovery work is still narrow and machine-visible.

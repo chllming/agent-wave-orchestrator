@@ -356,6 +356,7 @@ wave signal doc-closure --state <closed|no-change|delta> [--path <file> ...] [--
 Notes:
 
 - `complete` is accepted for proof and component state and is normalized to `met`.
+- the command rejects unsafe field content that would break `key=value` parsing and fails if the emitted marker would not round-trip through the shipped parser.
 - `--append-file` appends the canonical emitted marker line to an existing file, which is useful for wrappers and local agent logs.
 - `--json` returns the emitted line plus the append target for wrapper-friendly automation.
 

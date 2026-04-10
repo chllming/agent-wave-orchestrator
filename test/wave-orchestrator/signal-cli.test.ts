@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import { PACKAGE_ROOT } from "../../scripts/wave-orchestrator/shared.mjs";
+import { parseStructuredSignalCandidate } from "../../scripts/wave-orchestrator/structured-signal-parser.mjs";
 
 const tempDirs = [];
 
@@ -55,6 +56,10 @@ describe("wave signal CLI", () => {
     expect(result.stdout.trim()).toBe(
       "[wave-proof] completion=integrated durability=durable proof=integration state=met detail=ready-for-closeout",
     );
+    expect(parseStructuredSignalCandidate(result.stdout.trim())).toMatchObject({
+      accepted: true,
+      normalizedLine: result.stdout.trim(),
+    });
   });
 
   it("can append canonical signal lines to a file and emit json", () => {
@@ -88,5 +93,75 @@ describe("wave signal CLI", () => {
     expect(fs.readFileSync(appendFile, "utf8").trim()).toBe(
       "[wave-component] component=runtime-render-snapshot level=contract-frozen state=met detail=component-landed",
     );
+  });
+
+  it("prints canonical doc-delta markers", () => {
+    const repoDir = makeTempDir();
+    const result = runWaveCli(
+      [
+        "signal",
+        "doc-delta",
+        "--state",
+        "owned",
+        "--path",
+        "docs/example.md",
+      ],
+      repoDir,
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("[wave-doc-delta] state=owned paths=docs/example.md");
+    expect(parseStructuredSignalCandidate(result.stdout.trim())).toMatchObject({
+      accepted: true,
+      kind: "docDelta",
+      normalizedLine: result.stdout.trim(),
+    });
+  });
+
+  it("prints canonical doc-closure markers", () => {
+    const repoDir = makeTempDir();
+    const result = runWaveCli(
+      [
+        "signal",
+        "doc-closure",
+        "--state",
+        "closed",
+        "--path",
+        "docs/example.md",
+      ],
+      repoDir,
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("[wave-doc-closure] state=closed paths=docs/example.md");
+    expect(parseStructuredSignalCandidate(result.stdout.trim())).toMatchObject({
+      accepted: true,
+      kind: "docClosure",
+      normalizedLine: result.stdout.trim(),
+    });
+  });
+
+  it("rejects unsafe detail text that would break parser round-tripping", () => {
+    const repoDir = makeTempDir();
+    const result = runWaveCli(
+      [
+        "signal",
+        "proof",
+        "--completion",
+        "integrated",
+        "--durability",
+        "durable",
+        "--proof",
+        "integration",
+        "--state",
+        "met",
+        "--detail",
+        "saw state=gap in logs",
+      ],
+      repoDir,
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("embedded key=value fragments");
   });
 });

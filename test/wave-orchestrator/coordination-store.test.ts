@@ -76,6 +76,63 @@ describe("updateSeedRecords", () => {
       artifactRefs: ["src/second.ts"],
     });
   });
+
+  it("does not reopen a resolved seed request when the seed identity is unchanged", () => {
+    const dir = makeTempDir();
+    const logPath = path.join(dir, "wave-0.jsonl");
+
+    updateSeedRecords(logPath, {
+      lane: "main",
+      wave: 0,
+      agents: [],
+      componentPromotions: [],
+      sharedPlanDocs: ["docs/roadmap.md"],
+      feedbackRequests: [],
+    });
+
+    fs.appendFileSync(
+      logPath,
+      `${JSON.stringify({
+        recordVersion: 1,
+        id: "wave-0-shared-plan-docs",
+        kind: "request",
+        lane: "main",
+        wave: 0,
+        agentId: "launcher",
+        targets: ["agent:A9"],
+        status: "resolved",
+        priority: "high",
+        blocking: true,
+        blockerSeverity: "closure-critical",
+        artifactRefs: ["docs/roadmap.md"],
+        dependsOn: [],
+        closureCondition: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        confidence: "medium",
+        summary: "Reconcile shared-plan documentation for wave 0",
+        detail: "Resolved from documentation steward evidence.",
+        source: "operator",
+      })}\n`,
+      "utf8",
+    );
+
+    updateSeedRecords(logPath, {
+      lane: "main",
+      wave: 0,
+      agents: [],
+      componentPromotions: [],
+      sharedPlanDocs: ["docs/roadmap.md"],
+      feedbackRequests: [],
+    });
+
+    const state = readMaterializedCoordinationState(logPath);
+    expect(state.byId.get("wave-0-shared-plan-docs")).toMatchObject({
+      status: "resolved",
+      detail: "Resolved from documentation steward evidence.",
+      source: "operator",
+    });
+  });
 });
 
 describe("normalizeCoordinationRecord", () => {

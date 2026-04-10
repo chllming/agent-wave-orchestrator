@@ -293,7 +293,7 @@ export function buildAgentExecutionSummary({ agent, statusRecord, logPath, repor
       : reportPath
         ? readFileTail(reportPath, 60000)
         : "";
-  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
+  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX, { mode: "last" });
   const logVerdict = parseVerdictFromText(signalText, WAVE_VERDICT_REGEX);
   // Prefer log verdict (authoritative for the current run) over report verdict
   // (may accumulate stale entries across retries in append-only report files).

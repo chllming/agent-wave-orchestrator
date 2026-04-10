@@ -2873,14 +2873,6 @@ export function readWaveContQaArtifacts(wave, { logsDir, contQaAgentId } = {}) {
     contQaReportPath && fs.existsSync(contQaReportPath)
       ? fs.readFileSync(contQaReportPath, "utf8")
       : "";
-  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
-  if (reportVerdict.verdict) {
-    return {
-      ok: reportVerdict.verdict === "pass",
-      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
-      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
-    };
-  }
   const contQaLogPath = logsDir
     ? path.join(logsDir, `wave-${wave.wave}-${contQa.slug}.log`)
     : null;
@@ -2893,6 +2885,14 @@ export function readWaveContQaArtifacts(wave, { logsDir, contQaAgentId } = {}) {
       ok: logVerdict.verdict === "pass",
       statusCode: logVerdict.verdict === "pass" ? "pass" : `cont-qa-${logVerdict.verdict}`,
       detail: logVerdict.detail || "Verdict read from cont-QA log marker.",
+    };
+  }
+  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX, { mode: "last" });
+  if (reportVerdict.verdict) {
+    return {
+      ok: reportVerdict.verdict === "pass",
+      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
+      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
     };
   }
   return {

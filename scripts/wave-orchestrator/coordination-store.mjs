@@ -1258,12 +1258,18 @@ export function updateSeedRecords(filePath, params) {
     "ownerWave",
     "required",
   ];
+  const resolutionStickyKeys = comparableKeys.filter((key) => !["status", "detail", "source"].includes(key));
   for (const record of seed) {
     const existingRecord = latestById.get(record.id);
     const unchanged =
       existingRecord &&
       comparableKeys.every((key) => JSON.stringify(existingRecord[key]) === JSON.stringify(record[key]));
-    if (!unchanged) {
+    const preservesResolvedSeed =
+      existingRecord &&
+      !isOpenCoordinationStatus(existingRecord.status) &&
+      isOpenCoordinationStatus(record.status) &&
+      resolutionStickyKeys.every((key) => JSON.stringify(existingRecord[key]) === JSON.stringify(record[key]));
+    if (!unchanged && !preservesResolvedSeed) {
       appendCoordinationRecord(filePath, record, {
         createdAt: existingRecord?.createdAt || record.createdAt,
       });

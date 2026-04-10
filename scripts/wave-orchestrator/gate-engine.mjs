@@ -507,16 +507,6 @@ export function readWaveContQaGate(wave, agentRuns, options = {}) {
     contQaReportPath && fs.existsSync(contQaReportPath)
       ? fs.readFileSync(contQaReportPath, "utf8")
       : "";
-  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX);
-  if (reportVerdict.verdict) {
-    return {
-      ok: reportVerdict.verdict === "pass",
-      agentId: contQaRun.agent.agentId,
-      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
-      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
-      logPath: path.relative(REPO_ROOT, contQaRun.logPath),
-    };
-  }
   const logVerdict = parseVerdictFromText(
     readFileTail(contQaRun.logPath, 30000),
     WAVE_VERDICT_REGEX,
@@ -527,6 +517,16 @@ export function readWaveContQaGate(wave, agentRuns, options = {}) {
       agentId: contQaRun.agent.agentId,
       statusCode: logVerdict.verdict === "pass" ? "pass" : `cont-qa-${logVerdict.verdict}`,
       detail: logVerdict.detail || "Verdict read from cont-QA log marker.",
+      logPath: path.relative(REPO_ROOT, contQaRun.logPath),
+    };
+  }
+  const reportVerdict = parseVerdictFromText(reportText, REPORT_VERDICT_REGEX, { mode: "last" });
+  if (reportVerdict.verdict) {
+    return {
+      ok: reportVerdict.verdict === "pass",
+      agentId: contQaRun.agent.agentId,
+      statusCode: reportVerdict.verdict === "pass" ? "pass" : `cont-qa-${reportVerdict.verdict}`,
+      detail: reportVerdict.detail || "Verdict read from cont-QA report.",
       logPath: path.relative(REPO_ROOT, contQaRun.logPath),
     };
   }

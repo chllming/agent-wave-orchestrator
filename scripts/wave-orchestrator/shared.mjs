@@ -436,17 +436,23 @@ export function normalizeWaveVerdict(verdict) {
   return normalized;
 }
 
-export function parseVerdictFromText(text, regex) {
+export function parseVerdictFromText(text, regex, options = {}) {
   if (!text) {
     return { verdict: null, detail: "" };
   }
+  const mode = String(options?.mode || "first").trim().toLowerCase() === "last" ? "last" : "first";
   regex.lastIndex = 0;
   let match = regex.exec(text);
   if (!match) {
     return { verdict: null, detail: "" };
   }
-  // Use the first match — in append-only reports the latest verdict is written
-  // at the top of the newest section, while stale entries linger at the bottom.
+  if (mode === "last") {
+    let nextMatch = regex.exec(text);
+    while (nextMatch) {
+      match = nextMatch;
+      nextMatch = regex.exec(text);
+    }
+  }
   const verdict = normalizeWaveVerdict(match[1]);
   const detail = String(match[2] || "")
     .trim()

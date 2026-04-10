@@ -60,6 +60,18 @@ describe("parseVerdictFromText", () => {
     expect(result.verdict).toBe("pass");
     expect(result.detail).toBe("Latest run");
   });
+
+  it("can read the last report verdict for append-at-bottom repair passes", () => {
+    const text = [
+      "## Initial review",
+      "Verdict: BLOCKED",
+      "",
+      "## Repair pass",
+      "Verdict: PASS",
+    ].join("\n");
+    const result = parseVerdictFromText(text, REPORT_VERDICT_REGEX, { mode: "last" });
+    expect(result.verdict).toBe("pass");
+  });
 });
 
 describe("normalizeWaveVerdict", () => {

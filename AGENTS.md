@@ -45,3 +45,17 @@ Vitest picks up `test/**/*.test.ts` and `test/**/*.spec.ts`. Add or update focus
 ## Commit & Pull Request Guidelines
 
 Follow the visible history: `Release: ...`, `Docs: ...`, `Fix: ...`, `Build: ...`. Keep each commit scoped to one release-surface or behavior change. Pull requests should summarize the operator-visible impact, list the validation commands run, and link the relevant issue or release task. Include terminal output or screenshots only when dashboard, operator, or Wave Control surfaces change.
+
+## Model usage (operator directive, 2026-10-05)
+
+Claude agents spawned in this repo — a Workflow, the Agent tool, any
+multi-agent run — pick their model by role, not by habit:
+
+- **Control plane → Fable** (`model: 'fable'`, the default — just omit the
+  override): planning, synthesis, adversarial review, completeness critics,
+  blocked/final gates. Run **review and specific high-value work** on Fable too.
+- **Work → Opus 5.5 or Sonnet 5.5**: implementers, integrators and fixers on
+  `model: 'opus'`; cheap mechanical stages (file sweeps, re-vendors, doc moves,
+  PR-opening) on `model: 'sonnet'`.
+
+Do not run a whole workflow on Fable by omission.
